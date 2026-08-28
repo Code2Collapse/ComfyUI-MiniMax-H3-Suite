@@ -46,6 +46,9 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.per_frame_denoise", "MiniMaxH3_PerFrameDenoise"),
     (".mmx_nodes.block_cache", "MiniMaxH3_BlockCacheT8"),
     (".mmx_nodes.sigma_inspector", "MiniMaxH3_SigmaInspector"),
+    (".mmx_nodes.turbo_lora", "MiniMaxH3_TurboLoRA"),
+    (".mmx_nodes.turbo_sampler", "MiniMaxH3_TurboSampler"),
+    (".mmx_nodes.audio_quality_gate", "MiniMaxH3_AudioQualityGate"),
     (".mmx_nodes.ocio_bridge", "MiniMaxH3_OCIOBridge"),
     (".mmx_nodes.color_roundtrip_qc", "MiniMaxH3_ColorRoundTripQC"),
     (".mmx_nodes.pose_hints", "MiniMaxH3_StrongestPose"),
@@ -120,6 +123,18 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.sigma_inspector import MiniMaxH3_SigmaInspector
 
                 nodes.append(MiniMaxH3_SigmaInspector)
+            elif mod_path.endswith("turbo_lora"):
+                from .mmx_nodes.turbo_lora import MiniMaxH3_TurboLoRA
+
+                nodes.append(MiniMaxH3_TurboLoRA)
+            elif mod_path.endswith("turbo_sampler"):
+                from .mmx_nodes.turbo_sampler import MiniMaxH3_TurboSampler
+
+                nodes.append(MiniMaxH3_TurboSampler)
+            elif mod_path.endswith("audio_quality_gate"):
+                from .mmx_nodes.audio_quality_gate import MiniMaxH3_AudioQualityGate
+
+                nodes.append(MiniMaxH3_AudioQualityGate)
             elif mod_path.endswith("ocio_bridge"):
                 from .mmx_nodes.ocio_bridge import MiniMaxH3_OCIOBridge
 

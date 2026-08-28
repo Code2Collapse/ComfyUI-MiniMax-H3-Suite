@@ -82,6 +82,36 @@ def validate_h3_sigmas(
     return ok, report
 
 
+def validate_turbo_step_contract(
+    sigmas: torch.Tensor,
+    contract: tuple[int, int, int],
+) -> tuple[bool, list[str]]:
+    """Enforce turbo step contract stashed by MiniMaxH3_TurboLoRA.
+
+    contract = (target_steps, warn_above, refuse_above).
+    """
+    target, warn_above, refuse_above = (int(contract[0]), int(contract[1]), int(contract[2]))
+    steps = int(len(sigmas)) - 1
+    notes: list[str] = []
+    ok = True
+    if steps > refuse_above:
+        ok = False
+        notes.append(
+            f"REFUSE: {steps} steps > turbo refuse limit {refuse_above} "
+            f"(contract {contract})"
+        )
+    elif steps > warn_above:
+        notes.append(
+            f"WARNING: {steps} steps > turbo warn threshold {warn_above} "
+            f"(target {target})"
+        )
+    elif steps != target:
+        notes.append(
+            f"NOTE: turbo target is {target} steps; schedule has {steps}"
+        )
+    return ok, notes
+
+
 def format_sigma_inspector_table(
     sigmas: torch.Tensor,
     *,

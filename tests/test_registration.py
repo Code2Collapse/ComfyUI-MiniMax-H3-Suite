@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 25
+EXPECTED_NODE_COUNT = 28
 SPINE_NODES = {
     "MiniMaxH3_TrackCrop",
     "MiniMaxH3_MaskPrep",
@@ -44,6 +44,9 @@ SAMPLING_NODES = {
     "MiniMaxH3_PerFrameDenoise",
     "MiniMaxH3_BlockCacheT8",
     "MiniMaxH3_SigmaInspector",
+    "MiniMaxH3_TurboLoRA",
+    "MiniMaxH3_TurboSampler",
+    "MiniMaxH3_AudioQualityGate",
 }
 COLOR_NODES = {
     "MiniMaxH3_OCIOBridge",
