@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Pack deliverables: these MUST stay tracked ---
+# tests/ was once `git rm --cached`'d out of the index while the files stayed on
+# disk, so a clone got the pack with zero tests and nothing looked wrong locally.
+# web/ has the same exposure: the JS widgets are the frontend, not build output.
+!tests/
+!web/
