@@ -96,3 +96,33 @@ def test_js_time_shift_sigma_matches_python(node_exe):
     assert len(js_vals) == len(py_vals) == len(grid)
     for (s, sv, sa), j, p in zip(grid, js_vals, py_vals):
         assert abs(j - p) <= 1e-12, f"sigma={s} shift_v={sv} shift_a={sa}: JS {j} != Python {p}"
+
+
+def test_parity_check_actually_fails_on_drift(node_exe):
+    """Negative control: the comparison must reject a formula that has drifted.
+
+    Without this, a subtly broken extractor (or a harness that silently returns
+    the Python values) would keep the parity test green forever while the shipped
+    widget diverged. This perturbs the EXTRACTED source by 0.1% and asserts the
+    same comparison rejects it — so the test above is known to be able to fail.
+    """
+    js_func = _extract_js_function(WIDGET_JS.read_text(encoding="utf-8"), FUNC_NAME)
+    perturbed = js_func.replace("return (toShift * base)", "return (1.001 * toShift * base)")
+    assert perturbed != js_func, "perturbation did not apply — the return shape changed"
+
+    harness = (
+        perturbed
+        + "\nconst payload = JSON.parse(process.argv[1]);"
+        + f"\nconsole.log(JSON.stringify(payload.map(([s, sv, sa]) => {FUNC_NAME}(s, sv, sa))));"
+    )
+    grid = [(0.5, 12.0, 3.0), (0.25, 3.0, 1.0)]
+    proc = subprocess.run(
+        [node_exe, "-e", harness, json.dumps(grid)],
+        check=True, capture_output=True, text=True, timeout=30,
+    )
+    js_vals = json.loads(proc.stdout.strip())
+    py_vals = [float(time_shift_sigma(s, sv, sa)) for s, sv, sa in grid]
+
+    assert any(abs(j - p) > 1e-12 for j, p in zip(js_vals, py_vals)), (
+        "a 0.1% drift in the JS was NOT detected — the parity test cannot fail"
+    )

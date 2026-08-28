@@ -113,7 +113,7 @@
       "widgets_values": [
         "[]",
         2.5,
-        "tv_lp",
+        "manual",
         512,
         512,
         "tv_lp",
@@ -177,7 +177,7 @@
         "Node name for S&R": "MiniMaxH3_StrongestPose"
       },
       "widgets_values": [
-        "vitpose",
+        "inhouse_vitpose",
         0.3,
         true
       ]
@@ -446,9 +446,24 @@
           "link": 2
         },
         {
+          "name": "vae",
+          "type": "VAE",
+          "link": null
+        },
+        {
           "name": "video_latent_mask",
           "type": "MASK",
           "link": 4
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": null
         }
       ],
       "outputs": [
@@ -942,7 +957,7 @@
       6,
       0,
       9,
-      2,
+      3,
       "MASK"
     ],
     [

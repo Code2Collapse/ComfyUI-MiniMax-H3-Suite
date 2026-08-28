@@ -175,8 +175,10 @@ def test_workflow_slots_match_live_schema(workflow_file):
 
     Outputs are pinned exactly (name AND order): that is what goes stale when a
     node gains an output, which is exactly what Stage 4 did to TrackCrop.
-    Inputs are a subset check, because widget inputs only appear in the workflow
-    once they are converted to sockets.
+    Inputs are pinned by INDEX. An earlier version checked names as a set, which
+    passed while MaskedReplace's saved graph omitted `vae` and delivered a MASK
+    to slot 2 — the vae socket. Membership is not enough; position is the thing
+    links actually use.
     """
     data = json.loads(workflow_file.read_text(encoding="utf-8"))
     slots = _schema_slots()
@@ -191,8 +193,74 @@ def test_workflow_slots_match_live_schema(workflow_file):
         got_in = [i.get("name") for i in (node.get("inputs") or [])]
         if got_out != want_out:
             problems.append(f"{ntype} (id {node.get('id')}) outputs {got_out} != schema {want_out}")
-        extra_in = [n for n in got_in if n not in want_in]
-        if extra_in:
-            problems.append(f"{ntype} (id {node.get('id')}) has inputs not in schema: {extra_in}")
+
+        # INDEX, not just membership. Links address inputs by position, so a name
+        # that exists but sits at the wrong index silently delivers the value to a
+        # different socket — a MASK arriving on `vae` typechecks as far as the JSON
+        # is concerned. A subset check by name cannot see that; this can.
+        for k, name in enumerate(got_in):
+            if name not in want_in:
+                problems.append(f"{ntype} (id {node.get('id')}) input {name!r} is not in schema")
+            elif want_in.index(name) != k:
+                problems.append(
+                    f"{ntype} (id {node.get('id')}) input {name!r} at slot {k}, "
+                    f"schema puts it at {want_in.index(name)} "
+                    f"(slot {k} is {want_in[k] if k < len(want_in) else 'out of range'!r})"
+                )
+
+    assert not problems, f"{workflow_file.name}:\n  " + "\n  ".join(problems)
+
+
+@pytest.mark.parametrize(
+    "workflow_file",
+    [
+        WORKFLOWS / "h3_masked_face_pipeline.json",
+        WORKFLOWS / "h3_full_spine_pipeline.json",
+    ],
+)
+def test_workflow_widget_values_are_legal(workflow_file):
+    """Combo widgets in saved graphs must hold a value the schema actually offers.
+
+    A saved workflow stores widget values positionally, so a copy-paste can leave a
+    value from a *different* combo in the slot. It still loads, and the node then
+    falls through to whatever its default branch is: `canvas_mode="tv_lp"` (a
+    planner_mode value) silently became auto-canvas instead of the manual 512x512
+    the rest of the graph was built around.
+    """
+    pack = _load_pack()
+
+    async def _combos():
+        ext = await pack.comfy_entrypoint()
+        out = {}
+        for n in await ext.get_node_list():
+            s = n.define_schema()
+            # widgets are stored positionally, skipping socket-only inputs
+            out[s.node_id] = [
+                (i.id, list(getattr(i, "options", []) or []))
+                for i in (s.inputs or [])
+            ]
+        return out
+
+    specs = asyncio.run(_combos())
+    data = json.loads(workflow_file.read_text(encoding="utf-8"))
+    problems: list[str] = []
+
+    for node in data.get("nodes", []):
+        spec = specs.get(node.get("type"))
+        if not spec:
+            continue
+        options_by_name = {name: opts for name, opts in spec if opts}
+        if not options_by_name:
+            continue
+        values = node.get("widgets_values") or []
+        # any stored value that looks like a combo choice must belong to SOME combo
+        # on this node; a value that belongs to none of them is a positional slip
+        legal = {v for opts in options_by_name.values() for v in opts}
+        for v in values:
+            if isinstance(v, str) and v and not v.startswith("[") and v not in legal:
+                problems.append(
+                    f"{node['type']} (id {node.get('id')}) widget value {v!r} "
+                    f"is not an option of any combo on this node: {sorted(legal)}"
+                )
 
     assert not problems, f"{workflow_file.name}:\n  " + "\n  ".join(problems)

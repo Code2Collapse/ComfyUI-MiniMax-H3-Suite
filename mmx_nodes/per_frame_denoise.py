@@ -23,7 +23,7 @@ from mmx_utils.transform_types import H3Transform, H3TransformType
 
 try:
     import comfy.nested_tensor as nested_tensor
-except ImportError:
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
     nested_tensor = None
 
 

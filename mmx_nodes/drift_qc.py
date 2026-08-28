@@ -31,7 +31,7 @@ from mmx_utils.drift_qc import drift_per_frame_json, measure_exterior_drift
 
 try:
     import comfy.model_management as mm
-except ImportError:
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
     mm = None
 
 

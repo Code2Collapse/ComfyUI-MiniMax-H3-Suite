@@ -316,9 +316,24 @@
           "link": 2
         },
         {
+          "name": "vae",
+          "type": "VAE",
+          "link": null
+        },
+        {
           "name": "video_latent_mask",
           "type": "MASK",
           "link": 4
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": null
         }
       ],
       "outputs": [
@@ -651,7 +666,7 @@
       4,
       0,
       7,
-      2,
+      3,
       "MASK"
     ],
     [

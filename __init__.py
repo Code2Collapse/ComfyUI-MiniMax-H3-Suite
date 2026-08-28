@@ -4,13 +4,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# ComfyUI imports its own top-level `utils` package before custom nodes load.
-# Legacy dirs named `utils/` and `nodes/` collided with sys.modules — rename once.
+# ComfyUI imports its own top-level `utils` package and `nodes.py` before custom
+# nodes load, so package dirs named `utils/`/`nodes/` here would shadow-collide in
+# sys.modules and register ZERO nodes while looking healthy. They were renamed to
+# mmx_utils/ and mmx_nodes/ once, in 2026-08.
+#
+# This used to RENAME those directories on every import. Mutating the filesystem as
+# a side effect of an import is not acceptable in a plugin ComfyUI loads at startup:
+# it fails on read-only installs, and it silently moves a directory someone may have
+# created deliberately. Detect and refuse instead — the migration is long done, so
+# reaching this means something is genuinely wrong.
 _PKG = Path(__file__).resolve().parent
-for _old, _new in (("utils", "mmx_utils"), ("nodes", "mmx_nodes")):
-    _src, _dst = _PKG / _old, _PKG / _new
-    if _src.is_dir() and not _dst.is_dir():
-        _src.rename(_dst)
+for _legacy in ("utils", "nodes"):
+    if (_PKG / _legacy).is_dir():
+        raise RuntimeError(
+            f"ComfyUI-MiniMaxSuite: found a legacy '{_legacy}/' directory at {_PKG / _legacy}. "
+            f"It collides with ComfyUI's own top-level '{_legacy}' and will stop this pack "
+            f"from registering any nodes. Rename it to 'mmx_{_legacy}' and update imports."
+        )
 
 import logging
 from typing_extensions import override

@@ -83,7 +83,7 @@ def merge_per_frame_video_mask(
             import comfy.nested_tensor as nested_tensor
 
             new_mask = nested_tensor.NestedTensor((vmask.to(video.dtype), audio_zero))
-        except ImportError:
+        except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
             new_mask = (vmask.to(video.dtype), audio_zero)
     out = dict(av_latent)
     out["noise_mask"] = new_mask

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import builtins
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -116,3 +117,44 @@ def test_sigma_inspector_emits_ui_payload():
     assert out.ui is not None
     assert "mmx_sigma" in out.ui
     assert out.ui["mmx_sigma"][0]
+
+
+def test_all_four_widget_nodes_emit_ui_payloads():
+    """Bug #14 regression, for all four widget nodes rather than one.
+
+    Only NodeOutput.ui reaches the browser (execution.py:377-381, :563). If any of
+    these stops emitting its key, its widget goes back to sitting on the loading
+    spinner forever — and nothing else in this suite would notice, because the
+    socket outputs would still be perfectly correct.
+    """
+    from mmx_nodes.drift_qc import MiniMaxH3_DriftQC
+    from mmx_nodes.mask_prep import MiniMaxH3_MaskPrep
+    from mmx_nodes.sigma_inspector import MiniMaxH3_SigmaInspector
+    from mmx_nodes.track_crop import MiniMaxH3_TrackCrop
+
+    torch.manual_seed(0)
+
+    images = torch.rand(22, 128, 128, 3)
+    boxes = json.dumps([[40.0, 40.0, 48.0, 48.0]] * 22)
+    tc = MiniMaxH3_TrackCrop.execute(
+        images, bboxes_json=boxes, canvas_width=512, canvas_height=512
+    )
+    assert tc.ui is not None and "mmx_boxes" in tc.ui, "W1 lost its trajectory payload"
+    assert "images" in tc.ui, "W1 lost its preview backdrop"
+    assert json.loads(tc.ui["mmx_boxes"][0])["boxes"], "mmx_boxes carries no boxes"
+
+    mask = torch.zeros(22, 128, 128)
+    mask[:, 40:88, 40:88] = 1.0
+    mp = MiniMaxH3_MaskPrep.execute(mask, width=512, height=512, frame_count=22)
+    assert mp.ui is not None
+    for key in ("mmx_pixel_mask", "mmx_token_preview"):
+        assert key in mp.ui, f"W2 lost {key}"
+
+    si = MiniMaxH3_SigmaInspector.execute(torch.tensor([1.0, 0.5, 0.0]))
+    assert si.ui is not None and si.ui["mmx_sigma"][0], "W3 lost its sigma payload"
+
+    original = torch.rand(2, 192, 192, 3)
+    dq = MiniMaxH3_DriftQC.execute(original, original.clone(), torch.zeros(2, 192, 192), 2.0)
+    assert dq.ui is not None and "mmx_drift" in dq.ui, "W4 lost its drift payload"
+    payload = json.loads(dq.ui["mmx_drift"][0])
+    assert "drift_px" in payload and "passed" in payload

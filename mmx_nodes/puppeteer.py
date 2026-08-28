@@ -19,7 +19,7 @@ from mmx_utils.puppeteer import RIG_TYPES, render_motion_hints
 
 try:
     import comfy.model_management as mm
-except ImportError:
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
     mm = None
 
 

@@ -19,7 +19,7 @@ from mmx_utils.mask_to_token import pixel_mask_to_h3_latent, token_preview_upsam
 
 try:
     import comfy.model_management as mm
-except ImportError:
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
     mm = None
 
 

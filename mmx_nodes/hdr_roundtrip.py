@@ -20,7 +20,7 @@ from mmx_utils.ocio_config import config_source_note, list_colorspaces, list_dis
 
 try:
     import comfy.model_management as mm
-except ImportError:
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
     mm = None
 
 

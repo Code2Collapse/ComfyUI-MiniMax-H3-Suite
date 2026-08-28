@@ -18,10 +18,16 @@ if str(_PKG) not in sys.path:
 
 from mmx_utils.affine_transform import affine_crop_batch
 from mmx_utils.crop_planner_tv import plan_tracked_crop_tv
+from mmx_utils.device import run_with_cpu_fallback
 from mmx_utils.detection import merge_detection_sources
 from mmx_utils.h3_constants import adapt_canvas
 from mmx_utils.jitterless_boxes import build_jitterless_boxes, lock_anchor_size, smooth_centers
 from mmx_utils.transform_types import H3Transform, H3TransformType
+
+try:
+    import comfy.model_management as mm
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
+    mm = None
 
 
 class MiniMaxH3_TrackCrop(io.ComfyNode):
@@ -200,7 +206,21 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
             need = min(max(need, 128), cap)
             cw, ch = adapt_canvas(need, need)
 
-        crops = affine_crop_batch(images, boxes, cw, ch)
+        # R5: the crop is the first heavy step of the spine and was running with no
+        # OOM path at all — on an 8 GB card it hard-failed here before any other node
+        # got a chance to fall back. affine_crop_batch already walks frame by frame,
+        # so the retry is a device swap, not a re-chunk.
+        dev = images.device
+        if mm is not None:
+            try:
+                dev = mm.get_torch_device()
+            except Exception:
+                dev = images.device
+
+        def _crop(device: torch.device) -> torch.Tensor:
+            return affine_crop_batch(images.to(device), boxes, cw, ch).to(images.device)
+
+        crops = run_with_cpu_fallback(_crop, device=dev, label="MiniMaxH3_TrackCrop")
         preview = images[..., :3].clone()
         for i, (x, y, bw, bh) in enumerate(boxes):
             xi, yi = int(round(x)), int(round(y))

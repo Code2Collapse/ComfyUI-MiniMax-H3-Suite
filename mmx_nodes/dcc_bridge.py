@@ -26,7 +26,7 @@ from mmx_utils.device import run_with_cpu_fallback
 
 try:
     import comfy.model_management as mm
-except ImportError:
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
     mm = None
 
 

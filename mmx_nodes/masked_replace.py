@@ -29,7 +29,7 @@ from mmx_utils.av_latent import (
 try:
     import comfy.model_management as mm
     import comfy.nested_tensor as nested_tensor
-except ImportError:
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
     mm = None
     nested_tensor = None
 

@@ -30,7 +30,7 @@ from mmx_utils.vitpose_plate import VitPoseUnavailableError, detect_keypoints_pl
 
 try:
     import comfy.model_management as mm
-except ImportError:
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
     mm = None
 
 
