@@ -12,6 +12,79 @@ TRAINED_SHIFT_AUDIO = 3.0
 TRAINED_SHIFT_RATIO = TRAINED_SHIFT_VIDEO / TRAINED_SHIFT_AUDIO
 
 
+def d_sigma_dt(t: float, shift: float) -> float:
+    """Analytic dσ/dt for σ(t) = shift·t / (1 + (shift − 1)·t)."""
+    t = float(t)
+    shift = float(shift)
+    denom = 1.0 + (shift - 1.0) * t
+    return shift / (denom * denom)
+
+
+def sigma_to_t(sigma: float, shift: float) -> float:
+    """Invert σ(t) for t given σ on a shift schedule."""
+    sigma = float(sigma)
+    shift = float(shift)
+    denom = shift + sigma * (1.0 - shift)
+    if abs(denom) < 1e-12:
+        return 0.0
+    return sigma / denom
+
+
+def dsigma_a_over_dsigma_v(t: float, shift_video: float, shift_audio: float) -> float:
+    """Analytic dσ_a/dσ_v at coupled parameter t (independent of step count)."""
+    dv = d_sigma_dt(t, shift_video)
+    da = d_sigma_dt(t, shift_audio)
+    if abs(dv) < 1e-12:
+        return 0.0
+    return da / dv
+
+
+def audio_carry_factor(sigma_v: float, sigma_a: float) -> float:
+    """σ_v / σ_a — how video σ carries relative to audio σ at this point."""
+    sa = float(sigma_a)
+    if abs(sa) < 1e-12:
+        return 0.0
+    return float(sigma_v) / sa
+
+
+def synthesize_linear_sigmas(steps: int) -> torch.Tensor:
+    """Simple H3 schedule: linear σ_v from 1 → 0 (BasicScheduler default shape)."""
+    n = int(steps)
+    if n < 1:
+        raise ValueError("steps must be >= 1")
+    return torch.linspace(1.0, 0.0, n + 1, dtype=torch.float32)
+
+
+def _inspector_step_row(
+    i: int,
+    sig_v: float,
+    sig_list: list[float],
+    *,
+    shift_video: float,
+    shift_audio: float,
+) -> dict[str, float | int]:
+    """Shared per-step fields for table + JSON inspector output."""
+    sig_a = float(time_shift_sigma(sig_v, shift_video, shift_audio))
+    t = sigma_to_t(sig_v, shift_video)
+    ds_analytic = float(dsigma_a_over_dsigma_v(t, shift_video, shift_audio))
+    if i + 1 < len(sig_list):
+        nxt_v = sig_list[i + 1]
+        nxt_a = float(time_shift_sigma(nxt_v, shift_video, shift_audio))
+        ds_fd = (nxt_a - sig_a) / (nxt_v - sig_v) if abs(nxt_v - sig_v) > 1e-12 else 0.0
+    else:
+        ds_fd = 0.0
+    return {
+        "step": i,
+        "t": float(t),
+        "sigma_v": float(sig_v),
+        "sigma_a": sig_a,
+        "dsigma_a_dsigma_v": ds_analytic,
+        "dsigma_a_dsigma_v_fd": float(ds_fd),
+        "carry_factor": float(audio_carry_factor(sig_v, sig_a)),
+        "effective_denoise_v": float(1.0 - sig_v),
+    }
+
+
 def time_shift_sigma(sigma: float | torch.Tensor, from_shift: float, to_shift: float):
     """Map sigma through from_shift grid, re-apply to_shift (core model.py)."""
     if isinstance(sigma, torch.Tensor):
@@ -61,8 +134,21 @@ def validate_h3_sigmas(
         return False, "sigmas must be strictly decreasing"
     if not bool(torch.isclose(sigmas[0], sigmas.new_tensor(1.0), atol=1e-3, rtol=0.0)):
         lines.append(f"WARNING: first sigma is {float(sigmas[0]):.4f}, expected ~1.0 for full denoise")
+    # STRUCTURAL SplitSigmas fingerprint, not a name match.
+    #
+    # Checking `"split" in scheduler` (below) only catches a scheduler NAMED split —
+    # a real SplitSigmas node upstream leaves scheduler="simple" and hands us the
+    # truncated tensor, which sailed through. Every legitimate H3 schedule ends at
+    # 0.0, including partial denoise: BasicScheduler denoise<1 STARTS lower but
+    # still lands on 0. A SplitSigmas high half does not, so a non-zero tail is a
+    # clean discriminator that cannot fire on legal partial denoise.
     if not bool(torch.isclose(sigmas[-1], sigmas.new_tensor(0.0), atol=1e-5, rtol=0.0)):
-        lines.append(f"WARNING: last sigma is {float(sigmas[-1]):.6f}, expected 0.0")
+        return False, (
+            f"This sigma schedule stops at {float(sigmas[-1]):.6f} instead of 0.0, which means "
+            "it is one half of a split schedule. SplitSigmas is illegal on H3 — it desynchronises "
+            "the video and audio clocks. Use BasicScheduler's denoise input to sample partially; "
+            "that still ends at 0."
+        )
 
     sched = (scheduler or "simple").lower()
     if sched not in ("simple", "sgm_uniform", "karras", "exponential", "beta"):
@@ -118,21 +204,20 @@ def format_sigma_inspector_table(
     shift_video: float = TRAINED_SHIFT_VIDEO,
     shift_audio: float = TRAINED_SHIFT_AUDIO,
 ) -> str:
-    """P2 backend: markdown table of σv, σa, dσa/dσv per step."""
+    """P2 backend: markdown table of σv, σa, analytic + FD dσa/dσv per step."""
     sv = float(shift_video)
     sa = float(shift_audio)
-    rows = ["step | sigma_v | sigma_a | dsigma_a/dsigma_v | effective_denoise_v"]
-    for i, sig_v in enumerate(sigmas.tolist()):
-        sig_v = float(sig_v)
-        sig_a = float(time_shift_sigma(sig_v, sv, sa))
-        if i + 1 < len(sigmas):
-            nxt_v = float(sigmas[i + 1].item())
-            nxt_a = float(time_shift_sigma(nxt_v, sv, sa))
-            ds = (nxt_a - sig_a) / (nxt_v - sig_v) if abs(nxt_v - sig_v) > 1e-12 else 0.0
-        else:
-            ds = 0.0
-        eff = 1.0 - sig_v
-        rows.append(f"{i:4d} | {sig_v:7.5f} | {sig_a:7.5f} | {ds:16.5f} | {eff:.5f}")
+    sig_list = [float(s) for s in sigmas.tolist()]
+    rows = [
+        "step | sigma_v | sigma_a | dsigma_a/dsigma_v (analytic) | dsigma_a/dsigma_v (fd) | carry σv/σa | effective_denoise_v"
+    ]
+    for i, sig_v in enumerate(sig_list):
+        row = _inspector_step_row(i, sig_v, sig_list, shift_video=sv, shift_audio=sa)
+        rows.append(
+            f"{row['step']:4d} | {row['sigma_v']:7.5f} | {row['sigma_a']:7.5f} | "
+            f"{row['dsigma_a_dsigma_v']:24.5f} | {row['dsigma_a_dsigma_v_fd']:22.5f} | "
+            f"{row['carry_factor']:11.5f} | {row['effective_denoise_v']:.5f}"
+        )
     return "\n".join(rows)
 
 
@@ -145,25 +230,11 @@ def build_sigma_inspector_json(
     """JSON payload for the sigma plot widget — same math as format_sigma_inspector_table."""
     sv = float(shift_video)
     sa = float(shift_audio)
-    steps: list[dict[str, float | int]] = []
     sig_list = [float(s) for s in sigmas.tolist()]
-    for i, sig_v in enumerate(sig_list):
-        sig_a = float(time_shift_sigma(sig_v, sv, sa))
-        if i + 1 < len(sig_list):
-            nxt_v = sig_list[i + 1]
-            nxt_a = float(time_shift_sigma(nxt_v, sv, sa))
-            ds = (nxt_a - sig_a) / (nxt_v - sig_v) if abs(nxt_v - sig_v) > 1e-12 else 0.0
-        else:
-            ds = 0.0
-        steps.append(
-            {
-                "step": i,
-                "sigma_v": sig_v,
-                "sigma_a": sig_a,
-                "dsigma_a_dsigma_v": float(ds),
-                "effective_denoise_v": float(1.0 - sig_v),
-            }
-        )
+    steps = [
+        _inspector_step_row(i, sig_v, sig_list, shift_video=sv, shift_audio=sa)
+        for i, sig_v in enumerate(sig_list)
+    ]
     payload = {
         "shift_video": sv,
         "shift_audio": sa,

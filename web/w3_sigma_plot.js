@@ -30,6 +30,23 @@ function timeShiftSigma(sigma, fromShift, toShift) {
   return (toShift * base) / (1.0 + (toShift - 1.0) * base);
 }
 
+function dSigmaDt(t, shift) {
+  const d = 1.0 + (shift - 1.0) * t;
+  return shift / (d * d);
+}
+
+function sigmaToT(sigma, shift) {
+  const denom = shift + sigma * (1.0 - shift);
+  return Math.abs(denom) > 1e-12 ? sigma / denom : 0.0;
+}
+
+function dsigmaADsigmaVAnalytic(sigmaV, shiftVideo, shiftAudio) {
+  const t = sigmaToT(sigmaV, shiftVideo);
+  const dv = dSigmaDt(t, shiftVideo);
+  const da = dSigmaDt(t, shiftAudio);
+  return Math.abs(dv) > 1e-12 ? da / dv : 0;
+}
+
 function recomputeSteps(sigmasV, shiftVideo, shiftAudio) {
   const sv = Number(shiftVideo);
   const sa = Number(shiftAudio);
@@ -37,14 +54,22 @@ function recomputeSteps(sigmasV, shiftVideo, shiftAudio) {
   for (let i = 0; i < sigmasV.length; i++) {
     const sigV = Number(sigmasV[i]);
     const sigA = timeShiftSigma(sigV, sv, sa);
-    let ds = 0;
+    const dsAnalytic = dsigmaADsigmaVAnalytic(sigV, sv, sa);
+    let dsFd = 0;
     if (i + 1 < sigmasV.length) {
       const nxtV = Number(sigmasV[i + 1]);
       const nxtA = timeShiftSigma(nxtV, sv, sa);
       const dv = nxtV - sigV;
-      ds = Math.abs(dv) > 1e-12 ? (nxtA - sigA) / dv : 0;
+      dsFd = Math.abs(dv) > 1e-12 ? (nxtA - sigA) / dv : 0;
     }
-    steps.push({ step: i, sigma_v: sigV, sigma_a: sigA, dsigma_a_dsigma_v: ds });
+    steps.push({
+      step: i,
+      sigma_v: sigV,
+      sigma_a: sigA,
+      dsigma_a_dsigma_v: dsAnalytic,
+      dsigma_a_dsigma_v_fd: dsFd,
+      carry_factor: Math.abs(sigA) > 1e-12 ? sigV / sigA : 0,
+    });
   }
   return steps;
 }
@@ -197,7 +222,7 @@ function paintFrame(node) {
   ctx.fillStyle = "#fbbf24";
   ctx.fillText("σa", pad.l + 24, pad.t + 10);
   ctx.fillStyle = "#a78bfa";
-  ctx.fillText("dσa/dσv", pad.l + 44, pad.t + 10);
+  ctx.fillText("dσa/dσv (analytic)", pad.l + 44, pad.t + 10);
 }
 
 function handleExecuted(node, output) {

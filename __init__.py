@@ -43,6 +43,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.accelerator_conflict", "MiniMaxH3_AcceleratorConflict"),
     (".mmx_nodes.legal_scheduler", "MiniMaxH3_LegalScheduler"),
     (".mmx_nodes.sigma_shift_locked", "MiniMaxH3_SigmaShiftLocked"),
+    (".mmx_nodes.dual_clock_shim", "MiniMaxH3_DualClockShim"),
     (".mmx_nodes.per_frame_denoise", "MiniMaxH3_PerFrameDenoise"),
     (".mmx_nodes.block_cache", "MiniMaxH3_BlockCacheT8"),
     (".mmx_nodes.sigma_inspector", "MiniMaxH3_SigmaInspector"),
@@ -111,6 +112,10 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.sigma_shift_locked import MiniMaxH3_SigmaShiftLocked
 
                 nodes.append(MiniMaxH3_SigmaShiftLocked)
+            elif mod_path.endswith("dual_clock_shim"):
+                from .mmx_nodes.dual_clock_shim import MiniMaxH3_DualClockShim
+
+                nodes.append(MiniMaxH3_DualClockShim)
             elif mod_path.endswith("per_frame_denoise"):
                 from .mmx_nodes.per_frame_denoise import MiniMaxH3_PerFrameDenoise
 
