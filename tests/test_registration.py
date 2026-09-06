@@ -26,8 +26,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 29
+EXPECTED_NODE_COUNT = 31
 SPINE_NODES = {
+    "MiniMaxH3_FrameRangeMask",
     "MiniMaxH3_TrackCrop",
     "MiniMaxH3_MaskPrep",
     "MiniMaxH3_StitchBack",
