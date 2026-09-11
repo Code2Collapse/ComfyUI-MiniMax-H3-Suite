@@ -49,6 +49,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.sigma_inspector", "MiniMaxH3_SigmaInspector"),
     (".mmx_nodes.differential_denoise", "MiniMaxH3_DifferentialDenoise"),
     (".mmx_nodes.frame_range_mask", "MiniMaxH3_FrameRangeMask"),
+    (".mmx_nodes.context_windows", "MiniMaxH3_ContextWindows"),
     (".mmx_nodes.turbo_lora", "MiniMaxH3_TurboLoRA"),
     (".mmx_nodes.turbo_sampler", "MiniMaxH3_TurboSampler"),
     (".mmx_nodes.audio_quality_gate", "MiniMaxH3_AudioQualityGate"),
@@ -167,6 +168,10 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.frame_range_mask import MiniMaxH3_FrameRangeMask
 
                 nodes.append(MiniMaxH3_FrameRangeMask)
+            elif mod_path.endswith("context_windows"):
+                from .mmx_nodes.context_windows import MiniMaxH3_ContextWindows
+
+                nodes.append(MiniMaxH3_ContextWindows)
             elif mod_path.endswith("turbo_lora"):
                 from .mmx_nodes.turbo_lora import MiniMaxH3_TurboLoRA
 
