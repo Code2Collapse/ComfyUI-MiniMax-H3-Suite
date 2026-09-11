@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 31
+EXPECTED_NODE_COUNT = 39
 SPINE_NODES = {
     "MiniMaxH3_FrameRangeMask",
     "MiniMaxH3_TrackCrop",
@@ -70,6 +70,17 @@ AUTHORING_NODES = {
 }
 BRIDGE_NODES = {
     "MiniMaxH3_DCCBridge",
+}
+MASK_NODES = {
+    "MiniMaxH3_MaskCleanup",
+    "MiniMaxH3_SubjectCrop",
+    "MiniMaxH3_SubjectCropAdvanced",
+    "MiniMaxH3_SubjectUncrop",
+    "MiniMaxH3_MaskToLatentSpace",
+    "MiniMaxH3_LatentMaskToMask",
+    "MiniMaxH3_AudioMaskToLatent",
+    "MiniMaxH3_AudioMaskDebug",
+    "MiniMaxH3_DifferentialDenoise",
 }
 
 
@@ -160,6 +171,7 @@ def test_all_nodes_register():
         | QC_NODES
         | AUTHORING_NODES
         | BRIDGE_NODES
+        | MASK_NODES
     ) - ids
     assert not missing, f"nodes failed to register: {sorted(missing)}"
     assert len(nodes) == EXPECTED_NODE_COUNT, sorted(ids)

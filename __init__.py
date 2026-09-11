@@ -63,6 +63,14 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.dcc_bridge", "MiniMaxH3_DCCBridge"),
     (".mmx_nodes.puppeteer", "MiniMaxH3_PosePuppeteer"),
     (".mmx_nodes.hdr_roundtrip", "MiniMaxH3_HDRRoundtrip"),
+    (".mmx_nodes.mask_cleanup", "MiniMaxH3_MaskCleanup"),
+    (".mmx_nodes.subject_crop", "MiniMaxH3_SubjectCrop"),
+    (".mmx_nodes.subject_crop", "MiniMaxH3_SubjectCropAdvanced"),
+    (".mmx_nodes.subject_crop", "MiniMaxH3_SubjectUncrop"),
+    (".mmx_nodes.mask_to_latent", "MiniMaxH3_MaskToLatentSpace"),
+    (".mmx_nodes.mask_to_latent", "MiniMaxH3_LatentMaskToMask"),
+    (".mmx_nodes.audio_mask", "MiniMaxH3_AudioMaskToLatent"),
+    (".mmx_nodes.audio_mask", "MiniMaxH3_AudioMaskDebug"),
 )
 
 
@@ -194,6 +202,38 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.hdr_roundtrip import MiniMaxH3_HDRRoundtrip
 
                 nodes.append(MiniMaxH3_HDRRoundtrip)
+            elif mod_path.endswith("mask_cleanup"):
+                from .mmx_nodes.mask_cleanup import MiniMaxH3_MaskCleanup
+
+                nodes.append(MiniMaxH3_MaskCleanup)
+            elif mod_path.endswith("subject_crop") and cls_name == "MiniMaxH3_SubjectCrop":
+                from .mmx_nodes.subject_crop import MiniMaxH3_SubjectCrop
+
+                nodes.append(MiniMaxH3_SubjectCrop)
+            elif mod_path.endswith("subject_crop") and cls_name == "MiniMaxH3_SubjectCropAdvanced":
+                from .mmx_nodes.subject_crop import MiniMaxH3_SubjectCropAdvanced
+
+                nodes.append(MiniMaxH3_SubjectCropAdvanced)
+            elif mod_path.endswith("subject_crop") and cls_name == "MiniMaxH3_SubjectUncrop":
+                from .mmx_nodes.subject_crop import MiniMaxH3_SubjectUncrop
+
+                nodes.append(MiniMaxH3_SubjectUncrop)
+            elif mod_path.endswith("mask_to_latent") and cls_name == "MiniMaxH3_MaskToLatentSpace":
+                from .mmx_nodes.mask_to_latent import MiniMaxH3_MaskToLatentSpace
+
+                nodes.append(MiniMaxH3_MaskToLatentSpace)
+            elif mod_path.endswith("mask_to_latent") and cls_name == "MiniMaxH3_LatentMaskToMask":
+                from .mmx_nodes.mask_to_latent import MiniMaxH3_LatentMaskToMask
+
+                nodes.append(MiniMaxH3_LatentMaskToMask)
+            elif mod_path.endswith("audio_mask") and cls_name == "MiniMaxH3_AudioMaskToLatent":
+                from .mmx_nodes.audio_mask import MiniMaxH3_AudioMaskToLatent
+
+                nodes.append(MiniMaxH3_AudioMaskToLatent)
+            elif mod_path.endswith("audio_mask") and cls_name == "MiniMaxH3_AudioMaskDebug":
+                from .mmx_nodes.audio_mask import MiniMaxH3_AudioMaskDebug
+
+                nodes.append(MiniMaxH3_AudioMaskDebug)
         except Exception as exc:
             msg = f"ComfyUI-MiniMaxSuite: failed to import {cls_name}: {exc}"
             _LOAD_ERRORS.append(msg)
