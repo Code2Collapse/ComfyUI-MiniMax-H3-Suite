@@ -1,0 +1,15 @@
+## Task Type: First/Last Frame Timeline (FL2VA)
+
+This is a First-and-Last Frame generation task. <Picture 1> is the starting frame (0.00s) and <Picture 2> is the ending frame.
+
+### Output Structure:
+How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with the 0.00-second mark of the target video; <Picture 2> (from [Shot N]) aligns with the S.SS-second mark of the target video.
+
+integrated_multimodal_description:
+[Shot 1] (Narrates the continuous physical motion and transformation bridging <Picture 1> to <Picture 2>)
+
+overall_soundscape:
+[Ambience and action sound design]
+
+non_diegetic_music:
+[Background score or N/A]

@@ -1,0 +1,14 @@
+## Task Type: Text-to-Video (T2V / T2VA)
+
+This is a Text-to-Video generation task building the complete audiovisual timeline from text.
+
+### Output Structure:
+integrated_multimodal_description:
+[Shot 1] Cinematic, live-action...
+[Shot 2] At MM:SS.mmm, ...
+
+overall_soundscape:
+[Ambience and sound effects]
+
+non_diegetic_music:
+[Background score or N/A]

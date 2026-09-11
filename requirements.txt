@@ -1,2 +1,5 @@
 scipy>=1.11.0
 numpy>=1.24.0
+# Face refine (optional — nodes fail with a clear message if absent):
+# ultralytics
+# insightface

@@ -1,0 +1,156 @@
+# PORTED FROM: 1038lab/ComfyUI-Minimax-H3-Promptor :: py/utils.py
+# Comfyui-Minimax-H3-Promptor — author 1038lab, GPL-3.0
+
+from __future__ import annotations
+
+import base64
+import io
+import re
+
+import numpy as np
+
+
+
+def log_info(msg: str):
+    print(f"\033[34m[H3-Promptor]\033[0m {msg}")
+
+
+def log_error(msg: str):
+    print(f"\033[31m[H3-Promptor ERROR]\033[0m {msg}")
+
+
+def log_debug(msg: str):
+    print(f"\033[90m[H3-Promptor]\033[0m {msg}")
+
+
+def log_warning(msg: str):
+    print(f"\033[33m[H3-Promptor WARNING]\033[0m {msg}")
+
+
+def tensor_to_base64(tensor, max_frames: int = 4) -> list[str]:
+    from PIL import Image
+
+    if isinstance(tensor, str):
+        return [tensor]
+    if isinstance(tensor, list):
+        res = []
+        for item in tensor:
+            res.extend(tensor_to_base64(item, max_frames=max_frames))
+        return res
+
+    if hasattr(tensor, "get_components"):
+        tensor = tensor.get_components().images
+
+    if hasattr(tensor, "cpu"):
+        img_array = tensor.cpu().numpy()
+    elif isinstance(tensor, np.ndarray):
+        img_array = tensor
+    else:
+        return []
+
+    if img_array.ndim == 3:
+        img_array = np.expand_dims(img_array, axis=0)
+
+    batch_size = img_array.shape[0]
+    if batch_size > max_frames:
+        indices = np.linspace(0, batch_size - 1, max_frames, dtype=int)
+    else:
+        indices = np.arange(batch_size)
+
+    base64_images = []
+    for idx in indices:
+        frame_array = img_array[idx]
+        frame_array = np.clip(frame_array * 255.0, 0, 255).astype(np.uint8)
+        img_pil = Image.fromarray(frame_array)
+        buffered = io.BytesIO()
+        img_pil.save(buffered, format="JPEG", quality=85)
+        base64_images.append(base64.b64encode(buffered.getvalue()).decode("utf-8"))
+
+    return base64_images
+
+
+def sanitize_llm_output(text: str) -> str:
+    if not text:
+        return ""
+
+    result = text.strip()
+    result = re.sub(
+        r"<think>.*?</think>", "", result, flags=re.DOTALL | re.IGNORECASE
+    ).strip()
+
+    if "<think>" in result.lower() and "</think>" not in result.lower():
+        result = re.sub(r"<think>.*", "", result, flags=re.DOTALL | re.IGNORECASE).strip()
+
+    section_marker = re.search(
+        r"(?:^|\n)(\[Shot 1\]|subject_definitions:|integrated_multimodal_description:|detailed_description:|For the target video|How the reference)",
+        result,
+        re.IGNORECASE,
+    )
+    if section_marker and section_marker.start() > 0:
+        preamble = result[: section_marker.start()]
+        if any(
+            term in preamble.lower()
+            for term in ["thinking", "thought", "analyze", "drafting", "step 1", "step 2", "constraints", "1.", "2.", "*"]
+        ):
+            result = result[section_marker.start() :].strip()
+
+    fence_match = re.search(r"^```(?:text|json|plaintext|plain|markdown)?\s*\n(.*?)\n```\s*$", result, re.DOTALL)
+    if fence_match:
+        result = fence_match.group(1).strip()
+    else:
+        result = re.sub(r"^```[\w]*\s*\n", "", result)
+        result = re.sub(r"\n```\s*$", "", result)
+
+    json_match = re.match(
+        r'^\s*\{\s*"(?:prompt|output|result|text)"\s*:\s*"(.*?)"\s*\}\s*$', result, re.DOTALL
+    )
+    if json_match:
+        result = json_match.group(1).strip().replace("\\n", "\n").replace('\\"', '"')
+
+    preambles = [
+        r"^Here(?:'s| is) (?:the|your) (?:generated |rewritten |final )?(?:H3 )?prompt:?\s*\n",
+        r"^(?:Sure|Okay|Of course)[!,.]?\s*(?:Here(?:'s| is).*?:)?\s*\n",
+        r"^Output:?\s*\n",
+    ]
+    for preamble in preambles:
+        result = re.sub(preamble, "", result, flags=re.IGNORECASE)
+
+    return result.strip()
+
+
+def _create_provider(provider_name: str, config_manager, api_key_override: str = ""):
+    # Imported HERE, not at module scope: the providers import log_debug back
+    # out of this module, and at module scope that cycle leaves `utils` only
+    # partially initialised -> ImportError -> the Promptor nodes silently do
+    # not register. By the time this function runs, both modules are complete.
+    from .provider_claude import ClaudeProvider
+    from .provider_gemini import GeminiProvider
+    from .provider_local_llm import LocalLLMProvider
+    from .provider_ollama import OllamaProvider
+    from .provider_openai import OpenAIProvider
+
+    provider_config = config_manager.get_provider_config(provider_name)
+    if not provider_config:
+        raise ValueError(f"Provider '{provider_name}' not configured.")
+
+    api_base = provider_config.get("api_base", "")
+    api_key = api_key_override or provider_config.get("api_key", "")
+    model = provider_config.get("model", "") or provider_config.get("default_model", "")
+    provider_type = provider_config.get("type", "openai").lower()
+    disable_thinking = provider_config.get("disable_thinking", True)
+
+    if provider_type == "ollama":
+        return OllamaProvider(api_base=api_base, model=model)
+    if provider_type == "gemini":
+        return GeminiProvider(
+            api_base=api_base, api_key=api_key, model=model, disable_thinking=disable_thinking
+        )
+    if provider_type in ["anthropic", "claude"]:
+        return ClaudeProvider(api_base=api_base, api_key=api_key, model=model)
+    if provider_type in ["local_llm", "qwenvl", "local_qwenvl"]:
+        return LocalLLMProvider(
+            api_base=api_base, api_key=api_key, model=model, disable_thinking=disable_thinking
+        )
+    return OpenAIProvider(
+        api_base=api_base, api_key=api_key, model=model, disable_thinking=disable_thinking
+    )

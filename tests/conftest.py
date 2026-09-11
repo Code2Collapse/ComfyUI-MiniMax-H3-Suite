@@ -15,3 +15,11 @@ for candidate in (
     p = str(candidate)
     if (candidate / "comfy_api").is_dir() and p not in sys.path:
         sys.path.insert(0, p)
+
+# Materialise spectrum_h3 from third_party before any test imports spectrum nodes.
+try:
+    from mmx_utils.spectrum_h3._copy_from_third_party import ensure_ported
+
+    ensure_ported()
+except Exception:
+    pass

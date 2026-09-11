@@ -1,0 +1,16 @@
+## Task Type: Image-to-Video (I2V)
+
+This is an Image-to-Video generation task. <Picture 1> is the starting frame at 0.00 seconds.
+
+### Output Structure:
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+
+integrated_multimodal_description:
+[Shot 1] (Begins exactly matching the composition, lighting, and pose of <Picture 1>, then narrating the continuous forward motion)
+[Shot 2] At MM:SS.mmm, ...
+
+overall_soundscape:
+[Ambient environment tone and action sounds]
+
+non_diegetic_music:
+[Background score or N/A]

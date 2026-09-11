@@ -1,0 +1,14 @@
+## Task Type: Audio-to-Video (A2V / Audio Synchronization)
+
+This is an Audio-to-Video generation task where <Audio 1> provides the primary dialogue, music, or beat timeline.
+
+### Output Structure:
+integrated_multimodal_description:
+[Shot 1] ... (Narrates visual actions strictly synchronizing with <Audio 1>)
+[Shot 2] At MM:SS.mmm, ...
+
+overall_soundscape:
+[Ambience and sound effects]
+
+non_diegetic_music:
+[Score description or N/A]

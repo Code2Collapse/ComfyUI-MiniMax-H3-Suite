@@ -1,0 +1,15 @@
+## Task Type: Last Frame to Video (L2VA)
+
+This is a Last-Frame generation task. <Picture 1> is the ending frame at S.SS seconds.
+
+### Output Structure:
+How the reference pictures align with the target video — <Picture 1> (from [Shot N]) aligns with the S.SS-second mark of the target video.
+
+integrated_multimodal_description:
+[Shot 1] ... (Infers a plausible preceding state and narrates the causal action converging on the final frame)
+
+overall_soundscape:
+[Ambience and sound effects]
+
+non_diegetic_music:
+[Background score or N/A]

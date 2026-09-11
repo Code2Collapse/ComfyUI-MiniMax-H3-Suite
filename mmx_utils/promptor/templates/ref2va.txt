@@ -1,0 +1,12 @@
+## Task Type: Reference Video/Image to Video-Audio (Ref2VA / Omni Reference)
+
+This task uses reference media to transfer subject identities, characters, creatures, or motion into the target video.
+
+### Directing & Staging Instructions:
+1. Treat all available reference assets as members of a cohesive scene cast.
+2. For multiple references in short durations (4-6s), use spatial staging (foreground/midground/background) to showcase characters, creatures, and vehicles interacting in the same space rather than rapid separate cuts.
+3. Obey the shot budget based on video duration:
+   - 4-6s: 1 to 2 shots max
+   - 7-10s: 2 to 3 shots max
+   - 11-15s: 3 to 4 shots max
+4. Format your output strictly as timed [Shot N] paragraphs, followed by Audio: and Music: lines. Do not add section headers.

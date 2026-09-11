@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 39
+EXPECTED_NODE_COUNT = 60
 SPINE_NODES = {
     "MiniMaxH3_FrameRangeMask",
     "MiniMaxH3_TrackCrop",
@@ -81,6 +81,35 @@ MASK_NODES = {
     "MiniMaxH3_AudioMaskToLatent",
     "MiniMaxH3_AudioMaskDebug",
     "MiniMaxH3_DifferentialDenoise",
+}
+PROMPT_NODES = {
+    "MiniMaxH3_Promptor",
+    "MiniMaxH3_Vision",
+    "MiniMaxH3_PromptEditor",
+    "MiniMaxH3_PromptComposer",
+}
+SPECTRUM_NODES = {
+    "MiniMaxH3_SpectrumApply",
+    "MiniMaxH3_ObjectiveMediaStage",
+    "MiniMaxH3_ObjectiveQualityCompare",
+    "MiniMaxH3_ObjectiveStagedQualityCompare",
+    "MiniMaxH3_ObjectiveSequentialCapture",
+    "MiniMaxH3_ObjectiveCaptureReset",
+}
+MOTION_NODES = {
+    "MiniMaxH3_MotionContext",
+    "MiniMaxH3_MotionContextTrim",
+    "MiniMaxH3_MotionContextSaveLatent",
+    "MiniMaxH3_MotionContextLoadLatent",
+    "MiniMaxH3_MotionContextChain",
+    "MiniMaxH3_MotionContextSeamProbe",
+}
+FACE_NODES = {
+    "MiniMaxH3_FaceTrackCrop",
+    "MiniMaxH3_FaceStitch",
+    "MiniMaxH3_InjectVideoLatent",
+    "MiniMaxH3_FaceMaskSAM",
+    "MiniMaxH3_FaceTransformInfo",
 }
 
 
@@ -172,6 +201,10 @@ def test_all_nodes_register():
         | AUTHORING_NODES
         | BRIDGE_NODES
         | MASK_NODES
+        | FACE_NODES
+        | MOTION_NODES
+        | SPECTRUM_NODES
+        | PROMPT_NODES
     ) - ids
     assert not missing, f"nodes failed to register: {sorted(missing)}"
     assert len(nodes) == EXPECTED_NODE_COUNT, sorted(ids)

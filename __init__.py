@@ -71,6 +71,27 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.mask_to_latent", "MiniMaxH3_LatentMaskToMask"),
     (".mmx_nodes.audio_mask", "MiniMaxH3_AudioMaskToLatent"),
     (".mmx_nodes.audio_mask", "MiniMaxH3_AudioMaskDebug"),
+    (".mmx_nodes.face_refine", "MiniMaxH3_FaceTrackCrop"),
+    (".mmx_nodes.face_refine", "MiniMaxH3_FaceStitch"),
+    (".mmx_nodes.face_refine", "MiniMaxH3_InjectVideoLatent"),
+    (".mmx_nodes.face_refine", "MiniMaxH3_FaceMaskSAM"),
+    (".mmx_nodes.face_refine", "MiniMaxH3_FaceTransformInfo"),
+    (".mmx_nodes.motion_context", "MiniMaxH3_MotionContext"),
+    (".mmx_nodes.motion_context", "MiniMaxH3_MotionContextTrim"),
+    (".mmx_nodes.motion_context", "MiniMaxH3_MotionContextSaveLatent"),
+    (".mmx_nodes.motion_context", "MiniMaxH3_MotionContextLoadLatent"),
+    (".mmx_nodes.motion_context", "MiniMaxH3_MotionContextChain"),
+    (".mmx_nodes.motion_context", "MiniMaxH3_MotionContextSeamProbe"),
+    (".mmx_nodes.spectrum", "MiniMaxH3_SpectrumApply"),
+    (".mmx_nodes.spectrum", "MiniMaxH3_ObjectiveMediaStage"),
+    (".mmx_nodes.spectrum", "MiniMaxH3_ObjectiveQualityCompare"),
+    (".mmx_nodes.spectrum", "MiniMaxH3_ObjectiveStagedQualityCompare"),
+    (".mmx_nodes.spectrum", "MiniMaxH3_ObjectiveSequentialCapture"),
+    (".mmx_nodes.spectrum", "MiniMaxH3_ObjectiveCaptureReset"),
+    (".mmx_nodes.promptor", "MiniMaxH3_Promptor"),
+    (".mmx_nodes.promptor", "MiniMaxH3_Vision"),
+    (".mmx_nodes.promptor", "MiniMaxH3_PromptEditor"),
+    (".mmx_nodes.promptor", "MiniMaxH3_PromptComposer"),
 )
 
 
@@ -234,6 +255,90 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.audio_mask import MiniMaxH3_AudioMaskDebug
 
                 nodes.append(MiniMaxH3_AudioMaskDebug)
+            elif mod_path.endswith("face_refine") and cls_name == "MiniMaxH3_FaceTrackCrop":
+                from .mmx_nodes.face_refine import MiniMaxH3_FaceTrackCrop
+
+                nodes.append(MiniMaxH3_FaceTrackCrop)
+            elif mod_path.endswith("face_refine") and cls_name == "MiniMaxH3_FaceStitch":
+                from .mmx_nodes.face_refine import MiniMaxH3_FaceStitch
+
+                nodes.append(MiniMaxH3_FaceStitch)
+            elif mod_path.endswith("face_refine") and cls_name == "MiniMaxH3_InjectVideoLatent":
+                from .mmx_nodes.face_refine import MiniMaxH3_InjectVideoLatent
+
+                nodes.append(MiniMaxH3_InjectVideoLatent)
+            elif mod_path.endswith("face_refine") and cls_name == "MiniMaxH3_FaceMaskSAM":
+                from .mmx_nodes.face_refine import MiniMaxH3_FaceMaskSAM
+
+                nodes.append(MiniMaxH3_FaceMaskSAM)
+            elif mod_path.endswith("face_refine") and cls_name == "MiniMaxH3_FaceTransformInfo":
+                from .mmx_nodes.face_refine import MiniMaxH3_FaceTransformInfo
+
+                nodes.append(MiniMaxH3_FaceTransformInfo)
+            elif mod_path.endswith("motion_context") and cls_name == "MiniMaxH3_MotionContext":
+                from .mmx_nodes.motion_context import MiniMaxH3_MotionContext
+
+                nodes.append(MiniMaxH3_MotionContext)
+            elif mod_path.endswith("motion_context") and cls_name == "MiniMaxH3_MotionContextTrim":
+                from .mmx_nodes.motion_context import MiniMaxH3_MotionContextTrim
+
+                nodes.append(MiniMaxH3_MotionContextTrim)
+            elif mod_path.endswith("motion_context") and cls_name == "MiniMaxH3_MotionContextSaveLatent":
+                from .mmx_nodes.motion_context import MiniMaxH3_MotionContextSaveLatent
+
+                nodes.append(MiniMaxH3_MotionContextSaveLatent)
+            elif mod_path.endswith("motion_context") and cls_name == "MiniMaxH3_MotionContextLoadLatent":
+                from .mmx_nodes.motion_context import MiniMaxH3_MotionContextLoadLatent
+
+                nodes.append(MiniMaxH3_MotionContextLoadLatent)
+            elif mod_path.endswith("motion_context") and cls_name == "MiniMaxH3_MotionContextChain":
+                from .mmx_nodes.motion_context import MiniMaxH3_MotionContextChain
+
+                nodes.append(MiniMaxH3_MotionContextChain)
+            elif mod_path.endswith("motion_context") and cls_name == "MiniMaxH3_MotionContextSeamProbe":
+                from .mmx_nodes.motion_context import MiniMaxH3_MotionContextSeamProbe
+
+                nodes.append(MiniMaxH3_MotionContextSeamProbe)
+            elif mod_path.endswith("spectrum") and cls_name == "MiniMaxH3_SpectrumApply":
+                from .mmx_nodes.spectrum import MiniMaxH3_SpectrumApply
+
+                nodes.append(MiniMaxH3_SpectrumApply)
+            elif mod_path.endswith("spectrum") and cls_name == "MiniMaxH3_ObjectiveMediaStage":
+                from .mmx_nodes.spectrum import MiniMaxH3_ObjectiveMediaStage
+
+                nodes.append(MiniMaxH3_ObjectiveMediaStage)
+            elif mod_path.endswith("spectrum") and cls_name == "MiniMaxH3_ObjectiveQualityCompare":
+                from .mmx_nodes.spectrum import MiniMaxH3_ObjectiveQualityCompare
+
+                nodes.append(MiniMaxH3_ObjectiveQualityCompare)
+            elif mod_path.endswith("spectrum") and cls_name == "MiniMaxH3_ObjectiveStagedQualityCompare":
+                from .mmx_nodes.spectrum import MiniMaxH3_ObjectiveStagedQualityCompare
+
+                nodes.append(MiniMaxH3_ObjectiveStagedQualityCompare)
+            elif mod_path.endswith("spectrum") and cls_name == "MiniMaxH3_ObjectiveSequentialCapture":
+                from .mmx_nodes.spectrum import MiniMaxH3_ObjectiveSequentialCapture
+
+                nodes.append(MiniMaxH3_ObjectiveSequentialCapture)
+            elif mod_path.endswith("spectrum") and cls_name == "MiniMaxH3_ObjectiveCaptureReset":
+                from .mmx_nodes.spectrum import MiniMaxH3_ObjectiveCaptureReset
+
+                nodes.append(MiniMaxH3_ObjectiveCaptureReset)
+            elif mod_path.endswith("promptor") and cls_name == "MiniMaxH3_Promptor":
+                from .mmx_nodes.promptor import MiniMaxH3_Promptor
+
+                nodes.append(MiniMaxH3_Promptor)
+            elif mod_path.endswith("promptor") and cls_name == "MiniMaxH3_Vision":
+                from .mmx_nodes.promptor import MiniMaxH3_Vision
+
+                nodes.append(MiniMaxH3_Vision)
+            elif mod_path.endswith("promptor") and cls_name == "MiniMaxH3_PromptEditor":
+                from .mmx_nodes.promptor import MiniMaxH3_PromptEditor
+
+                nodes.append(MiniMaxH3_PromptEditor)
+            elif mod_path.endswith("promptor") and cls_name == "MiniMaxH3_PromptComposer":
+                from .mmx_nodes.promptor import MiniMaxH3_PromptComposer
+
+                nodes.append(MiniMaxH3_PromptComposer)
         except Exception as exc:
             msg = f"ComfyUI-MiniMaxSuite: failed to import {cls_name}: {exc}"
             _LOAD_ERRORS.append(msg)
