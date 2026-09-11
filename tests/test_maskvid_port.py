@@ -119,3 +119,56 @@ def test_audio_mask_fills_time_range_on_audio_latent():
     assert amask[..., :20].amax() == 1.0
     assert amask[..., 20:].amax() == 0.0
     assert "source: time_ranges" in report
+
+
+# -- UI payload contract (w5_subject_crop.js depends on this) -----------------
+
+def test_subject_crop_emits_a_crop_plan_for_the_widget():
+    # INVARIANT: socket values never reach the browser - only NodeOutput.ui does -
+    # so w5_subject_crop.js can only draw the plan if this payload exists and
+    # carries frame size, per-frame boxes, and the jump list. Silently dropping
+    # it would leave the widget permanently on "Run the node".
+    import json as _json
+
+    n, h, w = 6, 96, 128
+    images = torch.rand(n, h, w, 3)
+    masks = torch.zeros(n, h, w)
+    masks[:, 30:70, 30:70] = 1.0
+    out = MiniMaxH3_SubjectCrop.execute(
+        images, masks,
+        {"mode": "combined", "crop_scale": 1.5, "aspect_ratio": 0.0},
+        divisible_by=16,
+    )
+    assert getattr(out, "ui", None), "NodeOutput carries no ui payload"
+    raw_json = out.ui["mmx_crop_plan"][0]
+    plan_d = _json.loads(raw_json)
+
+    # frame dims must be the REAL frame, not the crop - the widget scales the
+    # box against them, so swapping w/h would draw every box in the wrong place.
+    assert plan_d["frame_w"] == w
+    assert plan_d["frame_h"] == h
+    assert len(plan_d["boxes"]) == n
+    for b in plan_d["boxes"]:
+        assert {"x", "y", "w", "h"} <= set(b)
+        assert b["x"] >= 0 and b["y"] >= 0
+        assert b["x"] + b["w"] <= w and b["y"] + b["h"] <= h
+    assert isinstance(plan_d["jumps"], list)
+    assert all(0 < j < n for j in plan_d["jumps"])
+
+
+def test_crop_plan_marks_a_jump_only_when_the_box_actually_moves():
+    # INVARIANT: the jump ticks are the whole point of the timeline. A static
+    # subject must produce ZERO jumps, or every plan looks equally bad.
+    import json as _json
+
+    n, h, w = 8, 96, 96
+    images = torch.rand(n, h, w, 3)
+    masks = torch.zeros(n, h, w)
+    masks[:, 30:60, 30:60] = 1.0          # never moves
+    out = MiniMaxH3_SubjectCrop.execute(
+        images, masks,
+        {"mode": "combined", "crop_scale": 1.5, "aspect_ratio": 0.0},
+        divisible_by=16,
+    )
+    plan_d = _json.loads(out.ui["mmx_crop_plan"][0])
+    assert plan_d["jumps"] == []

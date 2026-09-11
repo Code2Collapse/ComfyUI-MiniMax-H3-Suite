@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import sys
@@ -205,8 +206,32 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
             masks[i, b["y"]:b["y"] + b["height"], b["x"]:b["x"] + b["width"]]
             for i, b in enumerate(boxes)
         ])
+    # UI payload. Socket values never reach the browser - only NodeOutput.ui
+    # does - so the crop plan is serialised here for w5_subject_crop.js. It is
+    # the only way to SEE what the planner decided: which frames the box jumps
+    # on, how much padding survived, and whether "stillness" actually held the
+    # box still. Reading that off a text report is guesswork.
+    jumps = [i for i in range(1, len(boxes))
+             if (boxes[i]["x"], boxes[i]["y"],
+                 boxes[i]["width"], boxes[i]["height"])
+             != (boxes[i - 1]["x"], boxes[i - 1]["y"],
+                 boxes[i - 1]["width"], boxes[i - 1]["height"])]
+    # Frame dims come from the mask tensor, not img_w/img_h: those two are only
+    # bound on the full_frame branch above, so reading them here raised
+    # UnboundLocalError on every real (cropped) run.
+    plan_json = json.dumps({
+        "frame_w": int(masks.shape[2]), "frame_h": int(masks.shape[1]),
+        "boxes": [{"x": int(b["x"]), "y": int(b["y"]),
+                   "w": int(b["width"]), "h": int(b["height"])} for b in boxes],
+        "jumps": jumps,
+        "out_w": int(size[0]) if size else int(bw),
+        "out_h": int(size[1]) if size else int(bh),
+        "mode": f"{sel} (full frame)" if full_frame else str(sel),
+        "crop_scale": float(p.get("crop_scale", 0.0) or 0.0),
+    })
     return io.NodeOutput(cropped_images, cropped_masks,
-                         [[b] for b in boxes], report)
+                         [[b] for b in boxes], report,
+                         ui={"mmx_crop_plan": [plan_json]})
 
 
 _UPSCALE_MEGAPIXELS = io.Float.Input(
