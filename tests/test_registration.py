@@ -26,10 +26,14 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 62
+EXPECTED_NODE_COUNT = 67
 
 #: long-form tiling planner (pure arithmetic, no weights)
-LONG_NODES = {"MiniMaxH3_ContextWindows", "MiniMaxH3_ToneCompensate"}
+LONG_NODES = {
+    "MiniMaxH3_ContextWindows", "MiniMaxH3_ToneCompensate",
+    "MiniMaxH3_PrepareContinuation", "MiniMaxH3_StitchContinuation",
+    "MiniMaxH3_PackAV", "MiniMaxH3_SplitAV", "MiniMaxH3_MergeAV",
+}
 SPINE_NODES = {
     "MiniMaxH3_FrameRangeMask",
     "MiniMaxH3_TrackCrop",
