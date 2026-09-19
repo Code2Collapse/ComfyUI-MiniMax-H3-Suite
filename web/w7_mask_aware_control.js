@@ -37,7 +37,7 @@ import {
 
 const NODE_ID = "MiniMaxH3_MaskAwareControlNet";
 const STATE = "_mmxMaskGate";
-const PLOT_H = 148;
+const PLOT_H = 176;
 
 /** The gate the node actually applies, for one row's mask value in 0..1. */
 function gateAt(maskValue, preservedStrength, softness) {
@@ -55,6 +55,16 @@ function gateAt(maskValue, preservedStrength, softness) {
     m = m >= 0.5 ? 1 : 0;
   }
   return preservedStrength + (1 - preservedStrength) * m;
+}
+
+/** Which of the 49 control channels are carrying real data. */
+function channels(node) {
+  const w = (n) => node.widgets?.find((x) => x.name === n);
+  const inpaint = !!w("inpaint")?.value;
+  const hasControl = node.inputs?.some(
+    (i) => i.name === "control_video" && i.link != null);
+  const hasMask = node.inputs?.some((i) => i.name === "mask" && i.link != null);
+  return { inpaint, hasControl, hasMask: inpaint && hasMask };
 }
 
 function regime(preserved, softness) {
@@ -155,7 +165,7 @@ function build(node) {
     // get a band each rather than a bare tick.
     const pad = 22;
     const plotW = w - pad * 2;
-    const plotH = h - pad - 16;
+    const plotH = h - pad - 34;
 
     ctx.fillStyle = "rgba(90,120,160,0.16)";
     ctx.fillRect(pad, 6, plotW * 0.18, plotH);
@@ -199,8 +209,34 @@ function build(node) {
     ctx.fillText(rightLabel, pad + plotW - tw - 2, h - 4);
     ctx.fillText("full control", pad + 2, 14);
 
+    // The channel budget, drawn as three blocks. The visibility block is
+    // the one worth seeing: ComfyUI leaves it at ZERO when no mask is
+    // connected, and zero means "this is a hole", so a control-only graph
+    // silently asks the Union model to inpaint the whole frame. Here it is
+    // always live.
+    const ch = channels(node);
+    const blocks = [
+      { n: 24, on: ch.hasControl, colour: "#6fa8d1" },
+      { n: 1, on: true, colour: "#6fb36f" },
+      { n: 24, on: ch.hasMask, colour: "#c89a4a" },
+    ];
+    let bx = pad;
+    const by = h - 28;
+    for (const b of blocks) {
+      const bw = (b.n / 49) * plotW;
+      ctx.fillStyle = b.on ? b.colour : "rgba(255,255,255,0.10)";
+      ctx.fillRect(bx, by, Math.max(1, bw - 1), 7);
+      bx += bw;
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.fillText("49 ch: control / vis / masked", pad, by - 2);
+
     caption.style.color = info.tone === "error" ? "#e06c6c" : ink;
-    caption.textContent = `${info.title}\n${info.body}`;
+    const mode = ch.inpaint
+      ? "inpaint \u2014 all 49 channels carry data"
+      : "structural only \u2014 visibility filled with ONES, so nothing "
+        + "reads as a hole";
+    caption.textContent = `${info.title}\n${info.body}\n${mode}`;
   };
 
   st.paint = rafThrottle(paint);
@@ -220,7 +256,7 @@ function build(node) {
     st.ro.observe(canvas);
   }
 
-  addDomWidgetLast(node, "mmx_mask_gate", wrap, () => PLOT_H + 42);
+  addDomWidgetLast(node, "mmx_mask_gate", wrap, () => PLOT_H + 58);
 
   chainOnRemoved(node, () => {
     st.dead = true;

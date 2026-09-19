@@ -28,6 +28,13 @@ if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
 from mmx_utils.mask_aware_control import control_gate, describe_gate  # noqa: E402
+from mmx_utils.fun_control_hint import (  # noqa: E402
+    assemble_hint,
+    describe_hint,
+    frame_indices,
+    looks_like_a_latent_mask,
+    visibility_from_mask,
+)
 
 # The H3 control machinery lives in ComfyUI's own extras. Import defensively:
 # `comfy_extras.nodes_minimax_h3` pulls in the H3 model modules, which on a
@@ -36,6 +43,9 @@ from mmx_utils.mask_aware_control import control_gate, describe_gate  # noqa: E4
 # constructible either way, so the failure is deferred to execute().
 _CORE_IMPORT_ERROR: Exception | None = None
 try:
+    import torch.nn.functional as F
+    import comfy.model_management
+    import comfy.utils
     from comfy_extras.nodes_minimax_h3 import MiniMaxH3FunControlPatch
 except Exception as _e:  # noqa: BLE001
     _CORE_IMPORT_ERROR = _e
@@ -58,8 +68,10 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
 
     def __init__(self, *args, preserved_strength: float = 0.0,
                  boundary_softness: float = 0.0, affect_text_rows: bool = False,
-                 **kwargs):
+                 inpaint: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.inpaint = bool(inpaint)
+        self.hint_report = "not built yet"
         self.preserved_strength = float(preserved_strength)
         self.boundary_softness = float(boundary_softness)
         self.affect_text_rows = bool(affect_text_rows)
@@ -67,6 +79,77 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
         self._gate = None
         self._gate_key = None
         self.last_report = "not run yet"
+
+    # ── build the whole 49-channel hint ─────────────────────────────────────
+    def prepare_control_latent(self, target_shape):
+        """The full hint, with neutral values where ComfyUI leaves zeros.
+
+        See mmx_utils/fun_control_hint.py for why the visibility channel's
+        neutral value is ONES and not zeros. Short version: visibility 0 means
+        "this is a hole", so a zero-padded channel asks the Union model to
+        inpaint the entire frame.
+        """
+        target_shape = tuple(target_shape)
+        if self.control_latent is not None and self.control_latent_shape == target_shape:
+            return
+
+        latent_frames, lat_h, lat_w = target_shape[2:]
+        frame_count = max((latent_frames - 2) // 5, 0) * 17 + 5
+        sc = self.vae.spacial_compression_encode()
+        width, height = lat_w * sc, lat_h * sc
+        loaded = comfy.model_management.loaded_models(only_currently_used=True)
+
+        try:
+            control_latent = None
+            if self.control_video is not None:
+                control_latent = self._encode(
+                    self._fit_frames(self.control_video, frame_count, width, height),
+                    target_shape)
+
+            visibility_latent = masked_latent = None
+            inpainting = self.inpaint and self.mask is not None
+            if inpainting:
+                mask_hw = (int(self.mask.shape[-2]), int(self.mask.shape[-1]))
+                if looks_like_a_latent_mask(mask_hw, (lat_h, lat_w), (height, width)):
+                    raise ValueError(
+                        f"the mask wired into this node is {mask_hw[0]}x{mask_hw[1]}, "
+                        f"which is LATENT resolution - the latent here is "
+                        f"{lat_h}x{lat_w} and the picture is {height}x{width}. "
+                        "That is the mask for Set Latent Noise Mask, not for the "
+                        "ControlNet. Wire the PIXEL-space mask here (the one that "
+                        "goes into Mask To Latent Space), and keep the latent one "
+                        "on the sampler. Feeding the latent mask here stretches a "
+                        "handful of rows across the whole clip."
+                    )
+                visibility = visibility_from_mask(self.mask, frame_count, inpaint=True)
+                visibility = comfy.utils.common_upscale(
+                    visibility, width, height, "bilinear", "center")
+                visibility = (visibility > 0.5).to(torch.float32)
+                source = (torch.zeros(frame_count, 3, height, width,
+                                      dtype=visibility.dtype, device=visibility.device)
+                          if self.source_video is None else
+                          self._fit_frames(self.source_video, frame_count, width, height))
+                masked_latent = self._encode(
+                    source * visibility.to(source.device), target_shape)
+                visibility_latent = F.interpolate(
+                    visibility.squeeze(1)[None, None],
+                    size=(latent_frames, lat_h, lat_w),
+                    mode="trilinear", align_corners=False)
+
+            reference = control_latent if control_latent is not None else masked_latent
+            device = reference.device if reference is not None else None
+            dtype = reference.dtype if reference is not None else torch.float32
+            hint = assemble_hint(
+                control_latent, visibility_latent, masked_latent,
+                latent_shape=target_shape, device=device, dtype=dtype)
+            self.hint_report = describe_hint(
+                control_latent is not None, inpainting, frame_count, latent_frames)
+            logger.info("[MiniMaxSuite] %s", self.hint_report)
+        finally:
+            comfy.model_management.load_models_gpu(loaded)
+
+        self.control_latent = hint
+        self.control_latent_shape = target_shape
 
     # ── capture the mask ────────────────────────────────────────────────────
     def diffusion_model_wrapper(self, executor, x, timestep, context,
@@ -157,13 +240,18 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
             display_name="H3 Mask-Aware ControlNet",
             category="MiniMax H3/Conditioning",
             description=(
-                "H3 Fun ControlNet whose residual respects the latent mask. "
-                "ComfyUI's own control node adds its residual to EVERY video row, "
-                "while latent masking tells some of those rows they are already "
-                "finished - so the control pushes pixels the sampler is holding "
-                "still. This scales the residual per row by the same mask the "
-                "sampler used, so the mask decides where and the control decides "
-                "what."
+                "H3 Fun ControlNet-Union that works alongside a latent noise "
+                "mask. Two fixes over ComfyUI's own node. (1) It builds all 49 "
+                "control channels. ComfyUI only builds the visibility and "
+                "masked-latent channels when a mask is connected and zero-pads "
+                "otherwise - but visibility 0 means 'this is a hole', so a "
+                "control-video-only graph is silently asking the Union model to "
+                "inpaint the entire frame. Here the neutral value is ONES. "
+                "(2) Its residual is scaled per latent row by the sampler's own "
+                "denoise mask, so the control steers only what is actually "
+                "being generated instead of pushing rows the sampler is holding "
+                "still. mask/source_video here are PIXEL space, not the latent "
+                "mask that feeds Set Latent Noise Mask."
             ),
             inputs=[
                 io.Model.Input("model", tooltip="The H3 model to patch."),
@@ -196,14 +284,29 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                     "control_video", optional=True,
                     tooltip="The hint - depth, pose, edges. Optional if you are "
                             "only inpainting with mask + source_video."),
+                io.Boolean.Input(
+                    "inpaint", default=False, optional=True,
+                    tooltip="Off: structural control only - the visibility "
+                            "channels are filled with ones, meaning nothing is a "
+                            "hole. On: also drive the Union model's inpainting "
+                            "branch from mask + source_video. The upstream model "
+                            "card treats these as two separate modes and ships a "
+                            "different script for each, so this is a switch, not "
+                            "something to infer."),
                 io.Mask.Input(
                     "mask", optional=True,
-                    tooltip="Inpaint mask for the control hint itself, as in the "
-                            "core node. This is NOT the sampler's denoise mask - "
-                            "that one is read automatically at sample time."),
+                    tooltip="PIXEL-space inpaint mask, only used when inpaint is "
+                            "on. This is NOT the latent mask that feeds Set "
+                            "Latent Noise Mask - wire the same pixel mask you "
+                            "send into Mask To Latent Space. A latent mask here "
+                            "is refused by name rather than stretched across the "
+                            "clip. The sampler's own denoise mask is read "
+                            "automatically and needs no wire."),
                 io.Image.Input(
                     "source_video", optional=True,
-                    tooltip="The plate the mask is cut from, for inpainting."),
+                    tooltip="The plate the mask is cut from, for inpainting. In "
+                            "a cropped workflow this is the CROPPED video, the "
+                            "same one that is VAE-encoded for the sampler."),
                 io.Float.Input(
                     "sigma_start", default=1.0, min=0.0, max=1.0, step=0.01,
                     optional=True, advanced=True),
@@ -222,8 +325,9 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
 
     @classmethod
     def execute(cls, model, control_net, vae, strength, preserved_strength,
-                boundary_softness, affect_text_rows=False, control_video=None,
-                mask=None, source_video=None, sigma_start=1.0, sigma_end=0.0):
+                boundary_softness, affect_text_rows=False, inpaint=False,
+                control_video=None, mask=None, source_video=None,
+                sigma_start=1.0, sigma_end=0.0):
         # Wiring first, environment second. A user who connected nothing gets
         # told that on any machine; the environment message is only useful to
         # someone whose wiring is already right.
@@ -232,6 +336,12 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                 "Mask-Aware ControlNet needs something to steer with: connect a "
                 "control_video (depth, pose, edges), or a mask plus source_video "
                 "for inpainting. With neither, the ControlNet has no hint."
+            )
+        if inpaint and mask is None:
+            raise ValueError(
+                "inpaint is on but no mask is connected. Either wire the "
+                "PIXEL-space mask (the one that also feeds Mask To Latent "
+                "Space), or turn inpaint off for structural control only."
             )
         _require_core()
 
@@ -242,11 +352,18 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
             preserved_strength=preserved_strength,
             boundary_softness=boundary_softness,
             affect_text_rows=affect_text_rows,
+            inpaint=inpaint,
         )
         patch.register(patched)
 
         lines = [
             f"Control strength {strength:.2f}, gated by the sampler's denoise mask.",
+            ("Inpaint mode: visibility and masked-latent channels are built "
+             "from the connected mask."
+             if inpaint else
+             "Structural control only: visibility is ONES, so nothing is "
+             "flagged as a hole. ComfyUI's own node leaves those channels at "
+             "zero, which asks the model to inpaint the whole frame."),
         ]
         if preserved_strength <= 0.0:
             lines.append(
