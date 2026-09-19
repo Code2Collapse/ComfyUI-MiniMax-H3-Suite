@@ -36,6 +36,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.mask_prep", "MiniMaxH3_MaskPrep"),
     (".mmx_nodes.stitch_back", "MiniMaxH3_StitchBack"),
     (".mmx_nodes.control_hints", "MiniMaxH3_ControlHints"),
+    (".mmx_nodes.mask_aware_control", "MiniMaxH3_MaskAwareControlNet"),
     (".mmx_nodes.masked_replace", "MiniMaxH3_MaskedReplace"),
     (".mmx_nodes.detail_reinject", "MiniMaxH3_DetailReinject"),
     (".mmx_nodes.frame_handles", "MiniMaxH3_FrameHandles"),
@@ -122,6 +123,10 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.control_hints import MiniMaxH3_ControlHints
 
                 nodes.append(MiniMaxH3_ControlHints)
+            elif mod_path.endswith("mask_aware_control"):
+                from .mmx_nodes.mask_aware_control import MiniMaxH3_MaskAwareControlNet
+
+                nodes.append(MiniMaxH3_MaskAwareControlNet)
             elif mod_path.endswith("masked_replace"):
                 from .mmx_nodes.masked_replace import MiniMaxH3_MaskedReplace
 

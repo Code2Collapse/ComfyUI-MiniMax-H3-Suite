@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 67
+EXPECTED_NODE_COUNT = 68   # + MiniMaxH3_MaskAwareControlNet
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {

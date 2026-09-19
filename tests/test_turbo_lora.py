@@ -60,7 +60,13 @@ def test_pruned_base_without_grid_raises(tmp_path, monkeypatch):
         def load_torch_file(path, safe_load=True):
             return {"blocks.0.attn.qkv_proj.lora_A.weight": torch.zeros(1)}
 
-    sys.modules["comfy"] = type("comfy", (), {"utils": _Utils})()
+    # monkeypatch.setitem, NOT a bare assignment: a bare one leaves the stub
+    # in sys.modules for the rest of the session, so any LATER test that
+    # does `import comfy.samplers` gets this two-attribute stand-in and
+    # dies with "'comfy' object has no attribute 'samplers'". That is
+    # exactly what happened to test_turbo_sampler once the suite started
+    # resolving the real ComfyUI.
+    monkeypatch.setitem(sys.modules, "comfy", type("comfy", (), {"utils": _Utils})())
 
     m = FakeModelPatcher()
     setattr(m.model.diffusion_model, "use_adaln_curves", True)
