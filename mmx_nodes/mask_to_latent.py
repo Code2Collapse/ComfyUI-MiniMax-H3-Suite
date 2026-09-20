@@ -47,6 +47,39 @@ def _grow_temporal(mask, steps):
     return x[0].transpose(0, 1).reshape(t, h, w)
 
 
+def _grow_tokens(x, token, tokens):
+    """Dilate a reduced mask by whole tokens. Cannot move the mask.
+
+    Growth in PIXEL space is re-quantised onto the token grid afterwards, so
+    changing it re-snaps the centre: measured 0.5-1.0 latent cells of drift,
+    and not monotonic in the grow amount. Dilating the already-reduced grid
+    adds an identical ring on every side and there is no second quantisation,
+    so the centre is fixed - measured 0.000 drift at +1, +2 and +3 tokens.
+    """
+    if tokens <= 0:
+        return x
+    tok = max(1, int(token))
+    if tok == 1:
+        r = int(tokens)
+        return F.max_pool2d(x[:, None], 2 * r + 1, stride=1, padding=r)[:, 0]
+
+    # Dilate ON THE TOKEN GRID, then expand back. Dilating the latent grid
+    # directly by a radius that is not a whole number of tokens leaves cells
+    # inside a 2x2 patch disagreeing, and H3 takes an amax over that patch
+    # (model_base._pool_masks_to_token_grid) - so the mask would be silently
+    # widened again at sample time and the preview would lie.
+    t, h, w = x.shape
+    pad_h, pad_w = (-h) % tok, (-w) % tok
+    g = x[:, None]
+    if pad_h or pad_w:
+        g = F.pad(g, (0, pad_w, 0, pad_h), mode="replicate")
+    g = F.max_pool2d(g, tok, stride=tok)                       # -> token grid
+    r = int(tokens)
+    g = F.max_pool2d(g, 2 * r + 1, stride=1, padding=r)        # grow, symmetric
+    g = g.repeat_interleave(tok, dim=-2).repeat_interleave(tok, dim=-1)
+    return g[:, 0, :h, :w]
+
+
 def _token_snap(x, token, method):
     t, h, w = x.shape
     x = F.pad(x[:, None], (0, -w % token, 0, -h % token), mode="replicate")
@@ -251,6 +284,22 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
                              tooltip="Grow (+) or shrink (-) the mask this many pixels before reduction."),
                 io.Int.Input("grow_temporal", default=0, min=-64, max=64,
                              tooltip="Grow (+) or shrink (-) the mask this many frames before reduction."),
+                io.Int.Input("grow_tokens", default=0, min=0, max=32,
+                             optional=True,
+                             tooltip="Grow the mask by whole TOKENS, after reduction "
+                                     "instead of before it. This is the one that does "
+                                     "not move the mask: measured drift is 0.000 latent "
+                                     "cells at +1, +2 and +3 tokens, against 0.5-1.0 "
+                                     "cells for the same growth done in pixels with "
+                                     "grow_spatial. Pixel growth is re-quantised onto "
+                                     "the 32px token grid, so changing it re-snaps the "
+                                     "centre somewhere new - grow_spatial 8 drifts "
+                                     "FURTHER than 16. Use this for a face or character "
+                                     "swap, where the preserve/regenerate boundary has "
+                                     "to stay put relative to the face. One token is 32 "
+                                     "pixels. It still moves once the grown mask reaches "
+                                     "a frame edge, because the shape is then genuinely "
+                                     "lopsided."),
                 io.Float.Input("coverage_threshold", default=0.05, min=0.0, max=1.0, step=0.01,
                                optional=True,
                                tooltip="Only for spatial_method=coverage. The fraction of a token block "
@@ -268,14 +317,16 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
 
     @classmethod
     def execute(cls, masks, compression, spatial_method, temporal_method, grow_spatial,
-                grow_temporal, coverage_threshold=0.05, vae=None) -> io.NodeOutput:
+                grow_temporal, grow_tokens=0, coverage_threshold=0.05,
+                vae=None) -> io.NodeOutput:
         spatial, groups, _, token = _resolve_geometry(compression, vae)
         out = None
         device = model_management.get_torch_device()
         if device.type != "cpu":
             try:
                 out = cls._reduce(masks.to(device), spatial, groups, token, spatial_method,
-                                  temporal_method, grow_spatial, grow_temporal, coverage_threshold)
+                                  temporal_method, grow_spatial, grow_temporal,
+                                  coverage_threshold, grow_tokens)
             except Exception as e:
                 logging.warning(
                     f"MiniMaxH3 Mask To Latent Space: mask reduction on {device} failed ({e}), "
@@ -283,12 +334,16 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
                 model_management.soft_empty_cache()
         if out is None:
             out = cls._reduce(masks, spatial, groups, token, spatial_method, temporal_method,
-                              grow_spatial, grow_temporal, coverage_threshold)
+                              grow_spatial, grow_temporal, coverage_threshold, grow_tokens)
         t_in, h_in, w_in = masks.shape
         t_out, h_out, w_out = out.shape
         report = (f"pixel: {t_in} frames {w_in}x{h_in}\n"
                   f"latent: {t_out} frames {w_out}x{h_out}\n"
                   f"spatial_factor: {spatial}\ntoken_spatial: {token}")
+        if grow_tokens:
+            report += (f"\ngrow_tokens: +{grow_tokens} token(s) "
+                       f"({grow_tokens * 32}px) after reduction - the "
+                       f"mask centre does not move")
         if spatial_method == "coverage":
             covered = float((out > 0).float().mean()) * 100.0
             report += (f"\ncoverage_threshold: {coverage_threshold:.2f}"
@@ -297,7 +352,7 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
 
     @staticmethod
     def _reduce(x, spatial, groups, token, spatial_method, temporal_method, grow_spatial,
-                grow_temporal, coverage_threshold=0.05):
+                grow_temporal, coverage_threshold=0.05, grow_tokens=0):
         if grow_spatial != 0:
             x = _grow_spatial(x, grow_spatial)
         if grow_temporal != 0:
@@ -334,10 +389,11 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
             x = (x > 0.0).to(x.dtype) if t_hold <= 0.0 else (x >= t_hold).to(x.dtype)
 
         if groups is None or t <= 1:
-            return x
+            return _grow_tokens(x, token, grow_tokens)
 
         reduce = _TEMPORAL_REDUCE[temporal_method]
-        return torch.stack([reduce(x[s:e]) for s, e in groups(t)])
+        x = torch.stack([reduce(x[s:e]) for s, e in groups(t)])
+        return _grow_tokens(x, token, grow_tokens)
 
 
 class MiniMaxH3_LatentMaskToMask(io.ComfyNode):

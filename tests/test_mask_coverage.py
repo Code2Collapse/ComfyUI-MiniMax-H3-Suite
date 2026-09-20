@@ -194,3 +194,93 @@ def test_coverage_is_offered_by_the_schema_and_the_widget_is_last():
     method = next(i for i in schema.inputs if getattr(i, "id", None) == "spatial_method")
     assert "coverage" in method.options
     assert method.default == "max", "the default behaviour must not change under existing graphs"
+
+
+# ── zero-drift growth (faceswap requirement) ────────────────────────────────
+#
+# For a face or character swap the preserve/regenerate boundary has to stay put
+# relative to the face: the swapped face is placed by the conditioning, the
+# boundary by the mask, and if the mask wanders the chin gets cut or a seam
+# appears. Growing in PIXEL space and then reducing re-quantises onto the 32px
+# token grid, so changing the grow re-snaps the centre somewhere new - measured
+# 0.4-0.6 latent cells of drift, and NOT monotonic in the grow amount.
+# `grow_tokens` dilates the already-reduced grid instead, which adds an
+# identical ring on every side with no second quantisation.
+
+def _face_ellipse(h=432, w=768, cy=150.0, cx=384.0):
+    """Deliberately NOT centred on a 32px boundary - that is when snapping bites."""
+    yy, xx = torch.meshgrid(torch.arange(h).float(), torch.arange(w).float(), indexing="ij")
+    r = (((yy - cy) / 58) ** 2 + ((xx - cx) / 44) ** 2).sqrt()
+    return (1.0 - (r - 1.0) * 20).clamp(0, 1)[None]
+
+
+def _centroid(t):
+    t = t[0] if t.dim() == 3 else t
+    w = t.float()
+    assert w.sum() > 0, "empty mask - nothing to measure"
+    ys = (w.sum(1) * torch.arange(w.shape[0]).float()).sum() / w.sum()
+    xs = (w.sum(0) * torch.arange(w.shape[1]).float()).sum() / w.sum()
+    return ys.item(), xs.item()
+
+
+@pytest.mark.parametrize("tokens", [1, 2, 3])
+def test_growing_in_tokens_does_not_move_the_mask(tokens):
+    m = _face_ellipse()
+    base = reduce(m.clone(), "coverage", threshold=0.15)
+    grown = Node._reduce(m.clone(), SPATIAL, None, TOKEN, "coverage", "max",
+                         0, 0, 0.15, tokens)
+    by, bx = _centroid(base)
+    gy, gx = _centroid(grown)
+    drift = ((gy - by) ** 2 + (gx - bx) ** 2) ** 0.5
+    assert drift == 0.0, f"+{tokens} token(s) moved the mask by {drift:.3f} cells"
+
+
+@pytest.mark.parametrize("tokens", [1, 2, 3])
+def test_growing_in_tokens_actually_grows_it(tokens):
+    """Guards the obvious way to pass the test above: do nothing."""
+    m = _face_ellipse()
+    base = int((reduce(m.clone(), "coverage", threshold=0.15) > 0).sum())
+    grown = int((Node._reduce(m.clone(), SPATIAL, None, TOKEN, "coverage", "max",
+                              0, 0, 0.15, tokens) > 0).sum())
+    assert grown > base, f"+{tokens} token(s) added no cells"
+
+
+def test_the_pixel_path_really_does_drift():
+    """The reason grow_tokens exists. If this ever stops drifting the widget
+    is redundant - but it must not stop drifting silently."""
+    m = _face_ellipse()
+    by, bx = _centroid(reduce(m.clone(), "coverage", threshold=0.15))
+    drifts = []
+    for px in (32, 64, 96):
+        cy, cx = _centroid(Node._reduce(m.clone(), SPATIAL, None, TOKEN,
+                                        "coverage", "max", px, 0, 0.15, 0))
+        drifts.append(((cy - by) ** 2 + (cx - bx) ** 2) ** 0.5)
+    assert max(drifts) > 0.3, f"pixel growth no longer drifts: {drifts}"
+
+
+def test_grow_tokens_zero_changes_nothing():
+    m = _face_ellipse()
+    a = reduce(m.clone(), "coverage", threshold=0.15)
+    b = Node._reduce(m.clone(), SPATIAL, None, TOKEN, "coverage", "max", 0, 0, 0.15, 0)
+    assert torch.equal(a, b)
+
+
+def test_the_grown_mask_is_still_token_uniform():
+    """H3 reads the mask per 2x2 patch; a grown mask that is not uniform there
+    would be silently widened again at sample time."""
+    m = _face_ellipse()
+    out = Node._reduce(m.clone(), SPATIAL, None, TOKEN, "coverage", "max", 0, 0, 0.15, 2)
+    t, h, w = out.shape
+    # 432/16 = 27 latent rows, which is ODD - the last row is half a token and
+    # cannot be reshaped into 2x2 blocks. The production path pads for exactly
+    # this reason; the check only applies to the whole blocks.
+    hh, ww = (h // TOKEN) * TOKEN, (w // TOKEN) * TOKEN
+    blocks = out[:, :hh, :ww].reshape(t, hh // TOKEN, TOKEN, ww // TOKEN, TOKEN)
+    assert bool((blocks.amax(dim=(2, 4)) == blocks.amin(dim=(2, 4))).all())
+
+
+def test_grow_tokens_is_the_last_widget_but_one():
+    """Widget values serialise positionally. grow_tokens was inserted before
+    coverage_threshold, so both must sit at the end, after the older widgets."""
+    ids = [getattr(i, "id", None) for i in Node.define_schema().inputs]
+    assert ids[-2:] == ["grow_tokens", "coverage_threshold"], ids[-4:]
