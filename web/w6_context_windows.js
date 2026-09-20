@@ -111,7 +111,7 @@ function draw(st) {
   setupDpiCanvas(canvas, w, h);
   ctx.clearRect(0, 0, w, h);
 
-  const fg = themeVar("--input-text") || "#ddd";
+  const fg = themeVar("inputText") || "#ddd";
   const accent = themeVar("--c2c-accentVivid") || "#4ea1ff";
 
   if (!st.plan || !st.plan.windows || !st.plan.windows.length) {

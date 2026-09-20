@@ -126,3 +126,100 @@ def test_parity_check_actually_fails_on_drift(node_exe):
     assert any(abs(j - p) > 1e-12 for j, p in zip(js_vals, py_vals)), (
         "a 0.1% drift in the JS was NOT detected — the parity test cannot fail"
     )
+
+
+# ── W8 NegPiP term grammar ─────────────────────────────────────────────────
+#
+# `parseTerms` in web/w8_negpip.js is a second implementation of
+# `mmx_utils.negpip.parse_terms`, written in JS so the ledger updates while the
+# user types instead of only after a run. The grammar is small but every part
+# of it is a place to drift: whether a colon inside a phrase is a weight,
+# whether "# " comments count, whether a bare line defaults to 1.0. Those all
+# change which rows get flipped, silently.
+#
+# The two are NOT identical by design: python REFUSES a negative or oversized
+# weight (the run must not proceed), while the JS keeps the line and marks it,
+# so the ledger can say which line will be rejected before you queue. That
+# difference is pinned here too, so neither side can quietly adopt the other's
+# behaviour.
+
+NEGPIP_JS = ROOT / "web" / "w8_negpip.js"
+
+_VALID_TERM_CASES = [
+    "blurry",
+    "blurry : 1.5",
+    "blurry:2",
+    "close-up: hands",
+    "  padded  ",
+    "# a comment\nblurry",
+    "\n\nblurry\n\nwatermark : 0.5\n",
+    "text : 0",
+    "three word phrase : 1.25",
+    "trailing colon:",
+    "a : b : 2",
+    "10",
+    "1:2:3",
+]
+
+
+def _run_parse_terms(node_exe, lines: list[str]):
+    js_func = _extract_js_function(NEGPIP_JS.read_text(encoding="utf-8"), "parseTerms")
+    harness = (
+        js_func
+        + "\nconst payload = JSON.parse(process.argv[1]);"
+        + "\nconsole.log(JSON.stringify(payload.map((t) => parseTerms(t))));"
+    )
+    proc = subprocess.run(
+        [node_exe, "-e", harness, json.dumps(lines)],
+        check=True, capture_output=True, text=True, timeout=30,
+    )
+    return json.loads(proc.stdout.strip())
+
+
+def test_negpip_extracted_source_is_the_shipped_one():
+    src = _extract_js_function(NEGPIP_JS.read_text(encoding="utf-8"), "parseTerms")
+    assert src.count("{") == src.count("}")
+    assert "weight" in src and "startsWith" in src
+
+
+def test_js_parse_terms_matches_python(node_exe):
+    from mmx_utils.negpip import parse_terms
+
+    js = _run_parse_terms(node_exe, _VALID_TERM_CASES)
+    assert len(js) == len(_VALID_TERM_CASES)
+    for text, got in zip(_VALID_TERM_CASES, js):
+        want = [{"phrase": t.phrase, "weight": t.weight} for t in parse_terms(text)]
+        assert got == want, f"{text!r}: JS {got} != Python {want}"
+
+
+def test_js_keeps_the_lines_python_refuses_so_the_ledger_can_name_them(node_exe):
+    from mmx_utils.negpip import parse_terms
+
+    refused = ["blurry : -1", "blurry : 99"]
+    js = _run_parse_terms(node_exe, refused)
+    for text, got in zip(refused, js):
+        with pytest.raises(ValueError):
+            parse_terms(text)
+        assert len(got) == 1, f"{text!r} must survive the JS parse so it can be flagged"
+
+
+def test_negpip_parity_check_actually_fails_on_drift(node_exe):
+    """Negative control, as above: prove this comparison can reject a change."""
+    from mmx_utils.negpip import parse_terms
+
+    js_func = _extract_js_function(NEGPIP_JS.read_text(encoding="utf-8"), "parseTerms")
+    perturbed = js_func.replace('out.push({ phrase: line, weight: 1.0 })',
+                                'out.push({ phrase: line, weight: 1.5 })')
+    assert perturbed != js_func, "perturbation did not apply — the default changed"
+    harness = (
+        perturbed
+        + "\nconst payload = JSON.parse(process.argv[1]);"
+        + "\nconsole.log(JSON.stringify(payload.map((t) => parseTerms(t))));"
+    )
+    proc = subprocess.run(
+        [node_exe, "-e", harness, json.dumps(["blurry"])],
+        check=True, capture_output=True, text=True, timeout=30,
+    )
+    js = json.loads(proc.stdout.strip())
+    want = [{"phrase": t.phrase, "weight": t.weight} for t in parse_terms("blurry")]
+    assert js[0] != want, "a changed default weight was NOT detected"

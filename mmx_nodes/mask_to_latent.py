@@ -235,14 +235,30 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
                         ]),
                     ],
                 ),
-                io.Combo.Input("spatial_method", options=["max", "min", "mean", "nearest"], default="max",
-                               tooltip="How a block of pixels reduces to one latent pixel. max marks the cell if any pixel is masked, min only if all are."),
+                io.Combo.Input("spatial_method", options=["max", "min", "mean", "nearest", "coverage"], default="max",
+                               tooltip="How a block of pixels reduces to one latent pixel. "
+                                       "max marks the cell if ANY pixel is masked - one stray pixel or one "
+                                       "antialiased edge therefore claims a whole 32x32 token, so the mask "
+                                       "creeps outward a full token all the way round the subject. min only "
+                                       "marks it if every pixel is. mean leaves a fraction, which H3 reads as "
+                                       "a partial denoise strength rather than a decision. coverage is the one "
+                                       "to reach for on a character or face swap: it measures how much of the "
+                                       "token the mask actually covers and decides with coverage_threshold "
+                                       "below, so thin edges are rejected and the plate survives."),
                 io.Combo.Input("temporal_method", options=["max", "min", "mean", "first", "last"], default="max",
                                tooltip="How a group of frames reduces to one latent frame. max marks the frame if any grouped frame is masked."),
                 io.Int.Input("grow_spatial", default=0, min=-256, max=256,
                              tooltip="Grow (+) or shrink (-) the mask this many pixels before reduction."),
                 io.Int.Input("grow_temporal", default=0, min=-64, max=64,
                              tooltip="Grow (+) or shrink (-) the mask this many frames before reduction."),
+                io.Float.Input("coverage_threshold", default=0.05, min=0.0, max=1.0, step=0.01,
+                               optional=True,
+                               tooltip="Only for spatial_method=coverage. The fraction of a token block "
+                                       "that must be masked before the whole block counts as masked. 0.05 "
+                                       "rejects stray pixels and antialiased boundaries while keeping "
+                                       "anything genuinely inside; raise it to pull the mask tighter, lower "
+                                       "it towards max behaviour. 0 marks a block if any pixel at all is "
+                                       "masked, which is what max does."),
             ],
             outputs=[
                 io.Mask.Output(display_name="mask", tooltip="Latent-resolution mask for Set Latent Noise Mask."),
@@ -251,29 +267,37 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, masks, compression, spatial_method, temporal_method, grow_spatial, grow_temporal, vae=None) -> io.NodeOutput:
+    def execute(cls, masks, compression, spatial_method, temporal_method, grow_spatial,
+                grow_temporal, coverage_threshold=0.05, vae=None) -> io.NodeOutput:
         spatial, groups, _, token = _resolve_geometry(compression, vae)
         out = None
         device = model_management.get_torch_device()
         if device.type != "cpu":
             try:
-                out = cls._reduce(masks.to(device), spatial, groups, token, spatial_method, temporal_method, grow_spatial, grow_temporal)
+                out = cls._reduce(masks.to(device), spatial, groups, token, spatial_method,
+                                  temporal_method, grow_spatial, grow_temporal, coverage_threshold)
             except Exception as e:
                 logging.warning(
                     f"MiniMaxH3 Mask To Latent Space: mask reduction on {device} failed ({e}), "
                     "retrying on CPU")
                 model_management.soft_empty_cache()
         if out is None:
-            out = cls._reduce(masks, spatial, groups, token, spatial_method, temporal_method, grow_spatial, grow_temporal)
+            out = cls._reduce(masks, spatial, groups, token, spatial_method, temporal_method,
+                              grow_spatial, grow_temporal, coverage_threshold)
         t_in, h_in, w_in = masks.shape
         t_out, h_out, w_out = out.shape
         report = (f"pixel: {t_in} frames {w_in}x{h_in}\n"
                   f"latent: {t_out} frames {w_out}x{h_out}\n"
                   f"spatial_factor: {spatial}\ntoken_spatial: {token}")
+        if spatial_method == "coverage":
+            covered = float((out > 0).float().mean()) * 100.0
+            report += (f"\ncoverage_threshold: {coverage_threshold:.2f}"
+                       f" -> {covered:.1f}% of latent cells masked")
         return io.NodeOutput(out.cpu(), report)
 
     @staticmethod
-    def _reduce(x, spatial, groups, token, spatial_method, temporal_method, grow_spatial, grow_temporal):
+    def _reduce(x, spatial, groups, token, spatial_method, temporal_method, grow_spatial,
+                grow_temporal, coverage_threshold=0.05):
         if grow_spatial != 0:
             x = _grow_spatial(x, grow_spatial)
         if grow_temporal != 0:
@@ -283,19 +307,31 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
         lh = max(1, h // spatial)
         lw = max(1, w // spatial)
 
+        # coverage measures the WHOLE token block, so it averages all the way
+        # down and only then decides. Thresholding earlier would ask "was any
+        # latent cell mostly covered", a different and much looser question on
+        # a 2x2 token grid.
+        pool = "mean" if spatial_method == "coverage" else spatial_method
+
         x = x[:, None]
-        if spatial_method == "max":
+        if pool == "max":
             x = F.adaptive_max_pool2d(x, (lh, lw))
-        elif spatial_method == "min":
+        elif pool == "min":
             x = -F.adaptive_max_pool2d(-x, (lh, lw))
-        elif spatial_method == "mean":
+        elif pool == "mean":
             x = F.adaptive_avg_pool2d(x, (lh, lw))
         else:
             x = F.interpolate(x, (lh, lw), mode="nearest-exact")
         x = x[:, 0]
 
         if token > 1:
-            x = _token_snap(x, token, spatial_method)
+            x = _token_snap(x, token, pool)
+
+        if spatial_method == "coverage":
+            # A threshold of 0 must still mean "any pixel at all" - every block
+            # trivially covers >= 0, so a plain >= would mask the entire frame.
+            t_hold = float(coverage_threshold)
+            x = (x > 0.0).to(x.dtype) if t_hold <= 0.0 else (x >= t_hold).to(x.dtype)
 
         if groups is None or t <= 1:
             return x

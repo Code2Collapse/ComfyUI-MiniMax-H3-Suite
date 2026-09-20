@@ -304,9 +304,13 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                             "automatically and needs no wire."),
                 io.Image.Input(
                     "source_video", optional=True,
-                    tooltip="The plate the mask is cut from, for inpainting. In "
-                            "a cropped workflow this is the CROPPED video, the "
-                            "same one that is VAE-encoded for the sampler."),
+                    tooltip="The plate the mask is cut from. REQUIRED when "
+                            "inpaint is on: these become the masked-latent "
+                            "channels, which are the plate with the hole cut "
+                            "out of it, and ComfyUI's own node substitutes a "
+                            "BLACK frame when it is missing. In a cropped "
+                            "workflow this is the CROPPED video - the same one "
+                            "that is VAE-encoded for the sampler."),
                 io.Float.Input(
                     "sigma_start", default=1.0, min=0.0, max=1.0, step=0.01,
                     optional=True, advanced=True),
@@ -342,6 +346,21 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                 "inpaint is on but no mask is connected. Either wire the "
                 "PIXEL-space mask (the one that also feeds Mask To Latent "
                 "Space), or turn inpaint off for structural control only."
+            )
+        if inpaint and source_video is None:
+            # Core silently substitutes a black plate here. The visibility
+            # channel then reads "everything outside the hole is visible" while
+            # the masked-latent channels read "and it is solid black" - two
+            # statements the model has no way to reconcile, and the reason a
+            # mask-plus-control graph can come back looking destroyed.
+            raise ValueError(
+                "inpaint is on with a mask but no source_video. The Union "
+                "model's masked-latent channels are the PLATE with the hole "
+                "cut out of it, so without a plate they encode a black frame "
+                "while the visibility channel still claims that area is "
+                "visible. Connect the video the mask was drawn on - in a "
+                "cropped workflow, the cropped video that is also VAE-encoded "
+                "for the sampler - or turn inpaint off."
             )
         _require_core()
 

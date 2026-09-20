@@ -218,3 +218,22 @@ def test_the_patch_overrides_the_hint_builder():
 
     assert "prepare_control_latent" in MaskAwareControlPatch.__dict__
     assert "after_block" in MaskAwareControlPatch.__dict__
+
+
+def test_inpaint_without_a_source_video_is_refused_not_filled_with_black():
+    """The wiring that silently destroys the plate.
+
+    `comfy_extras/nodes_minimax_h3.py:461` falls back to a zero source when a
+    mask is given without one, so the masked-latent channels encode a BLACK
+    frame while the visibility channel still says that area is visible. The
+    model cannot reconcile those, and from the graph there is nothing to see.
+    """
+    from mmx_nodes.mask_aware_control import MiniMaxH3_MaskAwareControlNet
+
+    with pytest.raises(ValueError, match="no source_video"):
+        MiniMaxH3_MaskAwareControlNet.execute(
+            model=None, control_net=None, vae=None, strength=1.0,
+            preserved_strength=0.0, boundary_softness=1.0,
+            inpaint=True, mask=torch.ones(4, 8, 12),
+            control_video=torch.zeros(1, 8, 8, 3),
+        )

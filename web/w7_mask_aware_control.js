@@ -154,9 +154,11 @@ function build(node) {
     const softness = read("boundary_softness", 1);
     const strength = read("strength", 1);
 
-    const bg = themeVar("--comfy-input-bg") || "#1e1e1e";
+    // short key, not the raw var: see themeVar in shared.js. A wrong
+    // name here paints the whole plot white in a dark theme.
+    const bg = themeVar("inputBg") || "#1e1e1e";
     const grid = "rgba(255,255,255,0.10)";
-    const ink = themeVar("--input-text") || "#ddd";
+    const ink = themeVar("inputText") || "#ddd";
 
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);

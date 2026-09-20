@@ -20,7 +20,17 @@ export const THEME_VARS = {
 };
 
 export function themeVar(name) {
-  const [key, fallback] = THEME_VARS[name] || ["--fg-color", "#ddd"];
+  // Accepts EITHER a short key from THEME_VARS ("inputBg") or a raw custom
+  // property ("--comfy-input-bg"). It used to accept only the short key and
+  // fall back to --fg-color for anything else, silently: on 2026-09-20 that
+  // painted the mask-gate plot's background with the FOREGROUND colour, i.e.
+  // a white slab in a dark theme, and nothing anywhere reported a problem.
+  // A name that resolves to nothing now returns "" so the caller's own
+  // `|| "#1e1e1e"` fallback takes effect instead of a wrong colour.
+  const entry = THEME_VARS[name];
+  const key = entry ? entry[0] : (String(name).startsWith("--") ? name : null);
+  const fallback = entry ? entry[1] : "";
+  if (key === null) return fallback;
   if (typeof document === "undefined") return fallback;
   const v = getComputedStyle(document.documentElement).getPropertyValue(key).trim();
   return v || fallback;
