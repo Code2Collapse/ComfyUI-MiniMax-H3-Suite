@@ -18,6 +18,7 @@ the single function is lifted by brace balancing and evaluated on its own.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -223,3 +224,76 @@ def test_negpip_parity_check_actually_fails_on_drift(node_exe):
     js = json.loads(proc.stdout.strip())
     want = [{"phrase": t.phrase, "weight": t.weight} for t in parse_terms("blurry")]
     assert js[0] != want, "a changed default weight was NOT detected"
+
+
+# ── W9 swap-scope diagram ──────────────────────────────────────────────────
+#
+# The diagram lights the landmark groups a scope drives, in the same colours
+# the renderer uses, and greys the jaw. Two copies of that mapping exist - the
+# JS one for the panel and the Python one that actually renders - and if they
+# drift the picture tells the user something the node does not do. The jaw
+# entry is the one that matters: the panel promises it is never sent.
+
+SWAP_JS = ROOT / "web" / "w9_swap_scope.js"
+
+
+def _js_object(source: str, name: str) -> dict:
+    """Lift a flat `const NAME = { ... };` object literal."""
+    start = source.index(f"const {name} = {{")
+    depth, i = 0, source.index("{", start)
+    for j in range(i, len(source)):
+        if source[j] == "{":
+            depth += 1
+        elif source[j] == "}":
+            depth -= 1
+            if depth == 0:
+                body = source[i:j + 1]
+                break
+    else:
+        raise AssertionError(f"unbalanced braces in {name}")
+    out = {}
+    for m in re.finditer(r"(\w+)\s*:\s*(\[[^\]]*\]|\"[^\"]*\"|'[^']*')", body):
+        raw = m.group(2)
+        if raw.startswith("["):
+            out[m.group(1)] = re.findall(r"[\"']([^\"']+)[\"']", raw)
+        else:
+            out[m.group(1)] = raw.strip("\"'")
+    return out
+
+
+def test_the_diagram_knows_the_same_scopes_as_the_renderer():
+    from mmx_utils.swap_regions import SWAP_SCOPES
+
+    js = _js_object(SWAP_JS.read_text(encoding="utf-8"), "SCOPE_GROUPS")
+    assert set(js) == set(SWAP_SCOPES), (
+        f"panel scopes {sorted(js)} != renderer scopes {sorted(SWAP_SCOPES)}")
+
+
+def test_each_scope_lights_exactly_the_groups_it_drives():
+    from mmx_utils.swap_regions import SWAP_SCOPES
+
+    js = _js_object(SWAP_JS.read_text(encoding="utf-8"), "SCOPE_GROUPS")
+    for scope, spec in SWAP_SCOPES.items():
+        assert sorted(js[scope]) == sorted(spec["groups"]), (
+            f"{scope}: panel lights {sorted(js[scope])}, renderer drives "
+            f"{sorted(spec['groups'])}")
+
+
+def test_the_panel_never_lights_the_jaw():
+    """The diagram's whole claim. If a scope ever listed 'jaw' here the panel
+    would be advertising the exact transfer the design prevents."""
+    js = _js_object(SWAP_JS.read_text(encoding="utf-8"), "SCOPE_GROUPS")
+    for scope, groups in js.items():
+        assert "jaw" not in groups, f"panel lights the jaw for scope {scope!r}"
+
+
+def test_the_legend_colours_match_the_rendered_ones():
+    from mmx_utils.swap_control import GROUP_COLOUR
+
+    js = _js_object(SWAP_JS.read_text(encoding="utf-8"), "GROUP_COLOUR")
+    assert set(js) == set(GROUP_COLOUR), "legend and renderer disagree on groups"
+    for group, hexv in js.items():
+        r, g, b = (int(hexv[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
+        want = GROUP_COLOUR[group]
+        assert all(abs(a - b_) < 0.01 for a, b_ in zip((r, g, b), want)), (
+            f"{group}: panel {hexv} != renderer {want}")
