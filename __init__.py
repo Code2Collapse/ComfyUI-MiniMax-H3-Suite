@@ -52,6 +52,14 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.first_block_cache", "MiniMaxH3_FirstBlockCache"),
     (".mmx_nodes.image_and_reference", "MiniMaxH3_ImageAndReferenceToVideo"),
     (".mmx_nodes.tail_from_latent", "MiniMaxH3_TailFromLatent"),
+    # Director (ported from ComfyUI-MiniMaxH3-Director, GPL-3.0). One
+    # subpackage, five nodes; MiniMaxH3_DirectorChain is deliberately not
+    # registered - see mmx_nodes/director/__init__.py.
+    (".mmx_nodes.director", "MiniMaxH3_Director"),
+    (".mmx_nodes.director", "MiniMaxH3_PreviewOverride"),
+    (".mmx_nodes.director", "MiniMaxH3_RetakeStitch"),
+    (".mmx_nodes.director", "MiniMaxH3_EnhancePrompt"),
+    (".mmx_nodes.director", "MiniMaxH3_SaveLastFrame"),
     (".mmx_nodes.sigma_inspector", "MiniMaxH3_SigmaInspector"),
     (".mmx_nodes.differential_denoise", "MiniMaxH3_DifferentialDenoise"),
     (".mmx_nodes.frame_range_mask", "MiniMaxH3_FrameRangeMask"),
@@ -195,6 +203,15 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.per_frame_denoise import MiniMaxH3_PerFrameDenoise
 
                 nodes.append(MiniMaxH3_PerFrameDenoise)
+            elif mod_path.endswith(".director") and cls_name == "MiniMaxH3_Director":
+                # Five nodes from one subpackage. Guarded on the first
+                # cls_name so the extend runs ONCE - the pack's own pattern
+                # for multi-node modules (see native_audio, multishot). The
+                # other four rows fall through and match nothing, which is
+                # what keeps the table readable as a list of every node.
+                from .mmx_nodes.director import director_nodes
+
+                nodes.extend(director_nodes())
             elif mod_path.endswith("tail_from_latent"):
                 from .mmx_nodes.tail_from_latent import MiniMaxH3_TailFromLatent
 

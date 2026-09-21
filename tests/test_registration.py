@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 92   # + native audio lock (3) + multishot (3) + first-block cache
+EXPECTED_NODE_COUNT = 98   # +5 Director (GPL port) +1 all-in-one Director (MIT port)   # + native audio lock (3) + multishot (3) + first-block cache
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
