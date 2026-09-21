@@ -50,6 +50,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.per_frame_denoise", "MiniMaxH3_PerFrameDenoise"),
     (".mmx_nodes.block_cache", "MiniMaxH3_BlockCacheT8"),
     (".mmx_nodes.first_block_cache", "MiniMaxH3_FirstBlockCache"),
+    (".mmx_nodes.image_and_reference", "MiniMaxH3_ImageAndReferenceToVideo"),
     (".mmx_nodes.sigma_inspector", "MiniMaxH3_SigmaInspector"),
     (".mmx_nodes.differential_denoise", "MiniMaxH3_DifferentialDenoise"),
     (".mmx_nodes.frame_range_mask", "MiniMaxH3_FrameRangeMask"),
@@ -193,6 +194,12 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.per_frame_denoise import MiniMaxH3_PerFrameDenoise
 
                 nodes.append(MiniMaxH3_PerFrameDenoise)
+            elif mod_path.endswith("image_and_reference"):
+                from .mmx_nodes.image_and_reference import (
+                    MiniMaxH3_ImageAndReferenceToVideo,
+                )
+
+                nodes.append(MiniMaxH3_ImageAndReferenceToVideo)
             elif mod_path.endswith("first_block_cache"):
                 # Before the block_cache branch on purpose: this dispatcher
                 # matches with endswith(), and "first_block_cache" ends with
