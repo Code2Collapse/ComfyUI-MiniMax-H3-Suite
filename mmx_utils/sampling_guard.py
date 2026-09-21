@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 CACHE_KEY = "minimax_h3_block_cache_t8"
+# The first-block cache patches EVERY block, which is legitimate for it and a
+# conflict for anything else. Named here so the guard can tell the two apart.
+FIRST_BLOCK_CACHE_KEY = "minimax_h3_first_block_cache"
 SPECTRUM_BINDING_KEY = "spectrum_h3_binding"
 WRAPPER_BLOCK_CACHE = "minimax_h3_block_cache_t8"
 
@@ -48,6 +51,28 @@ def check_accelerator_conflicts(
     if "easycache" in to and "lazycache" in to:
         raise ValueError("MiniMax H3: EasyCache and LazyCache cannot both be active.")
 
+    # Two block-level caches on one model do not error at runtime - they
+    # produce a quietly wrong image, because each assumes it owns the blocks
+    # it patched.
+    if FIRST_BLOCK_CACHE_KEY in to:
+        if CACHE_KEY in to:
+            raise ValueError(
+                "MiniMax H3: First-Block Cache and Block Cache T8 cannot run "
+                "together — both replace DiT blocks and each assumes it owns "
+                "them. Use one."
+            )
+        if "easycache" in to or "lazycache" in to:
+            raise ValueError(
+                "MiniMax H3: First-Block Cache cannot combine with "
+                "EasyCache/LazyCache — they cache the same thing by different "
+                "metrics and stack their errors."
+            )
+        if model_options.get(SPECTRUM_BINDING_KEY) is not None:
+            raise ValueError(
+                "MiniMax H3: Spectrum binding and First-Block Cache cannot run "
+                "together — use only one acceleration path."
+            )
+
     dit = _dit_replacements(to)
     if not dit:
         return
@@ -56,6 +81,12 @@ def check_accelerator_conflicts(
     allowed_cache = set()
     if CACHE_KEY in to and total_blocks is not None and total_blocks >= 2:
         allowed_cache = {("double_block", 0), ("double_block", total_blocks - 1)}
+    # The first-block cache is the one accelerator that legitimately patches
+    # every block: block 0 decides, the last one restores the tail, and the
+    # ones between are what it skips. Without this it looks like a pack of
+    # colliding nodes to the loop below.
+    if FIRST_BLOCK_CACHE_KEY in to and total_blocks is not None:
+        allowed_cache |= {("double_block", i) for i in range(total_blocks)}
 
     occupied: set[tuple] = set()
     for key in dit:

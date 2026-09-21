@@ -49,6 +49,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.dual_clock_shim", "MiniMaxH3_DualClockShim"),
     (".mmx_nodes.per_frame_denoise", "MiniMaxH3_PerFrameDenoise"),
     (".mmx_nodes.block_cache", "MiniMaxH3_BlockCacheT8"),
+    (".mmx_nodes.first_block_cache", "MiniMaxH3_FirstBlockCache"),
     (".mmx_nodes.sigma_inspector", "MiniMaxH3_SigmaInspector"),
     (".mmx_nodes.differential_denoise", "MiniMaxH3_DifferentialDenoise"),
     (".mmx_nodes.frame_range_mask", "MiniMaxH3_FrameRangeMask"),
@@ -192,6 +193,14 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.per_frame_denoise import MiniMaxH3_PerFrameDenoise
 
                 nodes.append(MiniMaxH3_PerFrameDenoise)
+            elif mod_path.endswith("first_block_cache"):
+                # Before the block_cache branch on purpose: this dispatcher
+                # matches with endswith(), and "first_block_cache" ends with
+                # "block_cache". Reordered, this node silently resolves to the
+                # T8 cache and registers under the wrong class.
+                from .mmx_nodes.first_block_cache import MiniMaxH3_FirstBlockCache
+
+                nodes.append(MiniMaxH3_FirstBlockCache)
             elif mod_path.endswith("block_cache"):
                 from .mmx_nodes.block_cache import MiniMaxH3_BlockCacheT8
 

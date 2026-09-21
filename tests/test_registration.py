@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 89   # + native audio lock (3) + multishot (3)
+EXPECTED_NODE_COUNT = 90   # + native audio lock (3) + multishot (3) + first-block cache
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
