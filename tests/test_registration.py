@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 70   # + MaskAwareControlNet, NegPiP, SwapControl
+EXPECTED_NODE_COUNT = 73   # + SplitUpscale, SpatialSplitParams, TemporalSplitParams
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
@@ -56,6 +56,9 @@ SAMPLING_NODES = {
     "MiniMaxH3_TurboLoRA",
     "MiniMaxH3_TurboSampler",
     "MiniMaxH3_AudioQualityGate",
+    "MiniMaxH3_SplitUpscale",
+    "MiniMaxH3_SpatialSplitParams",
+    "MiniMaxH3_TemporalSplitParams",
 }
 COLOR_NODES = {
     "MiniMaxH3_OCIOBridge",

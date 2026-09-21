@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from .h3_constants import FRAME_PER_TOKEN, align_frame_count, video_latent_t
 
+# Pixel-frame to audio-latent-sample scale (24 fps video vs 40 Hz audio clock).
+# Added for split-upscale temporal stitching; same ratio as motion_context.py.
+FRAME_RESCALE = 5.0 / 3.0
+
 
 def h3_pixel_frame_groups(frame_count: int) -> list[tuple[int, int]]:
     """Map each video-latent index to a half-open pixel-frame range [start, end).
@@ -60,3 +64,104 @@ def calculate_next_h3_frames(current_frames: int) -> int:
     if is_h3_compatible(n):
         return n
     return calculate_h3_frames(n)
+
+
+# ── token / frame mapping (split-upscale port; upstream clip_tokens == video_latent_t) ──
+
+
+def frames_for_tokens(n: int) -> int:
+    """Pixel frames covered by the first *n* video-latent rows."""
+    return sum(FRAME_PER_TOKEN[i % 5] for i in range(max(0, int(n))))
+
+
+def tokens_for_frames(f: int) -> int:
+    """Smallest latent-row count whose pixel span reaches frame *f*."""
+    n, acc = 0, 0
+    target = int(f)
+    while acc < target:
+        acc += FRAME_PER_TOKEN[n % 5]
+        n += 1
+    return n
+
+
+def clip_tokens(n: int) -> int:
+    """Latent rows for *n* pixel frames — alias of video_latent_t."""
+    return video_latent_t(int(n))
+
+
+def snap_clip_frames(v: int) -> int:
+    """Snap pixel-frame count to the nearest H3 grid point (17n+5)."""
+    v = int(v)
+    if v >= 5:
+        return 5 + 17 * max(1, round((v - 5) / 17))
+    return max(1, v)
+
+
+def snap_overlap_frames(v: int) -> int:
+    """Snap overlap length to the H3 grid; zero stays zero."""
+    v = int(v)
+    if v <= 0:
+        return 0
+    return 5 + 17 * max(0, round((v - 5) / 17))
+
+
+def steps_for_frames(n: int) -> int | None:
+    """Latent rows for exactly *n* pixel frames, or None if *n* is off-grid."""
+    k, covered = 0, 0
+    target = int(n)
+    while covered < target:
+        covered += FRAME_PER_TOKEN[k % 5]
+        k += 1
+    return k if covered == target else None
+
+
+def token_start_at_or_before(f: int) -> int:
+    """Largest latent index whose pixel span still starts at or before frame *f*."""
+    k = 0
+    while frames_for_tokens(k + 1) <= int(f):
+        k += 1
+    return k
+
+
+def audio_range(f0: int, f1: int) -> tuple[int, int]:
+    """Map a half-open pixel-frame span to audio-latent sample indices."""
+    return round(int(f0) * FRAME_RESCALE), round(int(f1) * FRAME_RESCALE)
+
+
+def compute_h3_segments_adaptive(
+    total_tokens: int,
+    chunk_frames: int,
+    overlap_frames: int,
+) -> tuple[list[tuple[int, int, int, int]], int]:
+    """Plan temporal segments on the H3 latent grid.
+
+    Returns ``(bounds, total_pixel_frames)`` where each bound is
+    ``(k0, f0, k1, f1)`` — half-open token indices and matching pixel frames.
+    *total_tokens* is the video latent ``T`` dimension; chunk/overlap are pixel
+    frames snapped through clip_tokens.
+    """
+    tv = int(total_tokens)
+    tc = clip_tokens(chunk_frames)
+    to = clip_tokens(overlap_frames) if overlap_frames > 0 else 0
+    if to >= tc:
+        to = max(0, tc - 1)
+    if tc >= tv:
+        return [(0, 0, tv, frames_for_tokens(tv))], frames_for_tokens(tv)
+    hop = max(1, tc - to)
+    bounds: list[tuple[int, int, int, int]] = []
+    prev_k0, i = -1, 0
+    while True:
+        k0 = i * hop
+        if k0 + tc >= tv:
+            k1 = tv
+            k0 = max(k0, tv - tc)
+            if prev_k0 >= 0 and k0 <= prev_k0:
+                k0 = prev_k0 + 1
+            if k0 >= tv:
+                break
+            bounds.append((k0, frames_for_tokens(k0), k1, frames_for_tokens(k1)))
+            break
+        bounds.append((k0, frames_for_tokens(k0), k0 + tc, frames_for_tokens(k0 + tc)))
+        prev_k0 = k0
+        i += 1
+    return bounds, frames_for_tokens(tv)

@@ -102,6 +102,9 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.promptor", "MiniMaxH3_Vision"),
     (".mmx_nodes.promptor", "MiniMaxH3_PromptEditor"),
     (".mmx_nodes.promptor", "MiniMaxH3_PromptComposer"),
+    (".mmx_nodes.split_upscale", "MiniMaxH3_SplitUpscale"),
+    (".mmx_nodes.split_upscale", "MiniMaxH3_SpatialSplitParams"),
+    (".mmx_nodes.split_upscale", "MiniMaxH3_TemporalSplitParams"),
 )
 
 
@@ -385,6 +388,18 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.promptor import MiniMaxH3_PromptComposer
 
                 nodes.append(MiniMaxH3_PromptComposer)
+            elif mod_path.endswith("split_upscale") and cls_name == "MiniMaxH3_SplitUpscale":
+                from .mmx_nodes.split_upscale import MiniMaxH3_SplitUpscale
+
+                nodes.append(MiniMaxH3_SplitUpscale)
+            elif mod_path.endswith("split_upscale") and cls_name == "MiniMaxH3_SpatialSplitParams":
+                from .mmx_nodes.split_upscale import MiniMaxH3_SpatialSplitParams
+
+                nodes.append(MiniMaxH3_SpatialSplitParams)
+            elif mod_path.endswith("split_upscale") and cls_name == "MiniMaxH3_TemporalSplitParams":
+                from .mmx_nodes.split_upscale import MiniMaxH3_TemporalSplitParams
+
+                nodes.append(MiniMaxH3_TemporalSplitParams)
         except Exception as exc:
             msg = f"ComfyUI-MiniMaxSuite: failed to import {cls_name}: {exc}"
             _LOAD_ERRORS.append(msg)
