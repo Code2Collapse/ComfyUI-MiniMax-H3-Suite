@@ -9,11 +9,15 @@ the face. Deriving both from one landmark array makes them consistent by
 construction, which is the only way to get an offset that stays at zero
 without tuning it per shot.
 
-WHY THE JAW IS IN HERE AND NOT IN THE CONTROL
----------------------------------------------
-See MASK_GROUPS in swap_regions.py. Masked-but-not-controlled is the pairing
-that lets the reference actor's jaw appear: the region is free to change, and
-nothing is telling it to look like the dupe's.
+THE JAW IS BOTH MASKED AND DRIVEN
+---------------------------------
+See MASK_GROUPS in swap_regions.py. Driving it brings the dupe's head pose and
+chin drop; masking it leaves the region free to move toward the reference
+actor's skull. Those two pull against each other on purpose, and ControlNet
+strength decides who wins.
+
+`lips` is the exception: it DRIVES the jaw so the chin can drop, but masks only
+the mouth, because a lip-sync must never reshape the chin.
 
 No cv2, no SciPy. A convex hull and a scanline fill are forty lines and a
 control mask is not worth a dependency that has already broken EXR reading in
@@ -112,7 +116,7 @@ def build_swap_mask(
     pad: float | None = None,
     feather: int = 0,
 ) -> np.ndarray:
-    """[T,133,3] pixel keypoints -> [T,H,W] float32 mask in 0..1."""
+    """[T,133or135,3] pixel keypoints -> [T,H,W] float32 mask in 0..1."""
     arr = np.asarray(keypoints, dtype=np.float32)
     if arr.ndim != 3:
         raise SwapRegionError(
@@ -121,7 +125,10 @@ def build_swap_mask(
     if w <= 0 or h <= 0:
         raise SwapRegionError(f"Canvas must be positive, got {w}x{h}.")
 
-    idx = mask_indices(scope)
+    # A detector without pupils gives 133 rows, one with them 135. Clamp
+    # rather than refuse: the pupils are a bonus for gaze, never required to
+    # build a region.
+    idx = [i for i in mask_indices(scope) if i < arr.shape[1]]
     amount = MASK_PAD[scope] if pad is None else float(pad)
     out = np.zeros((arr.shape[0], h, w), dtype=np.float32)
 

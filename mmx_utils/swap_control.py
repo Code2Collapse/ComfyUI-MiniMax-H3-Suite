@@ -1,12 +1,18 @@
 """Rasterise a swap's driving landmarks into a control video.
 
 The Fun ControlNet-Union takes Canny, Depth, HED, MLSD or Pose. This renders
-the Pose form, but only for the landmark groups a given swap scope drives -
-see swap_regions.py for why the jaw is never one of them.
+the Pose form, for the landmark groups a given swap scope drives.
 
 The edge tables below are per GROUP, so excluding a group excludes its lines
-by construction rather than by a filter someone can forget to apply. There is
-no jaw chain in this file at all.
+by construction rather than by a filter someone can forget to apply.
+
+The jaw chain IS here. It carries head pose and chin drop as well as skull
+shape, and `drive_jaw=False` drops it at call time for the cases where
+identity matters more than pose - see swap_regions.py.
+
+Pupils are drawn as a short cross rather than a chain: they are single points,
+and a dot one pixel across survives neither the VAE encode nor the model's
+patchify. A cross of a few pixels does, and its centre is still the gaze.
 
 Detector-agnostic: it takes COCO-WholeBody 133 keypoints, which is what
 DWPose, SDPose and ViTPose-wholebody all emit. SDPose (arXiv 2509.24980) is
@@ -19,7 +25,16 @@ from __future__ import annotations
 
 import numpy as np
 
-from .swap_regions import FACE, GROUPS, N_WHOLEBODY, SwapRegionError, scope_groups, select
+from .swap_regions import (
+    FACE,
+    GROUPS,
+    N_EXTENDED,
+    N_WHOLEBODY,
+    PUPILS,
+    SwapRegionError,
+    scope_groups,
+    select,
+)
 
 _F = FACE[0]
 
@@ -57,8 +72,10 @@ def _hand(base: int) -> tuple[tuple[int, int], ...]:
     return tuple(out)
 
 
-# NOTE: there is no "jaw" entry, and adding one would defeat the whole design.
 GROUP_EDGES: dict[str, tuple[tuple[int, int], ...]] = {
+    # An OPEN chain, ear to chin to ear. Closing it would draw a line straight
+    # across the eyes.
+    "jaw": _face(_chain(*range(0, 17))),
     "body": BODY_EDGES,
     "feet": ((15, 17), (15, 18), (15, 19), (16, 20), (16, 21), (16, 22)),
     "left_hand": _hand(GROUPS["left_hand"][0]),
@@ -73,6 +90,8 @@ GROUP_EDGES: dict[str, tuple[tuple[int, int], ...]] = {
 # each group its own hue is what lets it tell a mouth line from an eyebrow -
 # the same reason OpenPose renders limbs in distinct colours.
 GROUP_COLOUR: dict[str, tuple[float, float, float]] = {
+    "jaw": (0.55, 0.75, 1.00),
+    "pupils": (1.00, 1.00, 1.00),
     "body": (0.00, 0.60, 1.00),
     "feet": (0.00, 0.85, 0.75),
     "left_hand": (1.00, 0.70, 0.10),
@@ -84,10 +103,11 @@ GROUP_COLOUR: dict[str, tuple[float, float, float]] = {
 }
 
 
-def scope_edges(scope: str) -> list[tuple[tuple[int, int], tuple[float, float, float]]]:
-    """Every (edge, colour) a scope draws. Never contains a jaw edge."""
+def scope_edges(scope: str, *, drive_jaw: bool = True
+                ) -> list[tuple[tuple[int, int], tuple[float, float, float]]]:
+    """Every (edge, colour) a scope draws."""
     out = []
-    for group in scope_groups(scope):
+    for group in scope_groups(scope, drive_jaw=drive_jaw):
         colour = GROUP_COLOUR[group]
         for edge in GROUP_EDGES.get(group, ()):
             out.append((edge, colour))
@@ -127,6 +147,7 @@ def render_swap_control(
     confidence_gate: float = 0.3,
     line_width: int = 4,
     face_line_width: int | None = None,
+    drive_jaw: bool = True,
 ) -> np.ndarray:
     """[T,133,3] COCO-WholeBody -> [T,H,W,3] float32 control frames in 0..1.
 
@@ -143,17 +164,29 @@ def render_swap_control(
     if w <= 0 or h <= 0:
         raise SwapRegionError(f"Canvas must be positive, got {w}x{h}.")
 
-    gated = select(arr, scope)
-    edges = scope_edges(scope)
+    gated = select(arr, scope, drive_jaw=drive_jaw)
+    edges = scope_edges(scope, drive_jaw=drive_jaw)
     # Face lines default thinner: a 4px mouth on a 768px frame closes the lip
     # gap and the model then cannot tell an open mouth from a shut one.
     fw = face_line_width if face_line_width is not None else max(1, line_width // 2)
-    face_groups = {"brows", "nose", "eyes", "mouth"}
+    face_groups = {"jaw", "brows", "nose", "eyes", "mouth"}
     face_edge_ids = {e for g in face_groups for e in GROUP_EDGES.get(g, ())}
+
+    draw_pupils = "pupils" in scope_groups(scope, drive_jaw=drive_jaw)
+    pupil_colour = GROUP_COLOUR["pupils"]
 
     out = np.zeros((arr.shape[0], h, w, 3), dtype=np.float32)
     for t in range(arr.shape[0]):
         pts = gated[t]
+        if draw_pupils and arr.shape[1] >= N_EXTENDED:
+            # A cross, not a dot: one pixel does not survive the VAE encode.
+            r = max(2, fw + 1)
+            for i in range(*PUPILS):
+                if pts[i, 2] < confidence_gate:
+                    continue
+                x, y = int(round(pts[i, 0])), int(round(pts[i, 1]))
+                _line(out[t], x - r, y, x + r, y, pupil_colour, 1)
+                _line(out[t], x, y - r, x, y + r, pupil_colour, 1)
         for edge, colour in edges:
             a, b = edge
             if pts[a, 2] < confidence_gate or pts[b, 2] < confidence_gate:
@@ -166,12 +199,18 @@ def render_swap_control(
     return out
 
 
-def describe_render(scope: str, drawn: int, total: int) -> str:
-    groups = scope_groups(scope)
-    return (
-        f"Rendered {drawn} of {total} possible edges for scope '{scope}' "
-        f"({', '.join(groups)}).\n"
-        "No jaw edge exists in the table, so the dupe's face contour cannot "
-        "reach the model however the node is configured - the head shape stays "
-        "the reference actor's."
-    )
+def describe_render(scope: str, drawn: int, total: int,
+                    *, drive_jaw: bool = True) -> str:
+    groups = scope_groups(scope, drive_jaw=drive_jaw)
+    lines = [f"Rendered {drawn} of {total} possible edges for scope '{scope}' "
+             f"({', '.join(groups)})."]
+    if "jaw" in groups:
+        lines.append(
+            "The jaw contour is driven, so head pose and chin drop transfer. "
+            "It also pulls face width toward the dupe - lower the ControlNet "
+            "strength if the head starts taking the dupe's shape.")
+    else:
+        lines.append(
+            "The jaw contour is NOT driven, so the dupe's skull shape cannot "
+            "transfer - at the cost of head pose and chin drop.")
+    return "\n".join(lines)

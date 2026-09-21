@@ -1,15 +1,18 @@
-"""The landmark groups that drive a swap, and the one that must never.
+"""The landmark groups that drive a swap.
 
 H3 has no face conditioning path - expression can only reach it through the
-control video. So the control carries the dupe's performance, and the trap is
-that it then also carries the dupe's ANATOMY: put the dupe's face contour in
-the control and the swap comes back with the actor's texture on the dupe's
-skull.
+control video, so the control carries the dupe's whole performance.
 
-DWPose emits COCO-WholeBody 133, whose face block is the dlib-68 layout, and
-the jaw is a contiguous run at the front of it (face 0-16). Excluding exactly
-that run is what lets the dupe drive the performance while the reference
-actor keeps their own head shape. These tests exist to keep it excluded.
+The jaw (face points 0-16) is the awkward group, and it is a trade rather than
+a bug. Those points carry head POSE and the CHIN DROP that lets the mouth
+open, as well as the dupe's skull SHAPE. Driving them brings the first two and
+risks the third; the region is masked as well, so the reference actor's skull
+can still come through, and ControlNet strength decides who wins.
+`drive_jaw=False` is the lever for when identity beats pose, and both paths
+are pinned here.
+
+The array is 135: COCO-WholeBody's 133 plus the two pupils, which are the only
+eye-DIRECTION signal - the 68-point eye contours give the lid, never the gaze.
 
 CPU-only, no detector, no weights.
 """
@@ -30,8 +33,8 @@ from mmx_utils.swap_regions import (  # noqa: E402
     EXPRESSION,
     FACE,
     GROUPS,
+    N_EXTENDED,
     N_WHOLEBODY,
-    NEVER_RENDERED,
     SWAP_SCOPES,
     SwapRegionError,
     describe,
@@ -44,14 +47,14 @@ from mmx_utils.swap_regions import (  # noqa: E402
 
 # ── the layout is the one DWPose actually emits ─────────────────────────────
 
-def test_the_groups_tile_the_133_points_without_overlap():
+def test_the_groups_tile_every_point_without_overlap():
     """A gap or an overlap here silently mis-selects landmarks."""
     seen: list[int] = []
     for name in GROUPS:
         lo, hi = GROUPS[name]
         seen.extend(range(lo, hi))
     assert len(seen) == len(set(seen)), "groups overlap"
-    assert sorted(seen) == list(range(N_WHOLEBODY)), "groups do not tile 0..132"
+    assert sorted(seen) == list(range(N_EXTENDED)), "groups do not tile 0..134"
 
 
 def test_the_face_block_is_the_dlib_68():
@@ -71,33 +74,38 @@ def test_the_mouth_is_the_last_twenty():
 
 # ── the rule the whole design rests on ──────────────────────────────────────
 
-@pytest.mark.parametrize("scope", sorted(SWAP_SCOPES))
-def test_no_scope_ever_renders_the_jaw(scope):
-    """THE rule. Rendering the jaw transfers the dupe's skull shape, which is
-    the one thing a faceswap must not do - the head must stay the actor's."""
-    for banned in NEVER_RENDERED:
-        assert banned not in scope_groups(scope), (
-            f"scope {scope!r} would draw the dupe's {banned} into the control")
+@pytest.mark.parametrize("scope", ["face", "head", "person", "lips"])
+def test_every_face_scope_drives_the_jaw_by_default(scope):
     jaw = set(range(*GROUPS["jaw"]))
-    assert not (set(scope_indices(scope)) & jaw)
+    assert set(scope_indices(scope)) & jaw, f"{scope} drives no jaw point"
 
 
-def test_the_face_scope_still_carries_expression_and_lips():
-    """Excluding the jaw must not have thrown the performance out with it."""
+@pytest.mark.parametrize("scope", ["face", "head", "person", "lips"])
+def test_drive_jaw_false_removes_it(scope):
+    jaw = set(range(*GROUPS["jaw"]))
+    assert not (set(scope_indices(scope, drive_jaw=False)) & jaw)
+
+
+def test_the_face_scope_carries_the_whole_performance():
     groups = scope_groups("face")
-    for needed in ("brows", "eyes", "mouth", "nose"):
+    for needed in ("jaw", "brows", "eyes", "mouth", "nose", "pupils"):
         assert needed in groups, f"face scope dropped {needed}"
 
 
-def test_lips_scope_is_the_mouth_and_nothing_else():
-    assert scope_groups("lips") == ("mouth",)
-    assert len(scope_indices("lips")) == 20
+def test_lips_scope_is_mouth_plus_the_jaw_that_opens_it():
+    assert set(scope_groups("lips")) == {"mouth", "jaw"}
 
 
-def test_person_scope_drives_body_and_face_but_still_not_the_jaw():
+def test_person_scope_drives_body_and_face_together():
     groups = scope_groups("person")
-    assert "body" in groups and "mouth" in groups
-    assert "jaw" not in groups
+    assert "body" in groups and "mouth" in groups and "jaw" in groups
+
+
+def test_pupils_are_a_group_and_are_driven_for_gaze():
+    from mmx_utils.swap_regions import PUPILS
+
+    assert GROUPS["pupils"] == PUPILS
+    assert "pupils" in scope_groups("face")
 
 
 def test_the_vfx_scopes_all_exist():
@@ -108,8 +116,8 @@ def test_the_vfx_scopes_all_exist():
 # ── selection ───────────────────────────────────────────────────────────────
 
 def _kps(n=1):
-    a = np.zeros((n, N_WHOLEBODY, 3), dtype=np.float32)
-    a[..., 0] = np.arange(N_WHOLEBODY)          # x, so identity is checkable
+    a = np.zeros((n, N_EXTENDED, 3), dtype=np.float32)
+    a[..., 0] = np.arange(N_EXTENDED)          # x, so identity is checkable
     a[..., 1] = 100.0
     a[..., 2] = 1.0                              # all confident to start
     return a
@@ -121,11 +129,11 @@ def test_select_suppresses_everything_outside_the_scope():
     assert kept.tolist() == scope_indices("lips")
 
 
-def test_select_keeps_the_133_point_layout():
+def test_select_keeps_the_full_point_layout():
     """Downstream renderers and detectors index by position; dropping rows
     would silently shift every landmark after the gap."""
     out = select(_kps(), "face")
-    assert out.shape == (1, N_WHOLEBODY, 3)
+    assert out.shape == (1, N_EXTENDED, 3)
 
 
 def test_select_does_not_move_any_coordinate():
@@ -143,11 +151,15 @@ def test_select_does_not_mutate_its_input():
     assert np.array_equal(src, before)
 
 
-def test_the_jaw_is_suppressed_by_every_scope():
+def test_the_jaw_survives_selection_for_a_face_scope():
     jaw = list(range(*GROUPS["jaw"]))
-    for scope in SWAP_SCOPES:
-        out = select(_kps(), scope)
-        assert out[0, jaw, 2].max() == 0.0, f"{scope} left the jaw confident"
+    assert select(_kps(), "face")[0, jaw, 2].max() > 0.0
+
+
+def test_drive_jaw_false_suppresses_it_in_selection():
+    jaw = list(range(*GROUPS["jaw"]))
+    out = select(_kps(), "face", drive_jaw=False)
+    assert out[0, jaw, 2].max() == 0.0
 
 
 def test_a_body_only_pose_is_refused_with_the_reason():
@@ -174,12 +186,16 @@ def test_an_unknown_group_lists_the_real_ones():
 
 # ── the report ──────────────────────────────────────────────────────────────
 
-def test_the_report_says_the_jaw_is_excluded():
-    text = describe("face")
-    assert "jaw" in text.lower()
-    assert "skull" in text.lower() or "shape" in text.lower()
+def test_the_report_names_the_jaw_and_the_knob():
+    text = describe("face").lower()
+    assert "jaw" in text
+    assert "strength" in text, "a user seeing the dupe's head needs the knob named"
 
 
 def test_the_report_counts_the_landmarks_actually_driving():
-    text = describe("lips")
-    assert "20 of 133" in text
+    """lips drives mouth (20) + jaw (17) = 37 of the 135-point array."""
+    assert "37 of 135" in describe("lips")
+
+
+def test_the_report_counts_fewer_when_the_jaw_is_dropped():
+    assert "20 of 135" in describe("lips", drive_jaw=False)

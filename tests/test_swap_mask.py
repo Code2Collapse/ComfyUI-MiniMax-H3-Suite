@@ -1,15 +1,14 @@
 """The swap's region mask, and the one place it must disagree with the control.
 
-Mask says what may CHANGE. Control says what DRIVES. For the jaw they are
-opposites, and that opposition is the whole mechanism:
+Mask says what may CHANGE. Control says what DRIVES. For the jaw they now
+BOTH apply, and the two pull against each other on purpose:
 
-    jaw NOT controlled -> the dupe's skull shape is never imposed
-    jaw IS masked      -> the region can be regenerated, so the reference
-                          actor's jaw can appear there
+    jaw DRIVEN -> the dupe's head pose and chin drop transfer
+    jaw MASKED -> the region can still move toward the reference actor's skull
 
-Leave the jaw out of both and you keep the dupe's original jaw pixels - the
-same failure by a different route. Put it in both and you are back to the
-dupe's skull.
+ControlNet strength decides who wins. `lips` is the exception: it drives the
+jaw so the chin can drop, but masks only the mouth, because a lip-sync must
+never reshape the chin.
 
 Both are derived from ONE landmark array so they cannot drift apart frame to
 frame, which is what keeps the boundary offset at zero without per-shot tuning.
@@ -35,6 +34,7 @@ from mmx_utils.swap_regions import (  # noqa: E402
     FACE,
     GROUPS,
     MASK_GROUPS,
+    N_EXTENDED,
     N_WHOLEBODY,
     SWAP_SCOPES,
     SwapRegionError,
@@ -49,7 +49,7 @@ W = H = 256
 
 def face_kps(frames=1, cx=128.0, cy=128.0, r=50.0):
     """A ring of face landmarks, so the hull is a predictable disc."""
-    a = np.zeros((frames, N_WHOLEBODY, 3), dtype=np.float32)
+    a = np.zeros((frames, N_EXTENDED, 3), dtype=np.float32)
     n = FACE[1] - FACE[0]
     ang = np.linspace(0, 2 * np.pi, n, endpoint=False)
     a[:, FACE[0]:FACE[1], 0] = cx + r * np.cos(ang)
@@ -61,46 +61,52 @@ def face_kps(frames=1, cx=128.0, cy=128.0, r=50.0):
 # ── the opposition ──────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("scope", ["face", "head", "person"])
-def test_the_jaw_is_masked_but_not_controlled(scope):
-    """THE mechanism. Both halves asserted together, because either one alone
-    is a different bug."""
+def test_the_jaw_is_both_masked_and_driven(scope):
+    """Both halves asserted together, because either one alone is a different
+    result: driven-only imposes the dupe's skull, masked-only loses head pose
+    and chin drop."""
     assert "jaw" in mask_groups(scope), (
         f"{scope}: the jaw is not masked, so the actor's jaw can never be "
         "generated - the dupe's jaw pixels survive untouched")
-    assert "jaw" not in scope_groups(scope), (
-        f"{scope}: the jaw is controlled, so the dupe's skull shape is imposed")
+    assert "jaw" in scope_groups(scope), (
+        f"{scope}: the jaw is not driven, so head pose and chin drop are lost")
 
 
-def test_no_scope_both_masks_and_controls_the_jaw():
-    for scope in SWAP_SCOPES:
-        assert not ("jaw" in mask_groups(scope) and "jaw" in scope_groups(scope))
+def test_lips_drives_the_jaw_but_does_not_mask_it():
+    """The one scope where they must differ. The chin has to DROP for the
+    mouth to open, but a lip-sync that reshapes the chin is a broken shot."""
+    assert "jaw" in scope_groups("lips"), "the chin cannot drop"
+    assert mask_groups("lips") == ("mouth",), "a lip-sync must not reshape the chin"
 
 
-def test_no_control_edge_touches_the_jaw_even_though_it_is_masked():
-    """The mask growing to include the jaw must not quietly pull jaw edges
-    into the control alongside it."""
-    jaw = set(range(*GROUPS["jaw"]))
-    for scope in SWAP_SCOPES:
-        for (a, b), _ in scope_edges(scope):
-            assert a not in jaw and b not in jaw, scope
+def test_drive_jaw_off_removes_it_from_the_control_but_not_the_mask():
+    """The identity lever leaves the region free while removing the contour."""
+    for scope in ("face", "head", "person"):
+        assert "jaw" not in scope_groups(scope, drive_jaw=False)
+        assert "jaw" in mask_groups(scope), (
+            "turning the control off must not also stop the region changing")
 
 
-def test_lips_scope_masks_only_the_mouth():
-    """Lip-sync only: the jaw must NOT be masked, or the chin changes shape
-    on every syllable."""
-    assert mask_groups("lips") == ("mouth",)
-    assert "jaw" not in mask_groups("lips")
-
-
-def test_body_scope_does_not_mask_the_face():
+def test_body_scope_does_not_touch_the_face_either_way():
     assert "jaw" not in mask_groups("body")
-    assert "mouth" not in mask_groups("body")
+    assert "jaw" not in scope_groups("body")
 
 
-def test_the_report_explains_both_halves():
+def test_the_report_explains_the_tension():
+    """A user who sees the head drifting toward the dupe needs to be told the
+    knob, not left to guess."""
     text = describe("face")
-    assert "NOT in the control" in text
-    assert "IS inside the mask" in text
+    assert "driven and masked" in text.lower()
+    assert "strength" in text.lower()
+
+
+def test_the_report_explains_the_other_setting_too():
+    text = describe("face", drive_jaw=False)
+    assert "masked but not driven" in text.lower()
+
+
+def test_the_report_mentions_gaze_when_pupils_are_driven():
+    assert "direction" in describe("face").lower()
 
 
 # ── the mask itself ─────────────────────────────────────────────────────────
@@ -144,7 +150,7 @@ def test_head_pads_further_than_face_because_hair_has_no_landmarks():
 
 
 def test_lips_masks_a_far_smaller_area_than_face():
-    a = np.zeros((1, N_WHOLEBODY, 3), dtype=np.float32)
+    a = np.zeros((1, N_EXTENDED, 3), dtype=np.float32)
     a[..., 2] = 1.0
     ang = np.linspace(0, 2 * np.pi, 68, endpoint=False)
     a[0, FACE[0]:FACE[1], 0] = 128 + 50 * np.cos(ang)

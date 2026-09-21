@@ -279,12 +279,23 @@ def test_each_scope_lights_exactly_the_groups_it_drives():
             f"{sorted(spec['groups'])}")
 
 
-def test_the_panel_never_lights_the_jaw():
-    """The diagram's whole claim. If a scope ever listed 'jaw' here the panel
-    would be advertising the exact transfer the design prevents."""
+def test_the_panel_lights_the_jaw_for_every_face_scope():
+    """The jaw is driven now - it carries head pose and chin drop. A panel that
+    still greyed it would be telling the user the opposite of what runs."""
     js = _js_object(SWAP_JS.read_text(encoding="utf-8"), "SCOPE_GROUPS")
-    for scope, groups in js.items():
-        assert "jaw" not in groups, f"panel lights the jaw for scope {scope!r}"
+    for scope in ("face", "head", "person", "lips"):
+        assert "jaw" in js[scope], f"panel does not light the jaw for {scope!r}"
+
+
+def test_the_panel_lights_the_pupils_wherever_gaze_is_driven():
+    """Pupils are the only eye-DIRECTION signal; if the panel omits them a
+    user has no way to see that gaze is being transferred at all."""
+    from mmx_utils.swap_regions import SWAP_SCOPES
+
+    js = _js_object(SWAP_JS.read_text(encoding="utf-8"), "SCOPE_GROUPS")
+    for scope, spec in SWAP_SCOPES.items():
+        if "pupils" in spec["groups"]:
+            assert "pupils" in js[scope], f"panel omits pupils for {scope!r}"
 
 
 def test_the_legend_colours_match_the_rendered_ones():

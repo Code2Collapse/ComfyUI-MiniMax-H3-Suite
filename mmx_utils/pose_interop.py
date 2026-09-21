@@ -13,8 +13,11 @@ rather than an error:
          right, which on a face swap mirrors the expression.
 
   face   OpenPose emits 70 points: the dlib-68 followed by two PUPILS. The
-         first 68 line up exactly; the pupils have no COCO-WholeBody slot and
-         are dropped.
+         first 68 line up with the COCO-WholeBody face block. The pupils
+         have no COCO slot, and they are the ONLY eye-DIRECTION signal in
+         the array - the 68-point eye contours give the lid, never the gaze
+         - so the array is extended to 135 to carry them rather than
+         dropping them as an earlier version did.
 
   feet   OpenPose COCO-18 has none. Those six slots stay at score 0, so the
          confidence gate drops them and no foot line is invented.
@@ -32,7 +35,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .swap_regions import FACE, GROUPS, N_WHOLEBODY, SwapRegionError
+from .swap_regions import FACE, GROUPS, N_EXTENDED, N_WHOLEBODY, PUPILS, SwapRegionError
 
 # COCO-17 slot -> OpenPose COCO-18 slot.
 _OP18_TO_COCO17 = (0, 15, 14, 17, 16, 5, 2, 6, 3, 7, 4, 11, 8, 12, 9, 13, 10)
@@ -58,7 +61,7 @@ def _triples(flat, expected, label):
 def person_to_wholebody(person: dict, canvas: tuple[int, int]) -> np.ndarray:
     """One POSE_KEYPOINT person -> [133, 3] in PIXELS."""
     w, h = float(canvas[0]), float(canvas[1])
-    out = np.zeros((N_WHOLEBODY, 3), dtype=np.float32)
+    out = np.zeros((N_EXTENDED, 3), dtype=np.float32)
 
     body = person.get("pose_keypoints_2d")
     if body:
@@ -69,7 +72,8 @@ def person_to_wholebody(person: dict, canvas: tuple[int, int]) -> np.ndarray:
     face = person.get("face_keypoints_2d")
     if face:
         f = _triples(face, _N_OP_FACE, "face_keypoints_2d")
-        out[FACE[0]:FACE[1]] = f[:68]        # pupils 68,69 have no slot
+        out[FACE[0]:FACE[1]] = f[:68]
+        out[PUPILS[0]:PUPILS[1]] = f[68:70]   # eye direction
 
     for key, group in (("hand_left_keypoints_2d", "left_hand"),
                        ("hand_right_keypoints_2d", "right_hand")):
@@ -90,7 +94,7 @@ def person_to_wholebody(person: dict, canvas: tuple[int, int]) -> np.ndarray:
 def pose_keypoint_to_wholebody(
     pose_keypoint, *, person_index: int = 0, canvas: tuple[int, int] | None = None
 ) -> tuple[np.ndarray, tuple[int, int]]:
-    """POSE_KEYPOINT (list of frames) -> ([T,133,3] pixels, (w, h))."""
+    """POSE_KEYPOINT (list of frames) -> ([T,135,3] pixels, (w, h))."""
     if isinstance(pose_keypoint, dict):
         pose_keypoint = [pose_keypoint]
     if not isinstance(pose_keypoint, (list, tuple)) or not pose_keypoint:
@@ -113,7 +117,7 @@ def pose_keypoint_to_wholebody(
     for i, frame in enumerate(pose_keypoint):
         people = frame.get("people") or []
         if not people:
-            frames.append(np.zeros((N_WHOLEBODY, 3), dtype=np.float32))
+            frames.append(np.zeros((N_EXTENDED, 3), dtype=np.float32))
             continue
         if person_index >= len(people):
             raise PoseInteropError(
@@ -121,6 +125,19 @@ def pose_keypoint_to_wholebody(
                 f"{person_index} is out of range.")
         frames.append(person_to_wholebody(people[person_index], canvas))
     return np.stack(frames), canvas
+
+
+def has_pupils(keypoints: np.ndarray, gate: float = 0.3) -> bool:
+    """Whether eye DIRECTION is available at all.
+
+    Only OpenPose-family detectors emit pupils. Without them the eyes still
+    blink and squint, but gaze cannot be driven - worth saying rather than
+    letting someone wonder why the eyes look past the camera.
+    """
+    arr = np.asarray(keypoints)
+    if arr.shape[-2] < N_EXTENDED:
+        return False
+    return bool((arr[..., PUPILS[0]:PUPILS[1], 2] >= gate).any())
 
 
 def has_face(keypoints: np.ndarray, gate: float = 0.3) -> bool:
@@ -140,6 +157,12 @@ def describe_source(keypoints: np.ndarray, canvas: tuple[int, int], gate: float 
         f"{body / n:.0f} body and {face / n:.0f} face landmarks per frame "
         "above the confidence gate."
     ]
+    if not has_pupils(arr, gate):
+        lines.append(
+            "No pupils in this pose, so eye DIRECTION cannot be driven - the "
+            "eyes will blink and squint but not look where the dupe looks. "
+            "Pupils come from OpenPose-family face detection (70 face points, "
+            "not 68).")
     if face == 0:
         lines.append(
             "NO face landmarks. The detector is body-only, so expression and "

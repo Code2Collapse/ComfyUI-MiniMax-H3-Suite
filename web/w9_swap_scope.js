@@ -1,15 +1,15 @@
 /**
  * W9 — H3 Swap Control: what is driving, and what is deliberately not.
  *
- * WHY: this node's entire argument is a negative one. It renders brows, nose,
- * eyes and mouth into the control video and NEVER the jaw, because the jaw
- * contour would carry the dupe's skull shape into the swap and you would get
- * the reference actor's texture on the dupe's head.
+ * WHY: which landmarks drive a swap is the node's whole behaviour, and in a
+ * list of dropdowns it is invisible. So it is drawn: each driving group lights
+ * in the same colour the renderer actually uses, and changing swap_scope or
+ * drive_jaw relights it.
  *
- * A negative is the hardest thing to show in a list of dropdowns - "jaw" is
- * absent from a tuple the user cannot see. So it is drawn: the driving groups
- * light up in the same colours the renderer uses, and the jaw is drawn as a
- * dashed grey arc, struck through, labelled. Changing swap_scope relights it.
+ * The jaw is the group worth seeing. It carries head POSE and the CHIN DROP
+ * that lets the mouth open, as well as the dupe's skull SHAPE - so it is
+ * driven by default, and turning drive_jaw off greys it out with the cost
+ * spelled out in the caption rather than left to be discovered in a render.
  *
  * The face here is a SCHEMATIC, not a mean face shape. Drawing a real 68-point
  * mean face would imply a precision this diagram does not have; the groups are
@@ -37,6 +37,8 @@ const PANEL_H = 196;
 
 /** Mirrors GROUP_COLOUR in mmx_utils/swap_control.py. */
 const GROUP_COLOUR = {
+  jaw: "#8cbfff",
+  pupils: "#ffffff",
   body: "#0099ff",
   feet: "#00d9bf",
   left_hand: "#ffb31a",
@@ -49,19 +51,20 @@ const GROUP_COLOUR = {
 
 /** Mirrors SWAP_SCOPES[*]["groups"] in mmx_utils/swap_regions.py. */
 const SCOPE_GROUPS = {
-  lips: ["mouth"],
-  face: ["brows", "nose", "eyes", "mouth"],
-  head: ["brows", "nose", "eyes", "mouth"],
+  lips: ["mouth", "jaw"],
+  face: ["jaw", "brows", "nose", "eyes", "pupils", "mouth"],
+  head: ["jaw", "brows", "nose", "eyes", "pupils", "mouth"],
   body: ["body", "feet", "left_hand", "right_hand"],
-  person: ["body", "feet", "left_hand", "right_hand", "brows", "nose", "eyes", "mouth"],
+  person: ["body", "feet", "left_hand", "right_hand",
+           "jaw", "brows", "nose", "eyes", "pupils", "mouth"],
 };
 
 const SCOPE_NOTE = {
-  lips: "Mouth only. Everything else is the untouched plate — lip-sync alone.",
-  face: "Brows, nose, eyes and mouth drive it. Head shape follows your reference.",
-  head: "As face, but hair and skull are regenerated — still from your reference.",
+  lips: "Mouth and jaw drive it — the chin has to drop for the mouth to open — but only the mouth is regenerated, so a lip-sync never reshapes the chin.",
+  face: "The whole face drives it: jaw for head pose, pupils for gaze, mouth for lip movement. The region is masked too, so the skull can still move toward your reference.",
+  head: "As face, with hair and skull inside the mask as well.",
   body: "Body, feet and hands. The face is left to the plate.",
-  person: "Everything the dupe does. The jaw is still excluded.",
+  person: "Everything the dupe does — body, hands, face, gaze.",
 };
 
 /** Schematic face in 0..1 box coordinates. Not a mean face — see the header. */
@@ -94,8 +97,11 @@ function build(node) {
 
   const paint = () => {
     const scope = String(widgetByName(node, "swap_scope")?.value ?? "face");
+    const driveJaw = widgetByName(node, "drive_jaw")?.value !== false;
     const active = new Set(SCOPE_GROUPS[scope] || SCOPE_GROUPS.face);
+    if (!driveJaw) active.delete("jaw");
     const facey = ["brows", "nose", "eyes", "mouth"].some((g) => active.has(g));
+    const jawOn2 = active.has("jaw");
 
     const cssW = Math.max(160, (node.size?.[0] || 360) - 24);
     const ctx = setupDpiCanvas(canvas, cssW, PANEL_H);
@@ -115,11 +121,12 @@ function build(node) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // --- the jaw: always off, and said so ---
+    // --- the jaw: lit when driven, dashed and grey when not ---
+    const jawOn = active.has("jaw");
     ctx.save();
-    ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = "rgba(150,156,175,0.42)";
-    ctx.lineWidth = 1.5;
+    if (!jawOn) ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = jawOn ? GROUP_COLOUR.jaw : "rgba(150,156,175,0.42)";
+    ctx.lineWidth = jawOn ? 2.2 : 1.5;
     ctx.beginPath();
     F.jaw.forEach((p, i) => { const [x, y] = P(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
     ctx.stroke();
@@ -150,6 +157,16 @@ function build(node) {
       ctx.stroke();
     }
 
+    // pupils: the only gaze signal, so they get their own mark
+    for (const e of F.eyes) {
+      const [x, y] = P(e);
+      ctx.fillStyle = active.has("pupils")
+        ? GROUP_COLOUR.pupils : "rgba(150,156,175,0.22)";
+      ctx.beginPath();
+      ctx.arc(x + size * 0.04, y, Math.max(1.5, size * 0.014), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     stroke("mouth", 2.6);
     const [mx, my] = P(F.mouth);
     ctx.beginPath();
@@ -160,26 +177,29 @@ function build(node) {
     ctx.lineTo(mx + size * 0.135, my);
     ctx.stroke();
 
-    // jaw label, struck through
+    // jaw label: what it is doing right now, not a fixed claim
     ctx.font = "9px system-ui,sans-serif";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "rgba(150,156,175,0.75)";
-    const jl = "jaw — never sent";
+    const jl = jawOn ? "jaw — head pose + chin drop" : "jaw — not driven";
+    ctx.fillStyle = jawOn ? "rgba(140,191,255,0.9)" : "rgba(150,156,175,0.75)";
     const jx = bx + size * 0.5 - ctx.measureText(jl).width / 2;
     const jy = by + size + 9;
     ctx.fillText(jl, jx, jy);
-    ctx.strokeStyle = "rgba(150,156,175,0.5)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(jx - 2, jy);
-    ctx.lineTo(jx + ctx.measureText(jl).width + 2, jy);
-    ctx.stroke();
+    if (!jawOn) {
+      ctx.strokeStyle = "rgba(150,156,175,0.5)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(jx - 2, jy);
+      ctx.lineTo(jx + ctx.measureText(jl).width + 2, jy);
+      ctx.stroke();
+    }
 
     // --- legend ---
     const lx = bx + size + 18;
     let ly = by + 2;
     ctx.font = "10px system-ui,sans-serif";
-    for (const g of ["brows", "nose", "eyes", "mouth", "body", "feet", "left_hand", "right_hand"]) {
+    for (const g of ["jaw", "brows", "nose", "eyes", "pupils", "mouth",
+                     "body", "feet", "left_hand", "right_hand"]) {
       const on = active.has(g);
       ctx.fillStyle = on ? GROUP_COLOUR[g] : "rgba(150,156,175,0.22)";
       ctx.fillRect(lx, ly - 3, 9, 6);
@@ -193,8 +213,10 @@ function build(node) {
 
     caption.textContent =
       (SCOPE_NOTE[scope] || "") +
-      (facey ? " The jaw contour is never rendered, so the dupe's skull shape cannot transfer."
-             : " No face group is driven in this scope.");
+      (!facey ? " No face group is driven in this scope."
+        : jawOn2
+          ? " A strong jaw control pulls face width toward the dupe — lower the ControlNet strength if the head starts taking their shape."
+          : " drive_jaw is off: the reference actor's skull is unopposed, but a profile will read as a front-on face and the mouth cannot open as far.");
     const capH = Math.max(16, caption.offsetHeight || 0) + 6;
     if (Math.abs(capH - st.capH) > 1) {
       st.capH = capH;
@@ -206,8 +228,9 @@ function build(node) {
   st.paint = rafThrottle(paint);
   addDomWidgetLast(node, "mmx_swap_scope", wrap, () => PANEL_H + st.capH);
 
-  const wdg = widgetByName(node, "swap_scope");
-  if (wdg) {
+  for (const name of ["swap_scope", "drive_jaw"]) {
+    const wdg = widgetByName(node, name);
+    if (!wdg) continue;
     const prev = wdg.callback;
     wdg.callback = function (...a) {
       const r = prev?.apply(this, a);

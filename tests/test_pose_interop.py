@@ -34,7 +34,12 @@ from mmx_utils.pose_interop import (  # noqa: E402
     person_to_wholebody,
     pose_keypoint_to_wholebody,
 )
-from mmx_utils.swap_regions import FACE, GROUPS, N_WHOLEBODY  # noqa: E402
+from mmx_utils.swap_regions import (  # noqa: E402
+    FACE,
+    GROUPS,
+    N_EXTENDED,
+    PUPILS,
+)
 
 W, H = 640, 480
 
@@ -97,14 +102,35 @@ def test_the_first_68_face_points_land_in_the_face_block():
         assert round(kp[FACE[0] + i, 0] / W * 100) == i
 
 
-def test_the_two_pupils_are_dropped():
-    """OpenPose face is 70 - dlib-68 plus pupils. There is no COCO slot for
-    them, and appending them would shift every hand index by two."""
+def test_the_two_pupils_are_kept_at_the_end():
+    """They are the only eye-DIRECTION signal - the 68-point eye contours give
+    the lid, never the gaze - so they are appended at 133,134 rather than
+    dropped. Appending, not inserting: inserting would shift every hand index.
+    """
     kp = person_to_wholebody(op_person(), (W, H))
-    assert FACE[1] - FACE[0] == 68
-    # hand block must still start exactly where the table says
+    assert FACE[1] - FACE[0] == 68, "the face block must stay dlib-68"
+    assert round(kp[PUPILS[0], 0] / W * 100) == 68
+    assert round(kp[PUPILS[1] - 1, 0] / W * 100) == 69
+    # the hand block must still start exactly where the table says
     lo, _ = GROUPS["left_hand"]
     assert round(kp[lo, 0] / W * 100) == 0, "left hand did not start at its slot"
+
+
+def test_a_pose_with_pupils_reports_gaze_as_available():
+    from mmx_utils.pose_interop import has_pupils
+
+    kp, canvas = pose_keypoint_to_wholebody([frame()])
+    assert has_pupils(kp)
+    assert "No pupils" not in describe_source(kp, canvas)
+
+
+def test_a_pose_without_pupils_says_gaze_cannot_be_driven():
+    from mmx_utils.pose_interop import has_pupils
+
+    kp, canvas = pose_keypoint_to_wholebody([frame(face=False)])
+    assert not has_pupils(kp)
+    text = describe_source(kp, canvas)
+    assert "eye DIRECTION cannot be driven" in text
 
 
 def test_hands_are_copied_in_order():
@@ -142,7 +168,7 @@ def test_pixel_coordinates_are_left_alone():
 
 def test_a_clip_becomes_a_stacked_array():
     kp, canvas = pose_keypoint_to_wholebody([frame(), frame(), frame()])
-    assert kp.shape == (3, N_WHOLEBODY, 3)
+    assert kp.shape == (3, N_EXTENDED, 3)
     assert canvas == (W, H)
 
 

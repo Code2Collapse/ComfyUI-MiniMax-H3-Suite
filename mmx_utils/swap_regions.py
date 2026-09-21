@@ -8,30 +8,39 @@ face-specific segment). Expression and lip movement can only reach the model
 through the CONTROL VIDEO, which the Fun ControlNet-Union accepts as Canny,
 Depth, HED, MLSD or Pose.
 
-So the control has to carry the dupe's performance. The trap is that it then
-also carries the dupe's ANATOMY: draw the dupe's face contour into the control
-and the swapped face inherits the dupe's jaw and skull, giving you the actor's
-texture on the dupe's head.
+So the control has to carry the dupe's performance, and the whole face is
+driven. The face block is the dlib-68 layout:
 
-DWPose (COCO-WholeBody, 133 points) makes the fix exact, because the face
-block is the dlib-68 layout and the jaw is a contiguous run at the front of it:
-
-    face[ 0..16]  jaw / face contour   <- the DUPE's skull. EXCLUDE.
+    face[ 0..16]  jaw / face contour   <- head POSE, chin drop, AND skull shape
     face[17..26]  eyebrows             <- expression
     face[27..35]  nose                 <- position anchor
-    face[36..47]  eyes                 <- expression, blinks
+    face[36..47]  eyes                 <- lid opening, blinks
     face[48..67]  mouth                <- lip movement
+    pupils (x2)   appended at 133,134  <- eye DIRECTION
 
-Render 17..67 and drop 0..16 and the dupe's performance drives the swap while
-the dupe's head shape never enters the control at all. The silhouette is then
-free to follow the reference actor.
+THE JAW IS THE AWKWARD ONE and it is a genuine trade, not a bug to design
+away. Those 17 points carry three separate things:
 
-COCO-WholeBody 133 layout (what DWPose emits):
+  * head POSE - the contour says which way the head is turned. Drop it and a
+    profile reads as a front-on face with strange features.
+  * jaw ARTICULATION - the chin drops when the mouth opens. Drop it and you
+    cap how far the mouth can open, which is the lip movement itself.
+  * skull SHAPE - and this one you may not want, because it is the dupe's.
+
+An earlier version of this module excluded the jaw to protect the third. That
+bought face shape at the cost of the first two. The jaw is now DRIVEN by
+default and also MASKED, so the pose and chin drop come through while the
+region stays free to move toward the reference actor - with the tension
+managed by ControlNet strength rather than by throwing the landmarks away.
+`drive_jaw=False` remains for the cases where identity beats pose.
+
+COCO-WholeBody 133 layout (what DWPose and SDPose emit):
     0..16    body (COCO-17)
     17..22   feet
     23..90   face (the dlib-68 block above, offset by 23)
     91..111  left hand
     112..132 right hand
+    [133..134  pupils - our extension, see N_EXTENDED]
 """
 
 from __future__ import annotations
@@ -39,12 +48,19 @@ from __future__ import annotations
 from typing import Iterable
 
 N_WHOLEBODY = 133
+# Our internal array is 135: COCO-WholeBody's 133 plus the two PUPIL centres.
+# OpenPose emits them (face_keypoints_2d is 70 = dlib-68 + 2 pupils) and
+# COCO-WholeBody has no slot, so they used to be dropped on the floor. They
+# are the only eye-DIRECTION signal in the data: the 68-point eye contours
+# describe the lid opening and never where the eye is looking.
+N_EXTENDED = 135
 
 BODY = (0, 17)
 FEET = (17, 23)
 FACE = (23, 91)
 LEFT_HAND = (91, 112)
 RIGHT_HAND = (112, 133)
+PUPILS = (133, 135)
 
 _F = FACE[0]
 
@@ -59,10 +75,17 @@ GROUPS: dict[str, tuple[int, int]] = {
     "nose": (_F + 27, _F + 36),
     "eyes": (_F + 36, _F + 48),
     "mouth": (_F + 48, _F + 68),
+    "pupils": PUPILS,
 }
 
-# The features that carry performance without carrying skull shape.
-EXPRESSION = ("brows", "nose", "eyes", "mouth")
+# Everything the face can do. The jaw is in here deliberately: it carries head
+# POSE and jaw ARTICULATION as well as skull shape, and dropping it to protect
+# the shape also drops those. `drive_jaw=False` is the lever for the cases
+# where identity matters more than pose.
+EXPRESSION = ("jaw", "brows", "nose", "eyes", "pupils", "mouth")
+
+# Kept so `drive_jaw=False` has a name rather than a bare string literal.
+SHAPE_BEARING = ("jaw",)
 
 # scope -> (groups rendered into the control, what the silhouette follows)
 #
@@ -71,25 +94,25 @@ EXPRESSION = ("brows", "nose", "eyes", "mouth")
 # which is only possible when the jaw is kept OUT of the control.
 SWAP_SCOPES: dict[str, dict] = {
     "lips": {
-        "groups": ("mouth",),
+        "groups": ("mouth", "jaw"),
         "silhouette": "plate",
-        "why": "Only the mouth is driven and only the mouth is regenerated. "
-               "The rest of the face, including the jaw, is the original plate "
-               "untouched - this is the lipsync-only case.",
+        "why": "Mouth and jaw are driven - the chin has to drop for the mouth "
+               "to open - and only the mouth region is regenerated. The rest "
+               "of the face is the original plate untouched.",
     },
     "face": {
         "groups": EXPRESSION,
         "silhouette": "ref",
-        "why": "Brows, nose, eyes and mouth drive expression and lip movement. "
-               "The jaw is deliberately absent, so the swapped face takes the "
-               "reference actor's face shape rather than the dupe's.",
+        "why": "The whole face drives it - jaw for head pose and chin drop, "
+               "brows, eyes and pupils for expression and gaze direction, "
+               "mouth for lip movement. The region is masked too, so the skull "
+               "shape can still change toward the reference.",
     },
     "head": {
         "groups": EXPRESSION,
         "silhouette": "ref",
         "why": "As 'face', but the mask covers hair and the whole head, so the "
-               "skull outline is regenerated too - again from the reference, "
-               "because the dupe's contour is not in the control.",
+               "skull outline is regenerated too.",
     },
     "body": {
         "groups": ("body", "feet", "left_hand", "right_hand"),
@@ -100,35 +123,35 @@ SWAP_SCOPES: dict[str, dict] = {
     "person": {
         "groups": ("body", "feet", "left_hand", "right_hand") + EXPRESSION,
         "silhouette": "ref",
-        "why": "Everything the dupe does, driven. The jaw is still excluded so "
-               "the head keeps the reference actor's shape.",
+        "why": "Everything the dupe does, driven - body, hands, face, gaze.",
     },
 }
 
-# The jaw is never rendered by any scope. Stated as data so a test can assert
-# it rather than a reader having to check five tuples by eye.
-NEVER_RENDERED = ("jaw",)
+# Nothing is excluded unconditionally any more. `drive_jaw=False` drops the
+# shape-bearing group at call time; see scope_groups().
+NEVER_RENDERED: tuple[str, ...] = ()
 
-# THE DISTINCTION THE WHOLE SWAP TURNS ON
-# ---------------------------------------
 # CONTROL groups (above) say what the dupe DRIVES.
 # MASK groups (below) say what is allowed to CHANGE.
 #
-# They are not the same set, and for the jaw they are opposites:
+# They are still not the same set - `lips` drives the jaw so the chin can drop
+# but masks only the mouth, because a lip-sync must not reshape the chin - but
+# for face/head/person the jaw is now in BOTH:
 #
-#   jaw NOT in control -> the dupe's skull shape is never imposed
-#   jaw IN mask        -> the region is regenerated, so the reference actor's
-#                         jaw CAN appear there
+#   jaw DRIVEN -> head pose and chin drop transfer from the dupe
+#   jaw MASKED -> the region is regenerated, so it can still move toward the
+#                 reference actor's skull
 #
-# Leave the jaw out of both and the swap keeps the dupe's original jaw pixels
-# untouched, which is the same failure by a different route. Put it in both and
-# you are back to the dupe's skull. It has to be masked and not controlled.
+# Those two pull against each other, and that is the point: the control says
+# where the contour is, the reference says what shape it should be, and
+# ControlNet strength decides who wins. Turn the strength up and the head
+# takes the dupe's width; turn it down and it drifts toward the reference.
 MASK_GROUPS: dict[str, tuple[str, ...]] = {
     "lips": ("mouth",),
-    "face": ("jaw",) + EXPRESSION,
-    "head": ("jaw",) + EXPRESSION,
+    "face": EXPRESSION,
+    "head": EXPRESSION,
     "body": ("body", "feet", "left_hand", "right_hand"),
-    "person": ("jaw",) + EXPRESSION + ("body", "feet", "left_hand", "right_hand"),
+    "person": EXPRESSION + ("body", "feet", "left_hand", "right_hand"),
 }
 
 # How far past the landmark hull each scope's mask reaches, as a fraction of
@@ -160,13 +183,22 @@ class SwapRegionError(ValueError):
     """Raised with a sentence naming what to do instead."""
 
 
-def scope_groups(scope: str) -> tuple[str, ...]:
+def scope_groups(scope: str, *, drive_jaw: bool = True) -> tuple[str, ...]:
+    """Groups the control renders for this scope.
+
+    drive_jaw=False drops the face contour, which trades head pose and chin
+    drop for a stronger guarantee that the dupe's skull width does not
+    transfer. Both are legitimate; neither is free.
+    """
     if scope not in SWAP_SCOPES:
         raise SwapRegionError(
             f"Unknown swap scope {scope!r}. Choose one of: "
             + ", ".join(sorted(SWAP_SCOPES)) + "."
         )
-    return tuple(SWAP_SCOPES[scope]["groups"])
+    groups = tuple(SWAP_SCOPES[scope]["groups"])
+    if not drive_jaw:
+        groups = tuple(g for g in groups if g not in SHAPE_BEARING)
+    return groups
 
 
 def group_indices(groups: Iterable[str]) -> list[int]:
@@ -183,11 +215,11 @@ def group_indices(groups: Iterable[str]) -> list[int]:
     return sorted(out)
 
 
-def scope_indices(scope: str) -> list[int]:
-    return group_indices(scope_groups(scope))
+def scope_indices(scope: str, *, drive_jaw: bool = True) -> list[int]:
+    return group_indices(scope_groups(scope, drive_jaw=drive_jaw))
 
 
-def select(keypoints, scope: str):
+def select(keypoints, scope: str, *, drive_jaw: bool = True):
     """Keep only the scope's landmarks; zero the confidence of the rest.
 
     Takes and returns an array shaped [..., 133, C] with C >= 3 (x, y, score).
@@ -198,41 +230,52 @@ def select(keypoints, scope: str):
     import numpy as np
 
     arr = np.asarray(keypoints)
-    if arr.shape[-2] != N_WHOLEBODY:
+    if arr.shape[-2] not in (N_WHOLEBODY, N_EXTENDED):
         raise SwapRegionError(
-            f"Expected {N_WHOLEBODY} COCO-WholeBody keypoints (what DWPose "
-            f"emits), got {arr.shape[-2]}. A 17-point body-only pose cannot "
-            "carry expression - it has no face landmarks at all."
+            f"Expected {N_WHOLEBODY} COCO-WholeBody keypoints (what DWPose and "
+            f"SDPose emit), or {N_EXTENDED} with the two pupils appended, got "
+            f"{arr.shape[-2]}. A 17-point body-only pose cannot carry "
+            "expression - it has no face landmarks at all."
         )
     if arr.shape[-1] < 3:
         raise SwapRegionError(
             "Keypoints need at least (x, y, score); scores are how the "
             "excluded landmarks are suppressed.")
-    keep = scope_indices(scope)
+    n = arr.shape[-2]
+    keep = [i for i in scope_indices(scope, drive_jaw=drive_jaw) if i < n]
     out = arr.copy()
-    mask = np.zeros(N_WHOLEBODY, dtype=bool)
+    mask = np.zeros(n, dtype=bool)
     mask[keep] = True
     out[..., ~mask, 2] = 0.0
     return out
 
 
-def describe(scope: str) -> str:
+def describe(scope: str, *, drive_jaw: bool = True) -> str:
     spec = SWAP_SCOPES.get(scope)
     if spec is None:
         return f"Unknown scope {scope!r}."
-    n = len(scope_indices(scope))
+    groups = scope_groups(scope, drive_jaw=drive_jaw)
+    n = len(scope_indices(scope, drive_jaw=drive_jaw))
     lines = [
-        f"Swap scope '{scope}': {n} of {N_WHOLEBODY} landmarks drive the control.",
-        "Groups: " + ", ".join(spec["groups"]) + ".",
+        f"Swap scope '{scope}': {n} of {N_EXTENDED} landmarks drive the control.",
+        "Groups: " + ", ".join(groups) + ".",
         spec["why"],
     ]
-    if "jaw" not in spec["groups"]:
+    if "pupils" in groups:
         lines.append(
-            "The jaw contour (face points 0-16) is NOT in the control, so the "
-            "dupe's skull shape cannot transfer.")
-    if "jaw" in MASK_GROUPS.get(scope, ()):
+            "Pupils are driven, so eye DIRECTION transfers. The 68-point eye "
+            "contours only describe the lid; gaze lives in the pupil centres.")
+    jaw_driven = "jaw" in groups
+    jaw_masked = "jaw" in MASK_GROUPS.get(scope, ())
+    if jaw_driven and jaw_masked:
         lines.append(
-            "The jaw IS inside the mask, so that region is regenerated and the "
-            "reference actor's jaw can appear there. Masked but not "
-            "controlled - that pairing is what changes the head shape.")
+            "The jaw is BOTH driven and masked: the dupe's head pose and chin "
+            "drop come through, and the region is still free to move toward "
+            "the reference actor's skull. The tension is real - a strong jaw "
+            "control pulls the face width toward the dupe - so lower the "
+            "ControlNet strength if the head starts taking the dupe's shape.")
+    elif jaw_masked:
+        lines.append(
+            "The jaw is masked but NOT driven: the skull can change toward the "
+            "reference, at the cost of the dupe's head pose and chin drop.")
     return "\n".join(lines)

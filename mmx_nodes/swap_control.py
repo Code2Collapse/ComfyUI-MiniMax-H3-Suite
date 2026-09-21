@@ -32,6 +32,7 @@ if str(_PKG) not in sys.path:
 from mmx_utils.pose_interop import (  # noqa: E402
     describe_source,
     has_face,
+    has_pupils,
     pose_keypoint_to_wholebody,
 )
 from mmx_utils.swap_control import render_swap_control, scope_edges  # noqa: E402
@@ -54,12 +55,16 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                 "a swap on H3. H3 has NO face conditioning path - no "
                 "face_images, no expression coefficients - so expression and "
                 "lip movement can only arrive through the control video.\n\n"
-                "The point of this node is what it leaves OUT. It renders the "
-                "landmark groups that carry performance (brows, nose, eyes, "
-                "mouth) and never the jaw contour, so the dupe drives the "
-                "expression and the feature positions while the head SHAPE "
-                "stays free to follow your reference actor. A square-headed "
-                "dupe does not give a square-headed swap.\n\n"
+                "The whole face drives it: jaw for head pose and chin drop, "
+                "brows and eyes for expression, PUPILS for gaze direction, "
+                "mouth for lip movement. The same region is masked, so the "
+                "skull shape can still move toward your reference actor while "
+                "the dupe's performance comes through.\n\n"
+                "That is a real tension, not a solved problem: a strong jaw "
+                "control pulls face width toward the dupe. Lower the "
+                "ControlNet strength if the head starts taking the dupe's "
+                "shape, or turn drive_jaw off to remove the contour from the "
+                "control entirely - at the cost of head pose and chin drop.\n\n"
                 "Feed the output to the control_video input of H3 Mask-Aware "
                 "ControlNet. Any whole-body detector works - SDPose is the "
                 "strongest (72.8 AP on COCO-WholeBody against DWPose's ~66, "
@@ -76,13 +81,14 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                             "nothing to drive the lips with."),
                 io.Combo.Input(
                     "swap_scope", options=SCOPES, default="face",
-                    tooltip="Which VFX operation this is. face: brows, nose, "
-                            "eyes and mouth drive it, jaw excluded, head shape "
-                            "from your reference. lips: mouth only, everything "
-                            "else is the untouched plate - the lipsync-only "
-                            "case. head: as face but hair and skull are "
-                            "regenerated too. body: body, feet and hands, face "
-                            "left alone. person: all of it."),
+                    tooltip="Which VFX operation this is. face: the whole "
+                            "face drives it and the face region is masked. "
+                            "lips: mouth and jaw drive it - the chin has to "
+                            "drop for the mouth to open - but only the mouth "
+                            "is regenerated, so a lip-sync never reshapes the "
+                            "chin. head: as face, with hair and skull in the "
+                            "mask too. body: body, feet and hands, face left "
+                            "alone. person: all of it."),
                 io.Int.Input(
                     "width", default=768, min=64, max=8192, step=8,
                     tooltip="Control frame width. Match the generation, or the "
@@ -105,6 +111,19 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                             "which is the useful default: a thick line closes "
                             "the gap between the lips, and the model then "
                             "cannot tell an open mouth from a shut one."),
+                io.Boolean.Input(
+                    "drive_jaw", default=True, optional=True,
+                    tooltip="Draw the dupe's jaw contour into the control. ON "
+                            "is usually right: those 17 points carry head POSE "
+                            "(which way the head is turned) and the CHIN DROP "
+                            "that lets the mouth open, not just skull shape. "
+                            "They also carry the dupe's face WIDTH, so if the "
+                            "swapped head starts looking like the dupe, lower "
+                            "the ControlNet strength before reaching for this. "
+                            "OFF removes the contour entirely - the reference "
+                            "actor's skull is then unopposed, but a profile "
+                            "will read as a front-on face and the mouth cannot "
+                            "open as far."),
                 io.Float.Input(
                     "mask_pad", default=-1.0, min=-1.0, max=2.0, step=0.01,
                     optional=True,
@@ -147,8 +166,8 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
 
     @classmethod
     def execute(cls, pose_keypoint, swap_scope, width, height, confidence_gate,
-                line_width, face_line_width, mask_pad=-1.0, mask_feather=0,
-                person_index=0):
+                line_width, face_line_width, drive_jaw=True, mask_pad=-1.0,
+                mask_feather=0, person_index=0):
         if swap_scope not in SWAP_SCOPES:
             raise ValueError(
                 f"Unknown swap scope {swap_scope!r}. Choose one of: "
@@ -170,21 +189,30 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
             confidence_gate=confidence_gate,
             line_width=int(line_width),
             face_line_width=int(face_line_width) or None,
+            drive_jaw=bool(drive_jaw),
         )
 
-        possible = len(scope_edges(swap_scope)) * max(1, frames.shape[0])
+        edges = scope_edges(swap_scope, drive_jaw=bool(drive_jaw))
+        possible = len(edges) * max(1, frames.shape[0])
         drawn = int(sum(
             1 for t in range(frames.shape[0])
-            for (a, b), _ in scope_edges(swap_scope)
+            for (a, b), _ in edges
             if kps[t, a, 2] >= confidence_gate and kps[t, b, 2] >= confidence_gate
         ))
 
         lines = [
-            describe(swap_scope),
+            describe(swap_scope, drive_jaw=bool(drive_jaw)),
             "",
             describe_source(kps, (width, height), confidence_gate),
             f"Drew {drawn} of {possible} possible edges.",
         ]
+        if swap_scope in ("face", "head", "person") and not has_pupils(
+                kps, confidence_gate):
+            lines.append(
+                "No pupils in this pose: eye DIRECTION will not be driven. The "
+                "eyes still blink and squint from the lid contours, but they "
+                "will not look where the dupe looks. Pupils need an "
+                "OpenPose-family face detection (70 face points, not 68).")
         if swap_scope in ("face", "head", "lips", "person") and not has_face(
                 kps, confidence_gate):
             lines.append(
