@@ -16,6 +16,8 @@ from mmx_utils.native_audio import (  # noqa: E402
     assert_h3_av_latent,
     build_audio_lock_report,
     build_video_only_denoise_masks,
+    describe_region_mask,
+    existing_video_mask,
     fit_encoded_audio_to_target,
     fit_waveform_to_vae_rate,
     pack_locked_av_latent,
@@ -92,7 +94,9 @@ class MiniMaxH3_NativeAudioLock(io.ComfyNode):
         target_t = int(target_audio_template.shape[-1])
         exact_audio_latent, fit_note = fit_encoded_audio_to_target(exact_audio_latent, target_t)
 
-        video_mask, audio_mask = build_video_only_denoise_masks(video_latent, exact_audio_latent)
+        kept = existing_video_mask(av_latent, video_latent)
+        video_mask, audio_mask = build_video_only_denoise_masks(
+            video_latent, exact_audio_latent, kept)
         locked = pack_locked_av_latent(
             av_latent,
             video_latent,
@@ -116,6 +120,7 @@ class MiniMaxH3_NativeAudioLock(io.ComfyNode):
             "waveform": audio["waveform"].clone(),
             "sample_rate": int(audio["sample_rate"]),
         }
+        report = report + "\n" + describe_region_mask(kept)
         return io.NodeOutput(patched_model, locked, exact_out, report)
 
 

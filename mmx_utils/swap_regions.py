@@ -87,6 +87,13 @@ EXPRESSION = ("jaw", "brows", "nose", "eyes", "pupils", "mouth")
 # Kept so `drive_jaw=False` has a name rather than a bare string literal.
 SHAPE_BEARING = ("jaw",)
 
+# The mouth is the one group another signal can drive. With the native audio
+# lock in play H3 shapes the lips from the phonemes, so a control that also
+# draws the dupe's mouth overrides it - fine when the audio is that dupe's own
+# take, wrong for a dub. drive_mouth=False masks the mouth without driving it,
+# which is the only way the audio gets to decide.
+AUDIO_DRIVABLE = ("mouth",)
+
 # scope -> (groups rendered into the control, what the silhouette follows)
 #
 # "plate" means the surrounding image is preserved and the swap is confined to
@@ -183,12 +190,19 @@ class SwapRegionError(ValueError):
     """Raised with a sentence naming what to do instead."""
 
 
-def scope_groups(scope: str, *, drive_jaw: bool = True) -> tuple[str, ...]:
+def scope_groups(scope: str, *, drive_jaw: bool = True,
+                 drive_mouth: bool = True) -> tuple[str, ...]:
     """Groups the control renders for this scope.
 
-    drive_jaw=False drops the face contour, which trades head pose and chin
-    drop for a stronger guarantee that the dupe's skull width does not
-    transfer. Both are legitimate; neither is free.
+    drive_jaw=False drops the face contour, trading head pose and chin drop
+    for a stronger guarantee that the dupe's skull width does not transfer.
+
+    drive_mouth=False drops the lips, so a locked audio track decides the
+    mouth instead of the dupe's performance. That is the setting for a dub;
+    leave it on when the audio is the dupe's own take.
+
+    Both are trades. Neither is free, and the mouth is still MASKED either
+    way - what changes is only who tells it what to do.
     """
     if scope not in SWAP_SCOPES:
         raise SwapRegionError(
@@ -198,6 +212,8 @@ def scope_groups(scope: str, *, drive_jaw: bool = True) -> tuple[str, ...]:
     groups = tuple(SWAP_SCOPES[scope]["groups"])
     if not drive_jaw:
         groups = tuple(g for g in groups if g not in SHAPE_BEARING)
+    if not drive_mouth:
+        groups = tuple(g for g in groups if g not in AUDIO_DRIVABLE)
     return groups
 
 
@@ -215,11 +231,14 @@ def group_indices(groups: Iterable[str]) -> list[int]:
     return sorted(out)
 
 
-def scope_indices(scope: str, *, drive_jaw: bool = True) -> list[int]:
-    return group_indices(scope_groups(scope, drive_jaw=drive_jaw))
+def scope_indices(scope: str, *, drive_jaw: bool = True,
+                  drive_mouth: bool = True) -> list[int]:
+    return group_indices(scope_groups(scope, drive_jaw=drive_jaw,
+                                      drive_mouth=drive_mouth))
 
 
-def select(keypoints, scope: str, *, drive_jaw: bool = True):
+def select(keypoints, scope: str, *, drive_jaw: bool = True,
+           drive_mouth: bool = True):
     """Keep only the scope's landmarks; zero the confidence of the rest.
 
     Takes and returns an array shaped [..., 133, C] with C >= 3 (x, y, score).
@@ -242,7 +261,8 @@ def select(keypoints, scope: str, *, drive_jaw: bool = True):
             "Keypoints need at least (x, y, score); scores are how the "
             "excluded landmarks are suppressed.")
     n = arr.shape[-2]
-    keep = [i for i in scope_indices(scope, drive_jaw=drive_jaw) if i < n]
+    keep = [i for i in scope_indices(scope, drive_jaw=drive_jaw,
+                                     drive_mouth=drive_mouth) if i < n]
     out = arr.copy()
     mask = np.zeros(n, dtype=bool)
     mask[keep] = True
@@ -250,12 +270,13 @@ def select(keypoints, scope: str, *, drive_jaw: bool = True):
     return out
 
 
-def describe(scope: str, *, drive_jaw: bool = True) -> str:
+def describe(scope: str, *, drive_jaw: bool = True,
+             drive_mouth: bool = True) -> str:
     spec = SWAP_SCOPES.get(scope)
     if spec is None:
         return f"Unknown scope {scope!r}."
-    groups = scope_groups(scope, drive_jaw=drive_jaw)
-    n = len(scope_indices(scope, drive_jaw=drive_jaw))
+    groups = scope_groups(scope, drive_jaw=drive_jaw, drive_mouth=drive_mouth)
+    n = len(scope_indices(scope, drive_jaw=drive_jaw, drive_mouth=drive_mouth))
     lines = [
         f"Swap scope '{scope}': {n} of {N_EXTENDED} landmarks drive the control.",
         "Groups: " + ", ".join(groups) + ".",
@@ -265,6 +286,11 @@ def describe(scope: str, *, drive_jaw: bool = True) -> str:
         lines.append(
             "Pupils are driven, so eye DIRECTION transfers. The 68-point eye "
             "contours only describe the lid; gaze lives in the pupil centres.")
+    if "mouth" in MASK_GROUPS.get(scope, ()) and "mouth" not in groups:
+        lines.append(
+            "The mouth is masked but NOT driven, so a locked audio track "
+            "decides the lip shape. That is the dub setting. With no audio "
+            "locked the lips have nothing telling them what to do.")
     jaw_driven = "jaw" in groups
     jaw_masked = "jaw" in MASK_GROUPS.get(scope, ())
     if jaw_driven and jaw_masked:

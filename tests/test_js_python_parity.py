@@ -308,3 +308,23 @@ def test_the_legend_colours_match_the_rendered_ones():
         want = GROUP_COLOUR[group]
         assert all(abs(a - b_) < 0.01 for a, b_ in zip((r, g, b), want)), (
             f"{group}: panel {hexv} != renderer {want}")
+
+
+def test_the_panel_honours_drive_mouth():
+    """Both levers change what actually drives the swap. A panel that only
+    reacts to one of them shows a mouth that is lit while nothing draws it."""
+    src = SWAP_JS.read_text(encoding="utf-8")
+    assert 'widgetByName(node, "drive_mouth")' in src, (
+        "the diagram never reads drive_mouth")
+    assert 'active.delete("mouth")' in src, (
+        "the diagram reads drive_mouth but still lights the lips")
+    for name in ("swap_scope", "drive_jaw", "drive_mouth"):
+        assert f'"{name}"' in src, f"{name} does not repaint the diagram"
+
+
+def test_both_levers_exist_on_the_node_and_in_the_panel():
+    """The panel is only honest if the widgets it reads are really there."""
+    node_src = (ROOT / "mmx_nodes" / "swap_control.py").read_text(encoding="utf-8")
+    for name in ("drive_jaw", "drive_mouth"):
+        assert f'"{name}", default=True' in node_src, (
+            f"{name} is not a widget on the node, so the panel reads nothing")

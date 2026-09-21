@@ -11,6 +11,12 @@
  * driven by default, and turning drive_jaw off greys it out with the cost
  * spelled out in the caption rather than left to be discovered in a render.
  *
+ * The mouth is the other one. With a locked audio track, the audio can shape
+ * the lips itself - but only if the control is not already drawing the dupe's
+ * mouth over the top of it. drive_mouth off greys the lips and hands them to
+ * the audio; that is the DUB setting, and with no audio locked it leaves the
+ * lips with nothing driving them at all, which the caption says outright.
+ *
  * The face here is a SCHEMATIC, not a mean face shape. Drawing a real 68-point
  * mean face would imply a precision this diagram does not have; the groups are
  * at anatomically sensible places and that is all it claims.
@@ -98,8 +104,10 @@ function build(node) {
   const paint = () => {
     const scope = String(widgetByName(node, "swap_scope")?.value ?? "face");
     const driveJaw = widgetByName(node, "drive_jaw")?.value !== false;
+    const driveMouth = widgetByName(node, "drive_mouth")?.value !== false;
     const active = new Set(SCOPE_GROUPS[scope] || SCOPE_GROUPS.face);
     if (!driveJaw) active.delete("jaw");
+    if (!driveMouth) active.delete("mouth");
     const facey = ["brows", "nose", "eyes", "mouth"].some((g) => active.has(g));
     const jawOn2 = active.has("jaw");
 
@@ -167,7 +175,15 @@ function build(node) {
       ctx.fill();
     }
 
+    const mouthInScope = (SCOPE_GROUPS[scope] || []).includes("mouth");
+    const mouthToAudio = mouthInScope && !driveMouth;
+    ctx.save();
+    if (mouthToAudio) ctx.setLineDash([3, 3]);
     stroke("mouth", 2.6);
+    if (mouthToAudio) {                    // masked, just not by the control
+      ctx.strokeStyle = "rgba(255,77,115,0.45)";
+      ctx.lineWidth = 1.6;
+    }
     const [mx, my] = P(F.mouth);
     ctx.beginPath();
     ctx.ellipse(mx, my, size * 0.135, size * 0.055, 0, 0, Math.PI * 2);
@@ -176,6 +192,7 @@ function build(node) {
     ctx.moveTo(mx - size * 0.135, my);
     ctx.lineTo(mx + size * 0.135, my);
     ctx.stroke();
+    ctx.restore();
 
     // jaw label: what it is doing right now, not a fixed claim
     ctx.font = "9px system-ui,sans-serif";
@@ -211,12 +228,15 @@ function build(node) {
       if (ly > h - 12) break;
     }
 
-    caption.textContent =
-      (SCOPE_NOTE[scope] || "") +
-      (!facey ? " No face group is driven in this scope."
-        : jawOn2
-          ? " A strong jaw control pulls face width toward the dupe — lower the ControlNet strength if the head starts taking their shape."
-          : " drive_jaw is off: the reference actor's skull is unopposed, but a profile will read as a front-on face and the mouth cannot open as far.");
+    const jawNote = !facey
+      ? " No face group is driven in this scope."
+      : jawOn2
+        ? " A strong jaw control pulls face width toward the dupe — lower the ControlNet strength if the head starts taking their shape."
+        : " drive_jaw is off: the reference actor's skull is unopposed, but a profile will read as a front-on face and the mouth cannot open as far.";
+    const mouthNote = mouthToAudio
+      ? " drive_mouth is off: the lips are still masked, so they can change, but nothing is drawing them — lock an audio track or they have nothing to follow."
+      : "";
+    caption.textContent = (SCOPE_NOTE[scope] || "") + jawNote + mouthNote;
     const capH = Math.max(16, caption.offsetHeight || 0) + 6;
     if (Math.abs(capH - st.capH) > 1) {
       st.capH = capH;
@@ -228,7 +248,7 @@ function build(node) {
   st.paint = rafThrottle(paint);
   addDomWidgetLast(node, "mmx_swap_scope", wrap, () => PANEL_H + st.capH);
 
-  for (const name of ["swap_scope", "drive_jaw"]) {
+  for (const name of ["swap_scope", "drive_jaw", "drive_mouth"]) {
     const wdg = widgetByName(node, name);
     if (!wdg) continue;
     const prev = wdg.callback;

@@ -255,3 +255,65 @@ def test_coordinates_off_canvas_do_not_crash():
     a = kps()
     a[0, :, 0] -= 5000
     render_swap_control(a, "person", (64, 64))       # must simply draw nothing
+
+
+# ── drive_mouth in the rendered control ─────────────────────────────────────
+#
+# Off means the mouth is MASKED but NOT CONTROLLED, which is the only way a
+# locked audio track gets to decide the lip shape. If any lip ink survives,
+# the control is still arguing with the audio whatever the flag says - so
+# these check the rendered pixels, not only the edge table.
+
+
+CORNER = 62  # the mouth lives inside this box; nothing else may enter it
+
+
+def _mouth_in_a_corner(w=256, h=256):
+    """The mouth alone in a corner, everything else kept well clear of it, so
+    a box around the corner contains lip ink and nothing but lip ink.
+
+    Built explicitly rather than from kps(), whose points cover the whole
+    canvas - the guard below fired on it, which is the guard doing its job.
+    """
+    a = np.zeros((1, N_EXTENDED, 3), dtype=np.float32)
+    rng = np.random.default_rng(7)
+    a[..., 0] = rng.uniform(CORNER + 30, w - 20, size=(1, N_EXTENDED))
+    a[..., 1] = rng.uniform(CORNER + 30, h - 20, size=(1, N_EXTENDED))
+    a[..., 2] = 1.0
+    lo, hi = GROUPS["mouth"]
+    a[0, lo:hi, 0] = rng.uniform(14, CORNER - 10, size=hi - lo)
+    a[0, lo:hi, 1] = rng.uniform(14, CORNER - 10, size=hi - lo)
+    others = [i for i in range(N_EXTENDED) if not (lo <= i < hi)]
+    assert not ((a[0, others, 0] < CORNER) & (a[0, others, 1] < CORNER)).any(),         "another group strayed into the corner; the box would not be clean"
+    return a
+
+
+@pytest.mark.parametrize("scope", ["lips", "face", "head", "person"])
+def test_drive_mouth_false_removes_every_mouth_edge(scope):
+    mouth = set(range(*GROUPS["mouth"]))
+    for (a, b), _ in scope_edges(scope, drive_mouth=False):
+        assert a not in mouth and b not in mouth, (
+            f"scope {scope!r} still draws {(a, b)} with drive_mouth off")
+
+
+def test_drive_mouth_false_keeps_the_rest_of_the_face():
+    kept = {i for (a, b), _ in scope_edges("face", drive_mouth=False) for i in (a, b)}
+    for group in ("brows", "nose", "eyes", "jaw"):
+        lo, hi = GROUPS[group]
+        assert kept & set(range(lo, hi)), f"{group} vanished with the mouth"
+
+
+def test_no_lip_ink_survives_in_the_rendered_control():
+    a = _mouth_in_a_corner()
+    on = render_swap_control(a, "face", (256, 256), line_width=2)
+    off = render_swap_control(a, "face", (256, 256), line_width=2, drive_mouth=False)
+    box = (slice(0, 1), slice(0, CORNER), slice(0, CORNER))
+    assert on[box].max() > 0.05, "the test box missed the mouth entirely"
+    assert off[box].max() == 0.0, "lip ink survived drive_mouth=False"
+
+
+def test_the_two_levers_do_not_interfere_when_rendered():
+    a = _mouth_in_a_corner()
+    both = render_swap_control(a, "face", (256, 256), line_width=2,
+                               drive_jaw=False, drive_mouth=False)
+    assert both.max() > 0.05, "brows, nose, eyes and pupils went with them"

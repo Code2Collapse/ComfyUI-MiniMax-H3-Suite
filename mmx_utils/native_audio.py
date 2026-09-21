@@ -106,12 +106,45 @@ def fit_encoded_audio_to_target(
     return z, ("; ".join(notes) if notes else "")
 
 
+def existing_video_mask(av_latent, video_latent: torch.Tensor):
+    """The video half of whatever noise mask is already on this latent.
+
+    A face or character swap sets a REGION mask before the audio is locked.
+    If the lock ignores it the whole frame regenerates and the swap quietly
+    stops being a swap, so the existing mask has to be found and kept.
+    """
+    mask = av_latent.get("noise_mask") if hasattr(av_latent, "get") else None
+    if mask is None:
+        return None
+    if getattr(mask, "is_nested", False):
+        parts = mask.unbind()
+        mask = parts[0] if parts else None
+    if mask is None:
+        return None
+    m = torch.as_tensor(mask)
+    if m.shape == video_latent.shape:
+        return m
+    # A mask at latent resolution but without the channel axis is the usual
+    # shape from Set Latent Noise Mask; broadcast it rather than discard it.
+    try:
+        return m.expand_as(video_latent).contiguous()
+    except RuntimeError:
+        return None
+
+
 def build_video_only_denoise_masks(
     video_latent: torch.Tensor,
     audio_latent: torch.Tensor,
+    existing: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Video fully denoises (mask=1); audio locked clean (mask=0)."""
-    video_mask = torch.ones_like(video_latent)
+    """Audio locked clean (mask=0); video denoises where it is allowed to.
+
+    `existing` is a region mask already on the latent - a face or head mask
+    from a swap. Without it the video mask is all ones, which is right for a
+    music video and WRONG for a swap: it regenerates the whole frame.
+    """
+    video_mask = (torch.ones_like(video_latent) if existing is None
+                  else existing.to(video_latent.dtype).clone())
     audio_mask = torch.zeros_like(audio_latent)
     return video_mask, audio_mask
 
@@ -127,6 +160,19 @@ def clip_duration_seconds(frame_count: int, fps: float = FPS) -> float:
 def pixel_frame_count_from_audio_latent(audio_latent: torch.Tensor, fps: float = FPS) -> int:
     audio_t = int(audio_latent.shape[-1])
     return max(1, int(round(audio_t / AUDIO_LATENT_FPS * fps)))
+
+
+def describe_region_mask(existing: torch.Tensor | None) -> str:
+    """Say whether a region mask survived the lock, because silence here looks
+    identical to a swap that regenerated the whole frame."""
+    if existing is None:
+        return ("No region mask on the latent: the whole frame will be "
+                "regenerated. That is right for a music video and wrong for a "
+                "swap - set the region mask BEFORE this node if you wanted "
+                "only the face to change.")
+    frac = float((existing > 0.5).float().mean()) * 100.0
+    return (f"Region mask kept: {frac:.1f}% of the latent is free to change, "
+            "the rest is held. Audio is locked either way.")
 
 
 def build_audio_lock_report(
@@ -189,7 +235,8 @@ def lock_audio_chunk_into_latent(
     waveform, vae_rate, _ = fit_waveform_to_vae_rate(waveform, input_sr, vae_rate)
     encoded = audio_vae.encode(waveform.movedim(1, -1))
     encoded, _ = fit_encoded_audio_to_target(encoded, int(target_audio.shape[-1]))
-    video_mask, audio_mask = build_video_only_denoise_masks(video_latent, encoded)
+    video_mask, audio_mask = build_video_only_denoise_masks(
+        video_latent, encoded, existing_video_mask(av_latent, video_latent))
     return pack_locked_av_latent(
         av_latent, video_latent, encoded, video_mask, audio_mask, nested_ctor
     )

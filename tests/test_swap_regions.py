@@ -199,3 +199,71 @@ def test_the_report_counts_the_landmarks_actually_driving():
 
 def test_the_report_counts_fewer_when_the_jaw_is_dropped():
     assert "20 of 135" in describe("lips", drive_jaw=False)
+
+
+# ── drive_mouth: who decides the lip shape ──────────────────────────────────
+#
+# The three cases the swap has to serve, and they are genuinely different:
+#
+#   1. lips masked, no audio      -> control drives the lips (the dupe's own
+#                                    performance is copied)
+#   2. face masked, audio locked  -> BOTH can drive the mouth. Same take: they
+#                                    agree. A dub: they fight, control wins,
+#                                    and you get old lips over new words.
+#   3. face masked, no audio      -> control drives the lips, as case 1
+#
+# drive_mouth is the lever for case 2 only. Off, the mouth is MASKED but NOT
+# CONTROLLED, which is the one configuration where the audio decides.
+
+def test_the_mouth_is_driven_by_default_so_silent_lip_movement_works():
+    """The user's case 3: no audio, face masked, lips must still move with the
+    dupe. That only happens if the control draws them."""
+    for scope in ("lips", "face", "head", "person"):
+        assert "mouth" in scope_groups(scope), scope
+
+
+def test_drive_mouth_false_removes_the_lips_from_the_control():
+    mouth = set(range(*GROUPS["mouth"]))
+    for scope in ("lips", "face", "head", "person"):
+        assert "mouth" not in scope_groups(scope, drive_mouth=False), scope
+        assert not (set(scope_indices(scope, drive_mouth=False)) & mouth), scope
+
+
+def test_drive_mouth_false_still_leaves_the_mouth_masked():
+    """This is the whole point. The lips must stay free to CHANGE - otherwise
+    the audio has nothing to change - while nothing tells them what to be."""
+    from mmx_utils.swap_regions import MASK_GROUPS
+
+    for scope in ("lips", "face", "head", "person"):
+        assert "mouth" in MASK_GROUPS[scope], (
+            f"{scope} stopped masking the mouth; audio could not move the lips")
+
+
+def test_drive_mouth_does_not_disturb_the_other_expression_groups():
+    kept = set(scope_groups("face", drive_mouth=False))
+    for group in ("jaw", "brows", "nose", "eyes", "pupils"):
+        assert group in kept, f"{group} was lost with the mouth"
+
+
+def test_the_two_levers_are_independent():
+    both_off = set(scope_groups("face", drive_jaw=False, drive_mouth=False))
+    assert "jaw" not in both_off and "mouth" not in both_off
+    assert {"brows", "nose", "eyes", "pupils"} <= both_off
+
+
+def test_selection_drops_the_mouth_points_too():
+    out = select(_kps(), "face", drive_mouth=False)
+    lo, hi = GROUPS["mouth"]
+    assert out[:, lo:hi, 2].max() == 0.0, "mouth points still carry confidence"
+
+
+def test_describe_says_the_audio_is_deciding():
+    text = describe("face", drive_mouth=False)
+    assert "masked but NOT driven" in text
+    assert "audio" in text
+    # and it must warn about the configuration that does nothing at all
+    assert "no audio" in text.lower()
+
+
+def test_describe_stays_quiet_when_the_mouth_is_driven():
+    assert "masked but NOT driven" not in describe("face")

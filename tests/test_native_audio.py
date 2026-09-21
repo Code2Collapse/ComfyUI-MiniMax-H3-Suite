@@ -123,3 +123,77 @@ def test_shorter_audio_report_warns_tail_unlock():
     )
     assert "video-only denoising" in report
     assert "shorter than the clip" in report
+
+
+# ── the collision that makes faceswap + lipsync possible ────────────────────
+#
+# A swap sets a FACE region mask, then locks audio. The lock used to overwrite
+# noise_mask with ones_like(video), so the face mask vanished and the whole
+# frame regenerated - the swap silently stopped being a swap while every node
+# still reported success. These pin that it survives.
+
+def test_an_existing_region_mask_survives_the_audio_lock():
+    from mmx_utils.native_audio import build_video_only_denoise_masks
+
+    video = torch.zeros(1, 24, 7, 8, 12)
+    audio = torch.zeros(1, 32, 2, 40)
+    face = torch.zeros_like(video)
+    face[..., 2:5, 3:7] = 1.0                 # only part of the frame is free
+
+    vm, am = build_video_only_denoise_masks(video, audio, face)
+    assert torch.equal(vm, face), "the region mask was replaced"
+    assert float(am.max()) == 0.0, "audio must still be locked clean"
+
+
+def test_without_a_region_mask_the_whole_frame_is_free():
+    """Right for a music video, and the default."""
+    from mmx_utils.native_audio import build_video_only_denoise_masks
+
+    video = torch.zeros(1, 24, 7, 8, 12)
+    audio = torch.zeros(1, 32, 2, 40)
+    vm, _ = build_video_only_denoise_masks(video, audio, None)
+    assert float(vm.min()) == 1.0
+
+
+def test_the_existing_mask_is_found_on_a_plain_latent():
+    from mmx_utils.native_audio import existing_video_mask
+
+    video = torch.zeros(1, 24, 7, 8, 12)
+    mask = torch.zeros_like(video)
+    mask[..., 1:3, :] = 1.0
+    found = existing_video_mask({"noise_mask": mask}, video)
+    assert found is not None and torch.equal(found, mask)
+
+
+def test_a_latent_with_no_mask_returns_none():
+    from mmx_utils.native_audio import existing_video_mask
+
+    assert existing_video_mask({}, torch.zeros(1, 24, 7, 8, 12)) is None
+
+
+def test_a_mask_without_the_channel_axis_is_broadcast_not_discarded():
+    """Set Latent Noise Mask hands over [B,T,H,W]; discarding it because the
+    shape does not match exactly is how the face mask went missing."""
+    from mmx_utils.native_audio import existing_video_mask
+
+    video = torch.zeros(1, 24, 7, 8, 12)
+    mask = torch.zeros(1, 1, 7, 8, 12)
+    mask[..., 2:5, 3:7] = 1.0
+    found = existing_video_mask({"noise_mask": mask}, video)
+    assert found is not None and found.shape == video.shape
+    assert float(found[0, 0, 0, 3, 4]) == 1.0
+
+
+def test_the_report_warns_when_nothing_is_masked():
+    from mmx_utils.native_audio import describe_region_mask
+
+    text = describe_region_mask(None)
+    assert "whole frame" in text and "swap" in text
+
+
+def test_the_report_states_how_much_is_free():
+    from mmx_utils.native_audio import describe_region_mask
+
+    m = torch.zeros(1, 24, 7, 8, 12)
+    m[..., :4, :] = 1.0
+    assert "%" in describe_region_mask(m)

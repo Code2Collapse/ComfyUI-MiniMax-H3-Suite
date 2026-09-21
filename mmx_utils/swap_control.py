@@ -103,11 +103,12 @@ GROUP_COLOUR: dict[str, tuple[float, float, float]] = {
 }
 
 
-def scope_edges(scope: str, *, drive_jaw: bool = True
+def scope_edges(scope: str, *, drive_jaw: bool = True, drive_mouth: bool = True
                 ) -> list[tuple[tuple[int, int], tuple[float, float, float]]]:
     """Every (edge, colour) a scope draws."""
     out = []
-    for group in scope_groups(scope, drive_jaw=drive_jaw):
+    for group in scope_groups(scope, drive_jaw=drive_jaw,
+                              drive_mouth=drive_mouth):
         colour = GROUP_COLOUR[group]
         for edge in GROUP_EDGES.get(group, ()):
             out.append((edge, colour))
@@ -148,6 +149,7 @@ def render_swap_control(
     line_width: int = 4,
     face_line_width: int | None = None,
     drive_jaw: bool = True,
+    drive_mouth: bool = True,
 ) -> np.ndarray:
     """[T,133,3] COCO-WholeBody -> [T,H,W,3] float32 control frames in 0..1.
 
@@ -164,15 +166,16 @@ def render_swap_control(
     if w <= 0 or h <= 0:
         raise SwapRegionError(f"Canvas must be positive, got {w}x{h}.")
 
-    gated = select(arr, scope, drive_jaw=drive_jaw)
-    edges = scope_edges(scope, drive_jaw=drive_jaw)
+    gated = select(arr, scope, drive_jaw=drive_jaw, drive_mouth=drive_mouth)
+    edges = scope_edges(scope, drive_jaw=drive_jaw, drive_mouth=drive_mouth)
     # Face lines default thinner: a 4px mouth on a 768px frame closes the lip
     # gap and the model then cannot tell an open mouth from a shut one.
     fw = face_line_width if face_line_width is not None else max(1, line_width // 2)
     face_groups = {"jaw", "brows", "nose", "eyes", "mouth"}
     face_edge_ids = {e for g in face_groups for e in GROUP_EDGES.get(g, ())}
 
-    draw_pupils = "pupils" in scope_groups(scope, drive_jaw=drive_jaw)
+    draw_pupils = "pupils" in scope_groups(scope, drive_jaw=drive_jaw,
+                                           drive_mouth=drive_mouth)
     pupil_colour = GROUP_COLOUR["pupils"]
 
     out = np.zeros((arr.shape[0], h, w, 3), dtype=np.float32)

@@ -124,6 +124,17 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                             "actor's skull is then unopposed, but a profile "
                             "will read as a front-on face and the mouth cannot "
                             "open as far."),
+                io.Boolean.Input(
+                    "drive_mouth", default=True, optional=True,
+                    tooltip="Draw the dupe's lips into the control. Leave it ON "
+                            "when the audio is that dupe's own take, or when "
+                            "there is no audio at all - then the lips follow "
+                            "the performance. Turn it OFF for a DUB: the mouth "
+                            "is still masked, so it is free to change, but "
+                            "nothing is telling it the old lip shape and a "
+                            "locked audio track decides instead. With it off "
+                            "and no audio locked, the lips have nothing driving "
+                            "them at all."),
                 io.Float.Input(
                     "mask_pad", default=-1.0, min=-1.0, max=2.0, step=0.01,
                     optional=True,
@@ -154,20 +165,22 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                                        "to H3 Mask To Latent Space (with "
                                        "spatial_method=coverage, and grow it "
                                        "with grow_tokens) and to the "
-                                       "ControlNet's pixel-space mask. For "
-                                       "face/head/person this INCLUDES the "
-                                       "jaw, which the control deliberately "
-                                       "excludes: masked but not controlled is "
-                                       "what lets the reference actor's jaw "
-                                       "appear."),
+                                       "ControlNet's pixel-space mask. Masked "
+                                       "and driven are NOT the same set: the "
+                                       "jaw is both, so head pose comes through "
+                                       "while the skull can still move toward "
+                                       "your reference, and 'lips' drives the "
+                                       "jaw for the chin drop but masks only "
+                                       "the mouth, so a lip-sync never reshapes "
+                                       "the chin."),
                 io.String.Output(display_name="report"),
             ],
         )
 
     @classmethod
     def execute(cls, pose_keypoint, swap_scope, width, height, confidence_gate,
-                line_width, face_line_width, drive_jaw=True, mask_pad=-1.0,
-                mask_feather=0, person_index=0):
+                line_width, face_line_width, drive_jaw=True, drive_mouth=True,
+                mask_pad=-1.0, mask_feather=0, person_index=0):
         if swap_scope not in SWAP_SCOPES:
             raise ValueError(
                 f"Unknown swap scope {swap_scope!r}. Choose one of: "
@@ -190,9 +203,11 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
             line_width=int(line_width),
             face_line_width=int(face_line_width) or None,
             drive_jaw=bool(drive_jaw),
+            drive_mouth=bool(drive_mouth),
         )
 
-        edges = scope_edges(swap_scope, drive_jaw=bool(drive_jaw))
+        edges = scope_edges(swap_scope, drive_jaw=bool(drive_jaw),
+                            drive_mouth=bool(drive_mouth))
         possible = len(edges) * max(1, frames.shape[0])
         drawn = int(sum(
             1 for t in range(frames.shape[0])
@@ -201,7 +216,8 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
         ))
 
         lines = [
-            describe(swap_scope, drive_jaw=bool(drive_jaw)),
+            describe(swap_scope, drive_jaw=bool(drive_jaw),
+                     drive_mouth=bool(drive_mouth)),
             "",
             describe_source(kps, (width, height), confidence_gate),
             f"Drew {drawn} of {possible} possible edges.",
