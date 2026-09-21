@@ -53,6 +53,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.image_and_reference", "MiniMaxH3_ImageAndReferenceToVideo"),
     (".mmx_nodes.tail_from_latent", "MiniMaxH3_TailFromLatent"),
     (".mmx_nodes.encoder_unload", "MiniMaxH3_TextEncoderUnload"),
+    (".mmx_nodes.audio_transcript", "MiniMaxH3_AudioTranscript"),
     # Director (ported from ComfyUI-MiniMaxH3-Director, GPL-3.0). One
     # subpackage, five nodes; MiniMaxH3_DirectorChain is deliberately not
     # registered - see mmx_nodes/director/__init__.py.
@@ -213,6 +214,11 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.director import director_nodes
 
                 nodes.extend(director_nodes())
+            elif mod_path.endswith("audio_transcript"):
+                from .mmx_nodes.audio_transcript import MiniMaxH3_AudioTranscript
+
+                if MiniMaxH3_AudioTranscript is not None:
+                    nodes.append(MiniMaxH3_AudioTranscript)
             elif mod_path.endswith("encoder_unload"):
                 from .mmx_nodes.encoder_unload import MiniMaxH3_TextEncoderUnload
 
