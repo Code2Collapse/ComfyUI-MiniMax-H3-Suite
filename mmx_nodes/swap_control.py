@@ -35,7 +35,8 @@ from mmx_utils.pose_interop import (  # noqa: E402
     pose_keypoint_to_wholebody,
 )
 from mmx_utils.swap_control import render_swap_control, scope_edges  # noqa: E402
-from mmx_utils.swap_regions import SWAP_SCOPES, describe  # noqa: E402
+from mmx_utils.swap_mask import build_swap_mask, describe_mask  # noqa: E402
+from mmx_utils.swap_regions import MASK_PAD, SWAP_SCOPES, describe  # noqa: E402
 
 SCOPES = ["face", "lips", "head", "body", "person"]
 
@@ -104,6 +105,20 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                             "which is the useful default: a thick line closes "
                             "the gap between the lips, and the model then "
                             "cannot tell an open mouth from a shut one."),
+                io.Float.Input(
+                    "mask_pad", default=-1.0, min=-1.0, max=2.0, step=0.01,
+                    optional=True,
+                    tooltip="How far the region mask reaches past the landmark "
+                            "hull, as a fraction of the hull's own size. -1 "
+                            "uses the per-scope default (head pads furthest, "
+                            "because hair has no landmarks to find). Padding "
+                            "scales about the hull's centroid, so growing it "
+                            "does not move the boundary relative to the face."),
+                io.Int.Input(
+                    "mask_feather", default=0, min=0, max=64, optional=True,
+                    tooltip="Soften the mask edge, in pixels. Feather in PIXEL "
+                            "space here; the latent reduction downstream is "
+                            "where the 32px token grid takes over."),
                 io.Int.Input(
                     "person_index", default=0, min=0, max=32, optional=True,
                     tooltip="Which detected person is the dupe, when the frame "
@@ -113,13 +128,27 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                 io.Image.Output(display_name="control_video",
                                 tooltip="Feed to H3 Mask-Aware ControlNet's "
                                         "control_video."),
+                io.Mask.Output(display_name="region_mask",
+                               tooltip="The region allowed to change, built "
+                                       "from the SAME landmarks as the control "
+                                       "so the two cannot drift apart. Send it "
+                                       "to H3 Mask To Latent Space (with "
+                                       "spatial_method=coverage, and grow it "
+                                       "with grow_tokens) and to the "
+                                       "ControlNet's pixel-space mask. For "
+                                       "face/head/person this INCLUDES the "
+                                       "jaw, which the control deliberately "
+                                       "excludes: masked but not controlled is "
+                                       "what lets the reference actor's jaw "
+                                       "appear."),
                 io.String.Output(display_name="report"),
             ],
         )
 
     @classmethod
     def execute(cls, pose_keypoint, swap_scope, width, height, confidence_gate,
-                line_width, face_line_width, person_index=0):
+                line_width, face_line_width, mask_pad=-1.0, mask_feather=0,
+                person_index=0):
         if swap_scope not in SWAP_SCOPES:
             raise ValueError(
                 f"Unknown swap scope {swap_scope!r}. Choose one of: "
@@ -163,8 +192,23 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                 "gate, so nothing will drive the expression. Check the "
                 "detector is whole-body, or lower confidence_gate.")
 
+        masks = build_swap_mask(
+            kps, swap_scope, (width, height),
+            confidence_gate=confidence_gate,
+            pad=None if mask_pad < 0 else float(mask_pad),
+            feather=int(mask_feather),
+        )
+        lines.append("")
+        lines.append(describe_mask(masks, swap_scope))
+        used_pad = MASK_PAD[swap_scope] if mask_pad < 0 else mask_pad
+        lines.append(
+            f"Mask pad {used_pad:.2f} of the hull, scaled about its "
+            "centroid so the boundary does not move relative to the face.")
+
         return io.NodeOutput(
-            torch.from_numpy(np.ascontiguousarray(frames)), "\n".join(lines))
+            torch.from_numpy(np.ascontiguousarray(frames)),
+            torch.from_numpy(np.ascontiguousarray(masks)),
+            "\n".join(lines))
 
 
 NODE_LIST = [MiniMaxH3_SwapControl]

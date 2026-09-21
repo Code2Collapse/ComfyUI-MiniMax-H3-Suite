@@ -109,6 +109,52 @@ SWAP_SCOPES: dict[str, dict] = {
 # it rather than a reader having to check five tuples by eye.
 NEVER_RENDERED = ("jaw",)
 
+# THE DISTINCTION THE WHOLE SWAP TURNS ON
+# ---------------------------------------
+# CONTROL groups (above) say what the dupe DRIVES.
+# MASK groups (below) say what is allowed to CHANGE.
+#
+# They are not the same set, and for the jaw they are opposites:
+#
+#   jaw NOT in control -> the dupe's skull shape is never imposed
+#   jaw IN mask        -> the region is regenerated, so the reference actor's
+#                         jaw CAN appear there
+#
+# Leave the jaw out of both and the swap keeps the dupe's original jaw pixels
+# untouched, which is the same failure by a different route. Put it in both and
+# you are back to the dupe's skull. It has to be masked and not controlled.
+MASK_GROUPS: dict[str, tuple[str, ...]] = {
+    "lips": ("mouth",),
+    "face": ("jaw",) + EXPRESSION,
+    "head": ("jaw",) + EXPRESSION,
+    "body": ("body", "feet", "left_hand", "right_hand"),
+    "person": ("jaw",) + EXPRESSION + ("body", "feet", "left_hand", "right_hand"),
+}
+
+# How far past the landmark hull each scope's mask reaches, as a fraction of
+# the hull's own size. A face hull stops at the skin; a head has to take in
+# hair, which no landmark marks at all.
+MASK_PAD: dict[str, float] = {
+    "lips": 0.25,
+    "face": 0.12,
+    "head": 0.55,
+    "body": 0.10,
+    "person": 0.15,
+}
+
+
+def mask_groups(scope: str) -> tuple[str, ...]:
+    if scope not in MASK_GROUPS:
+        raise SwapRegionError(
+            f"Unknown swap scope {scope!r}. Choose one of: "
+            + ", ".join(sorted(SWAP_SCOPES)) + "."
+        )
+    return MASK_GROUPS[scope]
+
+
+def mask_indices(scope: str) -> list[int]:
+    return group_indices(mask_groups(scope))
+
 
 class SwapRegionError(ValueError):
     """Raised with a sentence naming what to do instead."""
@@ -184,4 +230,9 @@ def describe(scope: str) -> str:
         lines.append(
             "The jaw contour (face points 0-16) is NOT in the control, so the "
             "dupe's skull shape cannot transfer.")
+    if "jaw" in MASK_GROUPS.get(scope, ()):
+        lines.append(
+            "The jaw IS inside the mask, so that region is regenerated and the "
+            "reference actor's jaw can appear there. Masked but not "
+            "controlled - that pairing is what changes the head shape.")
     return "\n".join(lines)
