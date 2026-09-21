@@ -52,6 +52,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.first_block_cache", "MiniMaxH3_FirstBlockCache"),
     (".mmx_nodes.image_and_reference", "MiniMaxH3_ImageAndReferenceToVideo"),
     (".mmx_nodes.tail_from_latent", "MiniMaxH3_TailFromLatent"),
+    (".mmx_nodes.encoder_unload", "MiniMaxH3_TextEncoderUnload"),
     # Director (ported from ComfyUI-MiniMaxH3-Director, GPL-3.0). One
     # subpackage, five nodes; MiniMaxH3_DirectorChain is deliberately not
     # registered - see mmx_nodes/director/__init__.py.
@@ -212,6 +213,10 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.director import director_nodes
 
                 nodes.extend(director_nodes())
+            elif mod_path.endswith("encoder_unload"):
+                from .mmx_nodes.encoder_unload import MiniMaxH3_TextEncoderUnload
+
+                nodes.append(MiniMaxH3_TextEncoderUnload)
             elif mod_path.endswith("tail_from_latent"):
                 from .mmx_nodes.tail_from_latent import MiniMaxH3_TailFromLatent
 
