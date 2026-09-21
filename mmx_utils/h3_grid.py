@@ -47,6 +47,16 @@ def snap_frame_count(frame_count: int) -> int:
     return align_frame_count(max(5, int(frame_count)))
 
 
+def snap_frame_count_nearest(frame_count: int) -> int:
+    """Snap to the nearest H3 17n+5 count (minimum 5).
+
+    Multishot upstream uses round-to-nearest, not round-up — a 5.2s request at 24fps
+    (125 frames) lands on 124, not 141. Added for the native-audio multishot port.
+    """
+    n = max(5, int(frame_count))
+    return max(5, 17 * max(0, round((n - 5) / 17)) + 5)
+
+
 def is_h3_compatible(frames: int) -> bool:
     """True when frame count is on the H3 17n+5 grid (n>=0)."""
     n = int(frames)

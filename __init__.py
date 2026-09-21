@@ -115,6 +115,12 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.image_studio", "MiniMaxH3_ImageFrameSelector"),
     (".mmx_nodes.image_studio", "MiniMaxH3_ImageSamplingPreset"),
     (".mmx_nodes.image_studio", "MiniMaxH3_DetailToneLock"),
+    (".mmx_nodes.native_audio", "MiniMaxH3_NativeAudioLock"),
+    (".mmx_nodes.native_audio", "MiniMaxH3_ReferenceAudio"),
+    (".mmx_nodes.native_audio", "MiniMaxH3_AudioTrimStart"),
+    (".mmx_nodes.multishot", "MiniMaxH3_ScriptSplit"),
+    (".mmx_nodes.multishot", "MiniMaxH3_MultishotSampler"),
+    (".mmx_nodes.multishot", "MiniMaxH3_MultishotMemorySampler"),
 )
 
 
@@ -435,6 +441,30 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                     MiniMaxH3_ImageFrameSelector,
                     MiniMaxH3_ImageSamplingPreset,
                     MiniMaxH3_DetailToneLock,
+                ])
+            elif mod_path.endswith("native_audio") and cls_name == "MiniMaxH3_NativeAudioLock":
+                from .mmx_nodes.native_audio import (
+                    MiniMaxH3_AudioTrimStart,
+                    MiniMaxH3_NativeAudioLock,
+                    MiniMaxH3_ReferenceAudio,
+                )
+
+                nodes.extend([
+                    MiniMaxH3_NativeAudioLock,
+                    MiniMaxH3_ReferenceAudio,
+                    MiniMaxH3_AudioTrimStart,
+                ])
+            elif mod_path.endswith("multishot") and cls_name == "MiniMaxH3_ScriptSplit":
+                from .mmx_nodes.multishot import (
+                    MiniMaxH3_MultishotMemorySampler,
+                    MiniMaxH3_MultishotSampler,
+                    MiniMaxH3_ScriptSplit,
+                )
+
+                nodes.extend([
+                    MiniMaxH3_ScriptSplit,
+                    MiniMaxH3_MultishotSampler,
+                    MiniMaxH3_MultishotMemorySampler,
                 ])
         except Exception as exc:
             msg = f"ComfyUI-MiniMaxSuite: failed to import {cls_name}: {exc}"

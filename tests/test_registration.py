@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 83   # + Image Studio (10 nodes)
+EXPECTED_NODE_COUNT = 89   # + native audio lock (3) + multishot (3)
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
@@ -133,6 +133,16 @@ IMAGE_NODES = {
     "MiniMaxH3_ImageSamplingPreset",
     "MiniMaxH3_DetailToneLock",
 }
+AUDIO_NODES = {
+    "MiniMaxH3_NativeAudioLock",
+    "MiniMaxH3_ReferenceAudio",
+    "MiniMaxH3_AudioTrimStart",
+}
+MULTISHOT_NODES = {
+    "MiniMaxH3_ScriptSplit",
+    "MiniMaxH3_MultishotSampler",
+    "MiniMaxH3_MultishotMemorySampler",
+}
 
 
 def _load_pack_like_comfyui():
@@ -228,6 +238,8 @@ def test_all_nodes_register():
         | SPECTRUM_NODES
         | PROMPT_NODES
         | IMAGE_NODES
+        | AUDIO_NODES
+        | MULTISHOT_NODES
     ) - ids
     assert not missing, f"nodes failed to register: {sorted(missing)}"
     assert len(nodes) == EXPECTED_NODE_COUNT, sorted(ids)

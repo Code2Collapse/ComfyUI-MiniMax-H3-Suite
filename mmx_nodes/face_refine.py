@@ -503,7 +503,7 @@ class MiniMaxH3_InjectVideoLatent(io.ComfyNode):
             category=CATEGORY,
             description=(
                 "Encode real frames into the video stream of an H3 joint AV latent. "
-                "Pair with MiniMaxH3NativeAudioLock for the audio stream, and set strength with "
+                "Pair with MiniMaxH3_NativeAudioLock for the audio stream, and set strength with "
                 "BasicScheduler's denoise - NOT with SplitSigmas."
             ),
             inputs=[
