@@ -51,6 +51,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.block_cache", "MiniMaxH3_BlockCacheT8"),
     (".mmx_nodes.first_block_cache", "MiniMaxH3_FirstBlockCache"),
     (".mmx_nodes.image_and_reference", "MiniMaxH3_ImageAndReferenceToVideo"),
+    (".mmx_nodes.tail_from_latent", "MiniMaxH3_TailFromLatent"),
     (".mmx_nodes.sigma_inspector", "MiniMaxH3_SigmaInspector"),
     (".mmx_nodes.differential_denoise", "MiniMaxH3_DifferentialDenoise"),
     (".mmx_nodes.frame_range_mask", "MiniMaxH3_FrameRangeMask"),
@@ -194,6 +195,10 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.per_frame_denoise import MiniMaxH3_PerFrameDenoise
 
                 nodes.append(MiniMaxH3_PerFrameDenoise)
+            elif mod_path.endswith("tail_from_latent"):
+                from .mmx_nodes.tail_from_latent import MiniMaxH3_TailFromLatent
+
+                nodes.append(MiniMaxH3_TailFromLatent)
             elif mod_path.endswith("image_and_reference"):
                 from .mmx_nodes.image_and_reference import (
                     MiniMaxH3_ImageAndReferenceToVideo,
