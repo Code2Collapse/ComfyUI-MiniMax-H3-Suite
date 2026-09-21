@@ -128,6 +128,36 @@ def audio_range(f0: int, f1: int) -> tuple[int, int]:
     return round(int(f0) * FRAME_RESCALE), round(int(f1) * FRAME_RESCALE)
 
 
+# Image-studio temporal packet sizing (short 1/5/9/13/20-frame profiles).
+# PORTED FROM: ComfyUI-MiniMax-H3-Image-Studio :: nodes.py
+# (_decoded_frames_for_latent_t / _latent_t_for_frame_count).
+# Not the same as frames_for_tokens() — that sums the token clock for aligned
+# 17n+5 clips; image mode may stop mid-cycle on a shorter decoded span.
+
+
+def decoded_frames_for_latent_t(latent_t: int) -> int:
+    """Natural H3 VAE output length for a temporal latent length.
+
+    This arrived with the Image Studio port carrying its own closed-form
+    version of the same grid. Checked exhaustively over latent_t 0..2000, it
+    agrees with frames_for_tokens at every value except 0, where this one
+    clamps to a single frame and the other returns none. A latent of zero rows
+    is not a real input, so the clamp is kept and the arithmetic is not
+    duplicated: two implementations of one grid are two things to keep in
+    sync, and this pack has been bitten by exactly that before.
+    """
+    return frames_for_tokens(max(1, int(latent_t)))
+
+
+def latent_t_for_frame_count(frame_count: int) -> tuple[int, int]:
+    """Smallest temporal latent that decodes at least *frame_count* images."""
+    requested = max(1, int(frame_count))
+    latent_t = 1
+    while decoded_frames_for_latent_t(latent_t) < requested:
+        latent_t += 1
+    return latent_t, decoded_frames_for_latent_t(latent_t)
+
+
 def compute_h3_segments_adaptive(
     total_tokens: int,
     chunk_frames: int,

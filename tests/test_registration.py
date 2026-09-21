@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 73   # + SplitUpscale, SpatialSplitParams, TemporalSplitParams
+EXPECTED_NODE_COUNT = 83   # + Image Studio (10 nodes)
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
@@ -120,6 +120,18 @@ FACE_NODES = {
     "MiniMaxH3_InjectVideoLatent",
     "MiniMaxH3_FaceMaskSAM",
     "MiniMaxH3_FaceTransformInfo",
+}
+IMAGE_NODES = {
+    "MiniMaxH3_ImageResolution",
+    "MiniMaxH3_ImageResolutionPreset",
+    "MiniMaxH3_ImagePrepare",
+    "MiniMaxH3_TextToImagePrepare",
+    "MiniMaxH3_ImageToImagePrepare",
+    "MiniMaxH3_ReferenceEditPrepare",
+    "MiniMaxH3_ImageDecode",
+    "MiniMaxH3_ImageFrameSelector",
+    "MiniMaxH3_ImageSamplingPreset",
+    "MiniMaxH3_DetailToneLock",
 }
 
 
@@ -215,6 +227,7 @@ def test_all_nodes_register():
         | MOTION_NODES
         | SPECTRUM_NODES
         | PROMPT_NODES
+        | IMAGE_NODES
     ) - ids
     assert not missing, f"nodes failed to register: {sorted(missing)}"
     assert len(nodes) == EXPECTED_NODE_COUNT, sorted(ids)

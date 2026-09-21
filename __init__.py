@@ -105,6 +105,16 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.split_upscale", "MiniMaxH3_SplitUpscale"),
     (".mmx_nodes.split_upscale", "MiniMaxH3_SpatialSplitParams"),
     (".mmx_nodes.split_upscale", "MiniMaxH3_TemporalSplitParams"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_ImageResolution"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_ImageResolutionPreset"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_ImagePrepare"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_TextToImagePrepare"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_ImageToImagePrepare"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_ReferenceEditPrepare"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_ImageDecode"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_ImageFrameSelector"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_ImageSamplingPreset"),
+    (".mmx_nodes.image_studio", "MiniMaxH3_DetailToneLock"),
 )
 
 
@@ -400,6 +410,32 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.split_upscale import MiniMaxH3_TemporalSplitParams
 
                 nodes.append(MiniMaxH3_TemporalSplitParams)
+            elif mod_path.endswith("image_studio") and cls_name == "MiniMaxH3_ImageResolution":
+                from .mmx_nodes.image_studio import (
+                    MiniMaxH3_DetailToneLock,
+                    MiniMaxH3_ImageDecode,
+                    MiniMaxH3_ImageFrameSelector,
+                    MiniMaxH3_ImagePrepare,
+                    MiniMaxH3_ImageResolution,
+                    MiniMaxH3_ImageResolutionPreset,
+                    MiniMaxH3_ImageSamplingPreset,
+                    MiniMaxH3_ImageToImagePrepare,
+                    MiniMaxH3_ReferenceEditPrepare,
+                    MiniMaxH3_TextToImagePrepare,
+                )
+
+                nodes.extend([
+                    MiniMaxH3_ImageResolution,
+                    MiniMaxH3_ImageResolutionPreset,
+                    MiniMaxH3_ImagePrepare,
+                    MiniMaxH3_TextToImagePrepare,
+                    MiniMaxH3_ImageToImagePrepare,
+                    MiniMaxH3_ReferenceEditPrepare,
+                    MiniMaxH3_ImageDecode,
+                    MiniMaxH3_ImageFrameSelector,
+                    MiniMaxH3_ImageSamplingPreset,
+                    MiniMaxH3_DetailToneLock,
+                ])
         except Exception as exc:
             msg = f"ComfyUI-MiniMaxSuite: failed to import {cls_name}: {exc}"
             _LOAD_ERRORS.append(msg)
