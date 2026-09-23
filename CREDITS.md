@@ -43,3 +43,15 @@
 - **Licence:** **GPL-3.0-only**, declared in its README and pyproject classifiers. This pack is GPL-3.0, so the licences agree.
 - **Ported into this pack:** `mmx_utils/encoder_unload.py`, `mmx_nodes/encoder_unload.py` — `MiniMaxH3_TextEncoderUnload`. Taken because it matters more on H3 than anywhere else: the encoder is Qwen3-VL-32B, used once at the start and then resident for the whole sample, and a general "free memory" would unload the diffusion model that is about to run.
 - **Not ported from that pack:** the LTX-specific nodes (this is not an LTX pack), the service-API nodes, the two RTX nodes (they need NVIDIA's Video Effects SDK, a separate Windows-only install), and its Image/Video Compare nodes — those have four modes against the sixteen in `ComfyUI-CustomNodePacks`' own `video_comparer` (scopes, false colour, bit-depth crush, audio waveform/spectrogram/loudness, synced player), so porting them would have been a downgrade. Recorded here so it is not re-audited.
+
+## ComfyUI-MiniMaxH3-FirstBlockCache + ComfyUI_H3FBC (first-block residual caching)
+
+- **Sources:** both vendored at `third_party/` — `ComfyUI-MiniMaxH3-FirstBlockCache` and `ComfyUI_H3FBC`. Two independent implementations of the same idea.
+- **Licence:** neither states one (no LICENSE file, no SPDX header, no README statement) — ported at the repository owner's direction, 2026-09-21.
+- **Ported into this pack:** `mmx_utils/first_block_cache.py`, `mmx_nodes/first_block_cache.py` — `MiniMaxH3_FirstBlockCache`. **Merged, not chosen between**: each had something the other lacked and neither alone is safe for H3 video. FirstBlockCache contributed the temporal guard, the sigma window, per-uuid branch contexts, accelerator-conflict detection and the run statistics; H3FBC contributed warmup steps, metric stride and OOM tolerance.
+- **Why the merge mattered:** the plain metric averages over the whole latent, so on a 124-frame clip one frame can change completely while the mean stays under threshold — that step caches and the frame freezes while the rest of the shot moves. The temporal guard decides on the worst frame instead. Neither pack's defaults caught this alone.
+
+## ComfyUI-MiniMaxH3DualClockSampler / ComfyUI-MiniMaxH3-Cache (assessed, not ported)
+
+- **Sources:** vendored at `third_party/`.
+- **Not ported, with reasons** so this is not re-audited: the dual-clock sampler is already covered by `MiniMaxH3_TurboSampler` (legacy dual-clock Euler) plus `MiniMaxH3_DualClockShim`, which detects ComfyUI's native `ModelSamplingAV` and passes MODEL through when it is present. `ComfyUI-MiniMaxH3-Cache` is superseded by `MiniMaxH3_BlockCacheT8` and `MiniMaxH3_FirstBlockCache`, which between them cover both caching strategies with conflict detection neither original had.
