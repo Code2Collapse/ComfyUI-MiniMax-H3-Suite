@@ -8,6 +8,7 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 
+from .temporal import centred_window
 from .color_space import linear_luma, linear_to_srgb, srgb_to_linear
 from .drift_qc import inject_pixel_shift
 from .feather_composite import gaussian_blur_mask, mask_confined_blend
@@ -215,9 +216,7 @@ def _apply_affine_3x4(gen_lin: torch.Tensor, mat: torch.Tensor) -> torch.Tensor:
 
 
 def _median_filter_coeffs(coeffs: list[torch.Tensor], i: int, window: int = _TEMPORAL_WINDOW) -> torch.Tensor:
-    half = window // 2
-    lo = max(0, i - half)
-    hi = min(len(coeffs), i + half + 1)
+    lo, hi = centred_window(i, len(coeffs), window)
     return torch.stack(coeffs[lo:hi], dim=0).median(dim=0).values
 
 

@@ -82,6 +82,70 @@ def frequency_combine(
     return low_freq_nchw * detail_nchw.clamp(min=0.0)
 
 
+_GAUSS5_1D = torch.tensor([1.0, 4.0, 6.0, 4.0, 1.0], dtype=torch.float32) / 16.0
+
+
+def _gauss5_sep(x: torch.Tensor) -> torch.Tensor:
+    """Separable 5-tap Gaussian blur on NCHW with reflect padding."""
+    c = x.shape[1]
+    k = _GAUSS5_1D.to(device=x.device, dtype=x.dtype)
+    kh = k.view(1, 1, 1, 5).repeat(c, 1, 1, 1)
+    kv = kh.transpose(2, 3)
+    x = F.conv2d(F.pad(x, (2, 2, 0, 0), mode="reflect"), kh, groups=c)
+    x = F.conv2d(F.pad(x, (0, 0, 2, 2), mode="reflect"), kv, groups=c)
+    return x
+
+
+def _pyr_down(x: torch.Tensor) -> torch.Tensor:
+    x = _gauss5_sep(x)
+    return x[:, :, ::2, ::2]
+
+
+def _pyr_up(x: torch.Tensor, size: tuple[int, int]) -> torch.Tensor:
+    x = F.interpolate(x, size=size, mode="bilinear", align_corners=False)
+    return _gauss5_sep(x)
+
+
+def laplacian_pyramid(img: torch.Tensor, levels: int = 5) -> list[torch.Tensor]:
+    """Build a Laplacian pyramid from ``img`` [H,W,C] or [C,H,W] (auto-detected).
+
+    Returns ``levels`` band-pass tensors in NCHW layout (finest first).
+    """
+    if img.ndim == 3 and img.shape[-1] in (1, 3, 4):
+        x = img[..., :3].permute(2, 0, 1).unsqueeze(0).float()
+    elif img.ndim == 3:
+        x = img[:3].unsqueeze(0).float()
+    else:
+        raise ValueError(f"laplacian_pyramid expects [H,W,C] or [C,H,W], got {tuple(img.shape)}")
+
+    gauss: list[torch.Tensor] = [x]
+    for _ in range(levels - 1):
+        nxt = _pyr_down(gauss[-1])
+        if nxt.shape[-2] < 2 or nxt.shape[-1] < 2:
+            break
+        gauss.append(nxt)
+
+    actual = len(gauss)
+    lap: list[torch.Tensor] = []
+    for i in range(actual - 1):
+        up = _pyr_up(gauss[i + 1], gauss[i].shape[-2:])
+        lap.append(gauss[i] - up)
+    lap.append(gauss[-1])
+    return lap
+
+
+def reconstruct_pyramid(pyr: list[torch.Tensor]) -> torch.Tensor:
+    """Reconstruct an image from a Laplacian pyramid (NCHW bands, finest first)."""
+    x = pyr[-1]
+    for i in range(len(pyr) - 2, -1, -1):
+        up = _pyr_up(x, pyr[i].shape[-2:])
+        x = pyr[i] + up
+    return x
+
+
+reconstruct = reconstruct_pyramid
+
+
 def detail_reinject_frame(
     plate: torch.Tensor,
     generated: torch.Tensor,

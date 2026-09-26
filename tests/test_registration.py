@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 102   # + PlateRestore (N2), LatentColorAnchor (N1)
+EXPECTED_NODE_COUNT = 105   # + DetailMatch, ReferenceColorMatch, PixelRepair (N3–N5)
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
@@ -88,6 +88,9 @@ MASK_NODES = {
     "MiniMaxH3_SubjectCropAdvanced",
     "MiniMaxH3_SubjectUncrop",
     "MiniMaxH3_PlateRestore",
+    "MiniMaxH3_DetailMatch",
+    "MiniMaxH3_ReferenceColorMatch",
+    "MiniMaxH3_PixelRepair",
     "MiniMaxH3_MaskToLatentSpace",
     "MiniMaxH3_LatentMaskToMask",
     "MiniMaxH3_AudioMaskToLatent",

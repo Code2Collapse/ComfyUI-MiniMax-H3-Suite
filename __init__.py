@@ -92,6 +92,9 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.subject_crop", "MiniMaxH3_SubjectUncrop"),
     (".mmx_nodes.plate_restore", "MiniMaxH3_PlateRestore"),
     (".mmx_nodes.latent_color_anchor", "MiniMaxH3_LatentColorAnchor"),
+    (".mmx_nodes.detail_match", "MiniMaxH3_DetailMatch"),
+    (".mmx_nodes.reference_color_match", "MiniMaxH3_ReferenceColorMatch"),
+    (".mmx_nodes.pixel_repair", "MiniMaxH3_PixelRepair"),
     (".mmx_nodes.mask_to_latent", "MiniMaxH3_MaskToLatentSpace"),
     (".mmx_nodes.mask_to_latent", "MiniMaxH3_LatentMaskToMask"),
     (".mmx_nodes.audio_mask", "MiniMaxH3_AudioMaskToLatent"),
@@ -363,6 +366,18 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.latent_color_anchor import MiniMaxH3_LatentColorAnchor
 
                 nodes.append(MiniMaxH3_LatentColorAnchor)
+            elif mod_path.endswith("detail_match"):
+                from .mmx_nodes.detail_match import MiniMaxH3_DetailMatch
+
+                nodes.append(MiniMaxH3_DetailMatch)
+            elif mod_path.endswith("reference_color_match"):
+                from .mmx_nodes.reference_color_match import MiniMaxH3_ReferenceColorMatch
+
+                nodes.append(MiniMaxH3_ReferenceColorMatch)
+            elif mod_path.endswith("pixel_repair"):
+                from .mmx_nodes.pixel_repair import MiniMaxH3_PixelRepair
+
+                nodes.append(MiniMaxH3_PixelRepair)
             elif mod_path.endswith("mask_to_latent") and cls_name == "MiniMaxH3_MaskToLatentSpace":
                 from .mmx_nodes.mask_to_latent import MiniMaxH3_MaskToLatentSpace
 
