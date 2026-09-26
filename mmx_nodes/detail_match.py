@@ -13,7 +13,13 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
+from mmx_utils.device import run_with_cpu_fallback  # noqa: E402
 from mmx_utils.detail_match import detail_match_frames  # noqa: E402
+
+try:
+    import comfy.model_management as mm
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
+    mm = None
 
 
 def _normalize_boxes(bboxes, n: int) -> list[dict]:
@@ -170,16 +176,28 @@ class MiniMaxH3_DetailMatch(io.ComfyNode):
         if edit_mask is not None:
             edit_mask = edit_mask.expand(n, -1, -1) if edit_mask.shape[0] == 1 else edit_mask[:n]
 
-        crops, report_dict = detail_match_frames(
-            cropped_images,
-            original_images,
-            boxes,
-            edit_mask,
-            int(grow_px),
-            float(sharpen),
-            float(max_gain),
-            float(grain),
-            int(seed),
+        dev = cropped_images.device
+        if mm is not None:
+            try:
+                dev = mm.get_torch_device()
+            except Exception:
+                dev = cropped_images.device
+
+        crops, report_dict = run_with_cpu_fallback(
+            lambda d: detail_match_frames(
+                cropped_images,
+                original_images,
+                boxes,
+                edit_mask,
+                int(grow_px),
+                float(sharpen),
+                float(max_gain),
+                float(grain),
+                int(seed),
+                device=d,
+            ),
+            device=dev,
+            label="MiniMaxH3_DetailMatch",
         )
         report_text = json.dumps(report_dict, separators=(",", ":")) + "\n\n" + report_dict["summary"]
         return io.NodeOutput(crops, report_text)

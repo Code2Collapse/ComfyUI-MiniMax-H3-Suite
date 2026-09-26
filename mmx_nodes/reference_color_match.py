@@ -12,7 +12,13 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
+from mmx_utils.device import run_with_cpu_fallback  # noqa: E402
 from mmx_utils.reference_color_match import reference_color_match_frames  # noqa: E402
+
+try:
+    import comfy.model_management as mm
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
+    mm = None
 
 
 class MiniMaxH3_ReferenceColorMatch(io.ComfyNode):
@@ -109,15 +115,27 @@ class MiniMaxH3_ReferenceColorMatch(io.ComfyNode):
         temporal_smooth=5,
         reference_mask=None,
     ) -> io.NodeOutput:
-        out, report_dict = reference_color_match_frames(
-            images,
-            edit_mask,
-            reference,
-            reference_mask,
-            float(strength),
-            str(mode),
-            bool(match_lightness),
-            int(temporal_smooth),
+        dev = images.device
+        if mm is not None:
+            try:
+                dev = mm.get_torch_device()
+            except Exception:
+                dev = images.device
+
+        out, report_dict = run_with_cpu_fallback(
+            lambda d: reference_color_match_frames(
+                images,
+                edit_mask,
+                reference,
+                reference_mask,
+                float(strength),
+                str(mode),
+                bool(match_lightness),
+                int(temporal_smooth),
+                device=d,
+            ),
+            device=dev,
+            label="MiniMaxH3_ReferenceColorMatch",
         )
         report_text = json.dumps(report_dict, separators=(",", ":")) + "\n\n" + report_dict["summary"]
         return io.NodeOutput(out, report_text)

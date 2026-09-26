@@ -51,6 +51,7 @@ def border_ramp_alpha(
 
 _EVIDENCE_INSET_PX = 2
 _SHIFT_DEADBAND_PX = 0.01
+_AFFINE_MAX_SAMPLES = 200_000
 
 
 def interior_mask(h: int, w: int) -> torch.Tensor:
@@ -125,21 +126,30 @@ def uncrop_paste_frames(
 
 
 def _grow_mask(mask: torch.Tensor, px: int) -> torch.Tensor:
+    """Dilate by px with a square element - ONE pooling pass.
+
+    `px` iterated 3x3 max-pools compose to exactly a (2px+1) square, so a
+    single pool gives the identical result. The loop took 1.3 s per call on a
+    2 MP crop.
+    """
     if px <= 0:
         return mask
+    k = 2 * int(px) + 1
     x = mask.unsqueeze(0).unsqueeze(0)
-    for _ in range(px):
-        x = F.max_pool2d(x, kernel_size=3, stride=1, padding=1)
+    x = F.max_pool2d(x, kernel_size=(1, k), stride=1, padding=(0, px))
+    x = F.max_pool2d(x, kernel_size=(k, 1), stride=1, padding=(px, 0))
     return x[0, 0]
 
 
 def _erode_mask(mask: torch.Tensor, px: int) -> torch.Tensor:
     if px <= 0:
         return mask
-    x = mask.unsqueeze(0).unsqueeze(0)
-    for _ in range(px):
-        x = -F.max_pool2d(-x, kernel_size=3, stride=1, padding=1)
-    return x[0, 0]
+    # One separable pass; identical to px iterated 3x3 erosions (see _grow_mask).
+    k = 2 * int(px) + 1
+    x = -mask.unsqueeze(0).unsqueeze(0)
+    x = F.max_pool2d(x, kernel_size=(1, k), stride=1, padding=(0, px))
+    x = F.max_pool2d(x, kernel_size=(k, 1), stride=1, padding=(px, 0))
+    return -x[0, 0]
 
 
 def _resize_hwc(img: torch.Tensor, h: int, w: int) -> torch.Tensor:
@@ -183,6 +193,13 @@ def _fit_affine_3x4(plate_lin: torch.Tensor, gen_lin: torch.Tensor, ring: torch.
         return _mean_offset_matrix(plate_lin, gen_lin, ring), "mean_ring_too_small"
     g = gen_lin[sel]
     p = plate_lin[sel]
+    # Twelve coefficients do not need a million samples. An evenly spaced
+    # subset of at most 200k ring pixels gives the same fit; the full set took
+    # over a second a frame on a 2 MP crop.
+    if g.shape[0] > _AFFINE_MAX_SAMPLES:
+        idx = torch.linspace(0, g.shape[0] - 1, _AFFINE_MAX_SAMPLES, device=g.device).long()
+        g, p = g[idx], p[idx]
+        n = g.shape[0]
     ones = torch.ones(g.shape[0], 1, device=g.device, dtype=g.dtype)
     aug = torch.cat([g, ones], dim=1)
     try:
@@ -271,12 +288,17 @@ def restore_frames(
     max_shift_px: float,
     colour: str,
     temporal_lag_check: bool,
+    device: torch.device | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, dict[str, Any]]:
     """Per-frame plate restore in crop space then paste into full frames."""
     n = min(cropped_images.shape[0], original_images.shape[0], len(boxes))
     img_h, img_w = original_images.shape[1], original_images.shape[2]
+    out_dev = original_images.device
+    out_dtype = original_images.dtype
     out = original_images[:n].clone()
-    full_restore_mask = torch.zeros(n, img_h, img_w, dtype=torch.float32, device=out.device)
+    full_restore_mask = torch.zeros(n, img_h, img_w, dtype=torch.float32, device=out_dev)
+    streaming = device is not None and device != out_dev
+    cd = device if streaming else out_dev
 
     no_edit_mask = edit_mask is None
     per_frame: list[dict[str, Any]] = []
@@ -291,13 +313,16 @@ def restore_frames(
         x, y, w, h = (int(round(b[k])) for k in ("x", "y", "width", "height"))
         plate_crop = out[i, y : y + h, x : x + w, :]
         gen_crop = _resize_hwc(cropped_images[i], h, w)
+        if streaming:
+            plate_crop = plate_crop.to(cd)
+            gen_crop = gen_crop.to(cd)
 
         em = (
-            torch.ones(h, w, device=out.device, dtype=torch.float32)
+            torch.ones(h, w, device=cd, dtype=torch.float32)
             if no_edit_mask
-            else _resize_mask_hw(edit_mask[min(i, edit_mask.shape[0] - 1)], h, w).clamp(0, 1)
+            else _resize_mask_hw(edit_mask[min(i, edit_mask.shape[0] - 1)], h, w).clamp(0, 1).to(cd)
         )
-        interior = interior_mask(h, w).to(out.device)
+        interior = interior_mask(h, w).to(cd)
         ring, ring_count, ring_ok = _build_ring(em, grow_px, interior)
 
         plate_lin = srgb_to_linear(plate_crop[..., :3])
@@ -351,40 +376,53 @@ def restore_frames(
             raw_coeffs.append(_mean_offset_matrix(plate_lin, gen_lin, ring))
             rec["colour_mode"] = "mean"
         else:
-            raw_coeffs.append(_identity_affine(out.device, torch.float32))
+            raw_coeffs.append(_identity_affine(cd, torch.float32))
 
-        frame_data.append(
-            {
-                "x": x,
-                "y": y,
-                "w": w,
-                "h": h,
-                "em": em,
-                "ring": ring,
-                "ring_ok": ring_ok,
-                "plate_crop": plate_crop,
-                "gen_crop": gen_crop,
-                "rec": rec,
-                "dx": dx,
-                "dy": dy,
-            }
-        )
+        if streaming:
+            raw_coeffs[-1] = raw_coeffs[-1].cpu()
+
+        fd_entry: dict[str, Any] = {
+            "x": x,
+            "y": y,
+            "w": w,
+            "h": h,
+            "ring_ok": ring_ok,
+            "rec": rec,
+            "dx": dx,
+            "dy": dy,
+        }
+        if not streaming:
+            fd_entry.update(em=em, ring=ring, plate_crop=plate_crop, gen_crop=gen_crop)
+        frame_data.append(fd_entry)
         per_frame.append(rec)
 
     # Pass 2: apply corrections and composite
     for i, fd in enumerate(frame_data):
         x, y, w, h = fd["x"], fd["y"], fd["w"], fd["h"]
-        plate_crop = fd["plate_crop"]
-        working = fd["gen_crop"].clone()
-        ring = fd["ring"]
-        em = fd["em"]
         rec = fd["rec"]
+        if streaming:
+            plate_crop = out[i, y : y + h, x : x + w, :].to(cd)
+            working = _resize_hwc(cropped_images[i], h, w).to(cd)
+            em = (
+                torch.ones(h, w, device=cd, dtype=torch.float32)
+                if no_edit_mask
+                else _resize_mask_hw(edit_mask[min(i, edit_mask.shape[0] - 1)], h, w).clamp(0, 1).to(cd)
+            )
+            interior = interior_mask(h, w).to(cd)
+            ring, _, _ = _build_ring(em, grow_px, interior)
+        else:
+            plate_crop = fd["plate_crop"]
+            working = fd["gen_crop"].clone()
+            ring = fd["ring"]
+            em = fd["em"]
 
         if fd["ring_ok"] and rec.get("shift_applied"):
             working = inject_pixel_shift(working.unsqueeze(0), fd["dx"], fd["dy"]).squeeze(0).to(working.dtype)
 
         if fd["ring_ok"] and colour != "off":
             mat = _median_filter_coeffs(raw_coeffs, i)
+            if streaming:
+                mat = mat.to(cd)
             gen_lin = srgb_to_linear(working[..., :3])
             corrected_lin = _apply_affine_3x4(gen_lin, mat)
             rec["colour_magnitude_linear"] = _colour_magnitude(srgb_to_linear(plate_crop[..., :3]), corrected_lin, ring)
@@ -394,14 +432,18 @@ def restore_frames(
             else:
                 working = corrected_rgb.to(working.dtype)
 
-        border = border_ramp_alpha(h, w, x, y, img_h, img_w, feather_px, device=out.device, dtype=torch.float32)
+        border = border_ramp_alpha(h, w, x, y, img_h, img_w, feather_px, device=cd, dtype=torch.float32)
         edit_grown = _grow_mask(em, grow_px)
         alpha_crop = gaussian_blur_mask(edit_grown.unsqueeze(0).unsqueeze(0), feather_px)[0, 0]
         alpha_crop = (alpha_crop * border).clamp(0, 1)
 
         blended = mask_confined_blend(plate_crop, working, alpha_crop, colour_match=0.0)
-        out[i, y : y + h, x : x + w, :] = blended
-        full_restore_mask[i, y : y + h, x : x + w] = alpha_crop
+        if streaming:
+            out[i, y : y + h, x : x + w, :] = blended.to(out_dev, out_dtype)
+            full_restore_mask[i, y : y + h, x : x + w] = alpha_crop.to(out_dev)
+        else:
+            out[i, y : y + h, x : x + w, :] = blended
+            full_restore_mask[i, y : y + h, x : x + w] = alpha_crop
 
     best_lag = _temporal_lag(ring_means, plate_means) if temporal_lag_check else 0
     refused = sum(1 for f in per_frame if f.get("shift_refused"))

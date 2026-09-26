@@ -12,7 +12,13 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
+from mmx_utils.device import run_with_cpu_fallback  # noqa: E402
 from mmx_utils.pixel_repair import repair_frames  # noqa: E402
+
+try:
+    import comfy.model_management as mm
+except Exception:  # not just ImportError: the comfy_kitchen skew raises AttributeError
+    mm = None
 
 
 class MiniMaxH3_PixelRepair(io.ComfyNode):
@@ -87,12 +93,24 @@ class MiniMaxH3_PixelRepair(io.ComfyNode):
         debug=False,
         mask=None,
     ) -> io.NodeOutput:
-        out, damage, report_dict = repair_frames(
-            images,
-            mask,
-            float(impulse),
-            float(blotch),
-            bool(debug),
+        dev = images.device
+        if mm is not None:
+            try:
+                dev = mm.get_torch_device()
+            except Exception:
+                dev = images.device
+
+        out, damage, report_dict = run_with_cpu_fallback(
+            lambda d: repair_frames(
+                images,
+                mask,
+                float(impulse),
+                float(blotch),
+                bool(debug),
+                device=d,
+            ),
+            device=dev,
+            label="MiniMaxH3_PixelRepair",
         )
         report_text = json.dumps(report_dict, separators=(",", ":")) + "\n\n" + report_dict["summary"]
         return io.NodeOutput(out, damage, report_text)

@@ -87,6 +87,16 @@ def split_video(
     return video, write_back
 
 
+# A cell is EVIDENCE only if it is preserved at every step. `preserved > 0.5`
+# counted any cell with a mask value under 0.5, and under differential
+# diffusion (MVEx_DifferentialDiffusionSoft, MiniMaxH3_DifferentialDenoise) a
+# cell at 0.3 starts being EDITED about 70% of the way through the schedule -
+# while this runs to 85% by default. For that stretch the model's intended
+# edits would have been measured as drift and subtracted. Only cells that
+# stay kept throughout can say what "unchanged" looks like.
+_EVIDENCE_PRESERVED = 0.98
+
+
 def anchor_video(
     den_video: torch.Tensor,
     src_video: torch.Tensor,
@@ -120,7 +130,7 @@ def anchor_video(
         pres_sl: torch.Tensor,
         out_sl: torch.Tensor,
     ) -> float:
-        pres_frac = (pres_sl > 0.5).float().mean().item()
+        pres_frac = (pres_sl > _EVIDENCE_PRESERVED).float().mean().item()
         if pres_frac < min_preserved:
             return 0.0
 
@@ -128,7 +138,7 @@ def anchor_video(
         for ch in range(c):
             den_c = den_sl[:, ch]
             src_c = src_sl[:, ch]
-            pres_c = pres_sl[:, ch] > 0.5
+            pres_c = pres_sl[:, ch] > _EVIDENCE_PRESERVED
             if not pres_c.any():
                 continue
 

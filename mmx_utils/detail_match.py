@@ -70,7 +70,12 @@ def _flat_mask(luma_hw: torch.Tensor) -> torch.Tensor:
     gy[1:-1, :] = (luma_hw[2:, :] - luma_hw[:-2, :]) * 0.5
     gx[:, 1:-1] = (luma_hw[:, 2:] - luma_hw[:, :-2]) * 0.5
     grad = torch.sqrt(gx * gx + gy * gy)
-    thresh = torch.quantile(grad, 0.40)
+    # The 40th percentile from every other pixel each way: the same
+    # threshold for any real image, and torch.quantile over 2 million values
+    # was a second a call.
+    sample = grad[::2, ::2].reshape(-1)
+    k = max(1, int(0.40 * sample.numel()))
+    thresh = sample.kthvalue(k).values
     return grad < thresh
 
 
@@ -145,6 +150,7 @@ def _radial_bins(n: int, device) -> torch.Tensor:
 
 
 _PATCH_MIN_COVER = 0.75
+_MTF_MAX_PATCHES = 384
 
 
 def _ring_patch_spectrum(img_hwc: torch.Tensor, ring: torch.Tensor, patch: int):
@@ -174,16 +180,25 @@ def _ring_patch_spectrum(img_hwc: torch.Tensor, ring: torch.Tensor, patch: int):
     ys, xs = torch.nonzero(cover >= _PATCH_MIN_COVER, as_tuple=True)
     if ys.numel() == 0:
         return empty
+    # Welch averaging converges with a few hundred patches; a 2 MP ring has
+    # tens of thousands, and FFT-ing them one at a time in a Python loop was
+    # 14 of DetailMatch's 19 s a frame. An evenly spaced subset, deterministic,
+    # transformed in ONE batched call.
+    n_all = ys.numel()
+    if n_all > _MTF_MAX_PATCHES:
+        pick = torch.linspace(0, n_all - 1, _MTF_MAX_PATCHES, device=ys.device).long()
+        ys, xs = ys[pick], xs[pick]
     win = torch.hann_window(patch, periodic=False, device=luma.device)
     win2 = win[:, None] * win[None, :]
+    tiles = torch.stack([luma[y:y + patch, x:x + patch]
+                         for y, x in zip((ys * stride).tolist(), (xs * stride).tolist())])
+    wgts = torch.stack([rf[y:y + patch, x:x + patch]
+                        for y, x in zip((ys * stride).tolist(), (xs * stride).tolist())]) * win2
+    means = (tiles * wgts).sum(dim=(1, 2), keepdim=True) / wgts.sum(dim=(1, 2), keepdim=True).clamp_min(1e-8)
+    pw = (torch.fft.fft2((tiles - means) * wgts).abs() ** 2).sum(dim=0)
     acc = torch.zeros(_MTF_BINS, device=luma.device)
-    for y, x in zip((ys * stride).tolist(), (xs * stride).tolist()):
-        tile = luma[y:y + patch, x:x + patch]
-        wgt = rf[y:y + patch, x:x + patch] * win2
-        mean = (tile * wgt).sum() / wgt.sum().clamp_min(1e-8)
-        pw = torch.fft.fft2((tile - mean) * wgt).abs() ** 2
-        acc.index_add_(0, bins.reshape(-1), pw.reshape(-1))
-    spec = acc / counts.clamp_min(1) / ys.numel()
+    acc.index_add_(0, bins.reshape(-1), pw.reshape(-1))
+    spec = acc / counts.to(acc.device).clamp_min(1) / ys.numel()
     return spec.cpu(), counts.cpu(), int(ys.numel())
 
 
@@ -252,7 +267,10 @@ def _add_grain(
     # then multiplying by `missing` adds what the estimator said was missing.
     resid = noise_hwc - _from_nchw(_median3x3_nchw(_to_nchw(noise_hwc)), noise_hwc.dtype)
     response = resid.std(dim=(0, 1), unbiased=False).clamp_min(1e-6)
-    noise_hwc = noise_hwc / response
+    # Synthesised on the CPU so a seed gives the same grain on any device,
+    # then moved to the image's device - adding a CPU tensor to a CUDA image
+    # was a crash on every GPU run.
+    noise_hwc = (noise_hwc / response).to(img_hwc.device)
 
     lin = srgb_to_linear(img_hwc[..., :3])
     luma = linear_luma(lin)
@@ -360,10 +378,15 @@ def detail_match_frames(
     max_gain: float,
     grain: float,
     seed: int,
+    device: torch.device | None = None,
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     """Run MTF + grain match on raw decoded crops (before PlateRestore)."""
     n = min(cropped_images.shape[0], original_images.shape[0], len(boxes))
+    out_dev = cropped_images.device
+    out_dtype = cropped_images.dtype
     out = cropped_images[:n].clone()
+    streaming = device is not None and device != out_dev
+    cd = device if streaming else out_dev
     no_edit = edit_mask is None
 
     per_frame_gains: list[list[float]] = []
@@ -376,12 +399,15 @@ def detail_match_frames(
         x, y, w, h = (int(round(b[k])) for k in ("x", "y", "width", "height"))
         plate_crop = original_images[i, y : y + h, x : x + w, :]
         gen_crop = _resize_hwc(cropped_images[i], h, w)
+        if streaming:
+            plate_crop = plate_crop.to(cd)
+            gen_crop = gen_crop.to(cd)
         em = (
-            torch.ones(h, w, device=out.device, dtype=torch.float32)
+            torch.ones(h, w, device=cd, dtype=torch.float32)
             if no_edit
-            else _resize_mask_hw(edit_mask[min(i, edit_mask.shape[0] - 1)], h, w).clamp(0, 1)
+            else _resize_mask_hw(edit_mask[min(i, edit_mask.shape[0] - 1)], h, w).clamp(0, 1).to(cd)
         )
-        interior = interior_mask(h, w).to(out.device)
+        interior = interior_mask(h, w).to(cd)
         ring, ring_count, ring_ok = _build_ring(em, grow_px, interior)
         edit_grown = _grow_mask(em, grow_px)
         edit_feather = gaussian_blur_mask(edit_grown.unsqueeze(0).unsqueeze(0), max(1, grow_px // 2))[0, 0]
@@ -409,26 +435,43 @@ def detail_match_frames(
         nlf_plate = _nlf_per_bin(plate_crop, ring, flat_plate, edges) if ring_ok else [0.0] * _NLF_BINS
         nlf_gen = _nlf_per_bin(gen_crop, ring, flat_gen, edges) if ring_ok else [0.0] * _NLF_BINS
 
-        frame_ctx.append(
-            {
-                "gen_crop": gen_crop,
-                "edit_feather": edit_feather,
-                "ring_ok": ring_ok,
-                "ring_count": ring_count,
-                "nlf_plate": nlf_plate,
-                "nlf_gen": nlf_gen,
-                "gains": gains,
-                "edges": edges,
-            }
-        )
+        ctx_entry: dict[str, Any] = {
+            "x": x,
+            "y": y,
+            "w": w,
+            "h": h,
+            "ring_ok": ring_ok,
+            "ring_count": ring_count,
+            "nlf_plate": nlf_plate,
+            "nlf_gen": nlf_gen,
+            "gains": gains,
+            "edges": edges.cpu() if streaming else edges,
+        }
+        if not streaming:
+            ctx_entry["gen_crop"] = gen_crop
+            ctx_entry["edit_feather"] = edit_feather
+        frame_ctx.append(ctx_entry)
 
     # Pass 2 — apply temporally smoothed gains + grain
     for i, ctx in enumerate(frame_ctx):
         gains_sm = _median_temporal(per_frame_gains, i) if per_frame_gains else ctx["gains"]
-        working = ctx["gen_crop"].clone()
+        if streaming:
+            b = boxes[i]
+            x, y, w, h = (int(round(b[k])) for k in ("x", "y", "width", "height"))
+            working = _resize_hwc(cropped_images[i], h, w).to(cd)
+            em = (
+                torch.ones(h, w, device=cd, dtype=torch.float32)
+                if no_edit
+                else _resize_mask_hw(edit_mask[min(i, edit_mask.shape[0] - 1)], h, w).clamp(0, 1).to(cd)
+            )
+            edit_grown = _grow_mask(em, grow_px)
+            edit_feather = gaussian_blur_mask(edit_grown.unsqueeze(0).unsqueeze(0), max(1, grow_px // 2))[0, 0]
+        else:
+            working = ctx["gen_crop"].clone()
+            edit_feather = ctx["edit_feather"]
 
         if ctx["ring_ok"] and sharpen > 0:
-            working = _apply_mtf(working, ctx["edit_feather"], gains_sm, sharpen)
+            working = _apply_mtf(working, edit_feather, gains_sm, sharpen)
 
         # A deficit smaller than a quarter of the plate's own grain is inside
         # the estimator's error on a few hundred ring pixels; adding "grain"
@@ -438,15 +481,16 @@ def detail_match_frames(
              if p > 0.0 and (p - g) > _GRAIN_DEADBAND * p else 0.0)
             for p, g in zip(ctx["nlf_plate"], ctx["nlf_gen"])
         ]
-        edges = ctx["edges"]
+        edges = ctx["edges"].to(cd) if streaming else ctx["edges"]
 
-        working = _add_grain(working, ctx["edit_feather"], missing, edges, grain, seed + i)
+        working = _add_grain(working, edit_feather, missing, edges, grain, seed + i)
 
         # Write back at crop resolution (geometry unchanged)
         if working.shape[0] != cropped_images[i].shape[0] or working.shape[1] != cropped_images[i].shape[1]:
-            out[i] = _resize_hwc(working, cropped_images[i].shape[0], cropped_images[i].shape[1])
+            result = _resize_hwc(working, cropped_images[i].shape[0], cropped_images[i].shape[1])
         else:
-            out[i] = working.to(cropped_images.dtype)
+            result = working.to(out_dtype)
+        out[i] = result.to(out_dev, out_dtype) if streaming else result
 
         per_frame.append(
             {

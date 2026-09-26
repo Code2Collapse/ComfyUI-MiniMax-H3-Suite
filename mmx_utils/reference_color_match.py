@@ -105,9 +105,14 @@ def reference_color_match_frames(
     mode: str,
     match_lightness: bool,
     temporal_smooth: int,
+    device: torch.device | None = None,
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     """Match edit-region chroma to a single reference frame in Oklab."""
     n, h, w, _ = images.shape
+    out_dev = images.device
+    out_dtype = images.dtype
+    streaming = device is not None and device != out_dev
+    cd = device if streaming else out_dev
     ref = reference[0] if reference.ndim == 4 else reference
     if ref.shape[0] != h or ref.shape[1] != w:
         ref_nchw = ref[..., :3].permute(2, 0, 1).unsqueeze(0).float()
@@ -134,6 +139,9 @@ def reference_color_match_frames(
     if em.shape[-2] != h or em.shape[-1] != w:
         em = F.interpolate(em.unsqueeze(1).float(), size=(h, w), mode="bilinear", align_corners=False)[:, 0]
 
+    if streaming:
+        ref = ref.to(cd)
+        ref_mask = ref_mask.to(cd)
     ref_lin = srgb_to_linear(ref[..., :3])
     ref_lab = linear_srgb_to_oklab(ref_lin)
     chans = (0, 1, 2) if match_lightness else (1, 2)
@@ -143,23 +151,24 @@ def reference_color_match_frames(
     per_frame: list[dict[str, Any]] = []
 
     for i in range(n):
-        frame = images[i]
+        frame = images[i].to(cd) if streaming else images[i]
+        em_i = em[i].to(cd) if streaming else em[i]
         lin = srgb_to_linear(frame[..., :3])
         lab = linear_srgb_to_oklab(lin)
-        edit_sel = em[i] > 0.5
-        src_mean, src_std = _masked_stats(lab, em[i], chans)
+        edit_sel = em_i > 0.5
+        src_mean, src_std = _masked_stats(lab, em_i, chans)
 
         if mode == "histogram":
             corrected = lab.clone()
             for ch in chans:
                 corrected[..., ch] = _cdf_match_channel(
-                    lab[..., ch], ref_lab[..., ch], em[i], ref_mask, _HIST_BINS,
+                    lab[..., ch], ref_lab[..., ch], em_i, ref_mask, _HIST_BINS,
                 )
         else:
             corrected = _mean_std_correct(lab, ref_mean, ref_std, src_mean, src_std, chans)
 
         delta = corrected - lab
-        corrections.append(delta)
+        corrections.append(delta.cpu() if streaming else delta)
 
         a_shift = float(delta[..., 1][edit_sel].mean().item()) if edit_sel.any() else 0.0
         per_frame.append(
@@ -173,6 +182,23 @@ def reference_color_match_frames(
     out = images.clone()
     for i in range(n):
         delta_sm = _temporal_median_stack(corrections, i, temporal_smooth)
+        if streaming:
+            delta_sm = delta_sm.to(cd)
+            alpha = em[i].to(cd).clamp(0.0, 1.0)
+            src_frame = images[i].to(cd)
+            lab = linear_srgb_to_oklab(srgb_to_linear(src_frame[..., :3]))
+            lab_corr = lab + delta_sm * float(strength)
+            rgb_lin = oklab_to_linear_srgb(lab_corr)
+            rgb = linear_to_srgb(rgb_lin)
+            m = alpha.unsqueeze(-1)
+            blended = src_frame[..., :3].float() * (1.0 - m) + rgb.to(out_dtype).float() * m
+            blended = torch.where(m > 0, blended, images[i, ..., :3].float().to(cd))
+            if out.shape[-1] > 3:
+                frame_out = torch.cat([blended.to(out_dtype), src_frame[..., 3:]], dim=-1)
+            else:
+                frame_out = blended.to(out_dtype)
+            out[i] = frame_out.to(out_dev, out_dtype)
+            continue
         # The weight IS the mask: PlateRestore's restore_mask says how much of
         # each pixel is generated, so correcting by exactly that fraction
         # corrects the generated part and nothing else.

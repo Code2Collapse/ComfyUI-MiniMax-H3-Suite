@@ -15,6 +15,7 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
+from mmx_utils.device import run_with_cpu_fallback
 from mmx_utils.plate_restore import restore_frames
 
 try:
@@ -205,17 +206,29 @@ class MiniMaxH3_PlateRestore(io.ComfyNode):
         if edit_mask is not None:
             edit_mask = edit_mask.expand(n, -1, -1) if edit_mask.shape[0] == 1 else edit_mask[:n]
 
-        images, restore_mask, report_dict = restore_frames(
-            cropped_images,
-            original_images,
-            boxes,
-            edit_mask,
-            int(grow_px),
-            int(feather_px),
-            str(register),
-            float(max_shift_px),
-            str(colour),
-            bool(temporal_lag_check),
+        dev = original_images.device
+        if mm is not None:
+            try:
+                dev = mm.get_torch_device()
+            except Exception:
+                dev = original_images.device
+
+        images, restore_mask, report_dict = run_with_cpu_fallback(
+            lambda d: restore_frames(
+                cropped_images,
+                original_images,
+                boxes,
+                edit_mask,
+                int(grow_px),
+                int(feather_px),
+                str(register),
+                float(max_shift_px),
+                str(colour),
+                bool(temporal_lag_check),
+                device=d,
+            ),
+            device=dev,
+            label="MiniMaxH3_PlateRestore",
         )
         report_text = json.dumps(report_dict, separators=(",", ":")) + "\n\n" + report_dict["summary"]
         return io.NodeOutput(images, restore_mask, report_text)

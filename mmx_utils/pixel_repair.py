@@ -38,8 +38,12 @@ def _box_blur_hw(x: torch.Tensor, radius: int) -> torch.Tensor:
         return x
     k = 2 * radius + 1
     t = x.unsqueeze(0).unsqueeze(0)
-    t = F.conv2d(F.pad(t, (radius, radius, 0, 0), mode="reflect"), torch.ones(1, 1, 1, k) / k)
-    t = F.conv2d(F.pad(t, (0, 0, radius, radius), mode="reflect"), torch.ones(1, 1, k, 1) / k)
+    # Kernels on the image's device and dtype: a CPU kernel against a CUDA
+    # image is a crash, and ComfyUI hands this node CUDA tensors routinely.
+    kh = torch.ones(1, 1, 1, k, device=x.device, dtype=t.dtype) / k
+    kv = torch.ones(1, 1, k, 1, device=x.device, dtype=t.dtype) / k
+    t = F.conv2d(F.pad(t, (radius, radius, 0, 0), mode="reflect"), kh)
+    t = F.conv2d(F.pad(t, (0, 0, radius, radius), mode="reflect"), kv)
     return t.squeeze()
 
 
@@ -57,8 +61,17 @@ def _neighbours8(img: torch.Tensor) -> torch.Tensor:
 
 
 def _noise_sigma(img: torch.Tensor) -> float:
-    """Robust per-frame noise scale: 1.4826 * MAD of the 3x3-median residual."""
-    return 1.4826 * _frame_mad(img - _median3x3_hw(img))
+    """Robust per-frame noise scale: 1.4826 * MAD of the 3x3-median residual.
+
+    The residual is full resolution; only the MAD - a robust scale, stable on
+    a fraction of a frame's pixels - is taken on every third pixel each way.
+    A median over 2 million values per channel per frame was a measurable
+    share of the node's time for no change in the estimate.
+    """
+    resid = img - _median3x3_hw(img)
+    if resid.numel() > 262144:
+        resid = resid[::3, ::3]
+    return 1.4826 * _frame_mad(resid)
 
 
 # Absolute floors in display units (0-1). The noise-scaled threshold alone
@@ -209,10 +222,47 @@ def _blotch_mask_and_repair(
     if s <= 0.0:
         return torch.zeros(frame.shape[:2], dtype=torch.bool, device=frame.device), frame
     lin = srgb_to_linear(frame[..., :3].float())
-    lab = linear_srgb_to_oklab(lin)
+    lab_full = linear_srgb_to_oklab(lin)
+    thr = _BLOTCH_THRESH[0] + (_BLOTCH_THRESH[1] - _BLOTCH_THRESH[0]) * s
+
+    # Detection and the local estimates run at a reduced scale on large
+    # frames. They are large-radius smooth fields by construction (radius
+    # ~short_edge/30, 36 px at 1080p), so full resolution buys nothing - and
+    # at 2 MP it was 80% of the node's time: ~60 separable box filters of 73
+    # taps over every pixel, 2.9 s a frame on the CPU. The result is applied
+    # at full resolution. Frames up to 1024 px on the short edge are not
+    # scaled at all.
+    scale = max(1, int(short_edge // 1024) + (1 if short_edge > 1024 else 0))
+    if scale > 1:
+        hw = lab_full.shape[:2]
+        small = F.avg_pool2d(lab_full.permute(2, 0, 1).unsqueeze(0), scale, stride=scale,
+                             ceil_mode=True)[0].permute(1, 2, 0)
+        allowed_s = None
+        if allowed is not None:
+            allowed_s = F.max_pool2d(allowed.float()[None, None], scale, stride=scale,
+                                     ceil_mode=True)[0, 0] > 0.5
+        mask_s, a_loc_s, b_loc_s = _blotch_detect(small, thr, short_edge // scale, allowed_s)
+        if not mask_s.any():
+            return torch.zeros(hw, dtype=torch.bool, device=frame.device), frame
+        up = lambda t, mode: F.interpolate(t[None, None].float(), size=hw, mode=mode,
+                                           **({} if mode == "nearest" else {"align_corners": False}))[0, 0]
+        mask = up(mask_s, "nearest") > 0.5
+        a_loc = up(a_loc_s, "bilinear")
+        b_loc = up(b_loc_s, "bilinear")
+    else:
+        mask, a_loc, b_loc = _blotch_detect(lab_full, thr, short_edge, allowed)
+        if not mask.any():
+            return mask, frame
+    if allowed is not None:
+        mask = mask & allowed
+    l_ch, a_ch, b_ch = lab_full[..., 0], lab_full[..., 1], lab_full[..., 2]
+    return mask, _apply_blotch_fix(frame, mask, l_ch, a_ch, b_ch, a_loc, b_loc, allowed)
+
+
+def _blotch_detect(lab, thr, short_edge, allowed):
+    """Candidates and the full-surround chroma estimate on one Oklab frame."""
     l_ch, a_ch, b_ch = lab[..., 0], lab[..., 1], lab[..., 2]
     radius = max(12, int(round(short_edge / 30.0)))
-    thr = _BLOTCH_THRESH[0] + (_BLOTCH_THRESH[1] - _BLOTCH_THRESH[0]) * s
 
     def _candidates(weight: torch.Tensor):
         # A blotch differs from its surroundings on EVERY side; a colour edge
@@ -249,10 +299,11 @@ def _blotch_mask_and_repair(
     # let a 2 px strip along the border survive the opening.
     eroded = -F.max_pool2d(F.pad(-c, (2, 2, 2, 2), value=0.0), 5, stride=1)
     opened = F.max_pool2d(eroded, 5, stride=1, padding=2)
-    mask = opened[0, 0] > 0.5
-    if not mask.any():
-        return mask, frame
+    return opened[0, 0] > 0.5, a_loc, b_loc
 
+
+def _apply_blotch_fix(frame, mask, l_ch, a_ch, b_ch, a_loc, b_loc, allowed):
+    """Pull a/b toward the local estimate inside the grown, feathered mask."""
     # Grow before feathering so the feather lands OUTSIDE the blotch, not
     # across it - otherwise its rim is only half corrected.
     grown = F.max_pool2d(mask.float().unsqueeze(0).unsqueeze(0), 5, stride=1, padding=2)
@@ -266,7 +317,7 @@ def _blotch_mask_and_repair(
     touched = (feather > 0).unsqueeze(-1)
     out = frame.clone()
     out[..., :3] = torch.where(touched, fixed, frame[..., :3])
-    return mask, out
+    return out
 
 
 def repair_frames(
@@ -275,17 +326,22 @@ def repair_frames(
     impulse: float,
     blotch: float,
     debug: bool,
+    device: torch.device | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, dict[str, Any]]:
     """Repair impulse snow and chroma blotches; return (images, damage_mask, report)."""
     n, h, w, _ = images.shape
+    out_dev = images.device
+    out_dtype = images.dtype
+    streaming = device is not None and device != out_dev
+    cd = device if streaming else out_dev
     restrict = mask
     if restrict is not None:
         if restrict.shape[0] == 1:
             restrict = restrict.expand(n, -1, -1)
-        restrict = restrict[:n].to(images.device)
+        restrict = restrict[:n].to(out_dev)
 
     out = images.clone()
-    damage_full = torch.zeros(n, h, w, dtype=torch.float32, device=images.device)
+    damage_full = torch.zeros(n, h, w, dtype=torch.float32, device=out_dev)
     per_frame: list[dict[str, Any]] = []
     short_edge = min(h, w)
 
@@ -294,10 +350,15 @@ def repair_frames(
         if restrict is not None:
             allowed = restrict[i] > 0.5
         else:
-            allowed = torch.ones(h, w, dtype=torch.bool, device=images.device)
+            allowed = torch.ones(h, w, dtype=torch.bool, device=out_dev)
 
         prev = out[i - 1] if i > 0 else None
         nxt = out[i + 1] if i < n - 1 else None
+        if streaming:
+            frame = frame.to(cd)
+            prev = prev.to(cd) if prev is not None else None
+            nxt = nxt.to(cd) if nxt is not None else None
+            allowed = allowed.to(cd)
         k_extra = 2.0 if (prev is None or nxt is None) else 0.0
 
         impulse_dmg = _impulse_mask_frame(frame, prev, nxt, impulse, k_extra) & allowed
@@ -306,8 +367,12 @@ def repair_frames(
         blotch_dmg, frame = _blotch_mask_and_repair(frame, blotch, short_edge, allowed)
 
         combined = impulse_dmg | blotch_dmg
-        damage_full[i] = combined.float()
-        out[i] = frame
+        if streaming:
+            damage_full[i] = combined.float().to(out_dev)
+            out[i] = frame.to(out_dev, out_dtype)
+        else:
+            damage_full[i] = combined.float()
+            out[i] = frame
 
         per_frame.append(
             {

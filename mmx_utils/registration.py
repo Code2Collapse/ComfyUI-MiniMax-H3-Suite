@@ -118,8 +118,8 @@ def _integer_shift(
     flat_idx = int(xcorr.argmax().item())
     iy, ix = flat_idx // xcorr.shape[1], flat_idx % xcorr.shape[1]
     maxima = (xcorr == xcorr[iy, ix]).nonzero(as_tuple=False).float().mean(dim=0)
-    ref_shape = torch.tensor(fixed.shape, dtype=torch.float32)
-    mov_shape = torch.tensor(moving.shape, dtype=torch.float32)
+    ref_shape = torch.tensor(fixed.shape, dtype=torch.float32, device=maxima.device)
+    mov_shape = torch.tensor(moving.shape, dtype=torch.float32, device=maxima.device)
     shifts = maxima - ref_shape + 1.0
     size_mismatch = mov_shape - ref_shape
     out = -shifts + size_mismatch / 2.0
