@@ -17,17 +17,34 @@
 // Sits UNDER the bespoke widgets; it adds a row and never replaces anything.
 // Plain ES module, no Vue, nothing touches `window` at import time.
 
-import { app, api, chainOnRemoved } from "./shared.js";
+import { app, api, chainOnRemoved, themeVar } from "./shared.js";
 import { humaniseH3Error } from "./h3_errors.js";
 
 const PREFIX = "MiniMaxH3_";
 const ST = "_mmxKit";
 
+// Stage hues as PALETTE keys plus the literal this pack shipped, so the badges
+// move with the theme instead of being eleven fixed colours that clash with
+// whatever ground ends up behind them.
 const STAGE_COLOR = {
-  Spine: "#5a8fc8", Sampling: "#c8894a", Mask: "#4fb3a5", Crop: "#7db35a",
-  Long: "#a07cc8", Face: "#c85a7d", Motion: "#d1a33a", Prompt: "#8a8a8a",
-  Spectrum: "#5aa8c8", Authoring: "#8a8a8a", QC: "#d16a6a",
+  Spine:     ["blue",     "#5a8fc8"],
+  Sampling:  ["peach",    "#c8894a"],
+  Mask:      ["teal",     "#4fb3a5"],
+  Crop:      ["green",    "#7db35a"],
+  Long:      ["mauve",    "#a07cc8"],
+  Face:      ["maroon",   "#c85a7d"],
+  Motion:    ["yellow",   "#d1a33a"],
+  Prompt:    ["overlay2", "#8a8a8a"],
+  Spectrum:  ["sky",      "#5aa8c8"],
+  Authoring: ["overlay2", "#8a8a8a"],
+  QC:        ["red",      "#d16a6a"],
 };
+
+function stageColor(stage) {
+  const entry = STAGE_COLOR[stage];
+  if (!entry) return themeVar("dim");
+  return themeVar("--c2c-" + entry[0]) || entry[1];
+}
 
 function stageOf(nodeData) {
   const cat = String(nodeData?.category || "");
@@ -41,15 +58,15 @@ function buildStrip(stage) {
   const el = document.createElement("div");
   el.style.cssText =
     "display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;" +
-    "font:10px system-ui,sans-serif;color:var(--input-text,#ddd);padding:1px 2px;";
+    `font:10px system-ui,sans-serif;color:${themeVar("inputText")};padding:1px 2px;`;
 
   const badge = document.createElement("span");
   if (stage) {
     badge.textContent = stage;
     badge.style.cssText =
       "flex:0 0 auto;padding:0 5px;border-radius:7px;font-size:9px;" +
-      "letter-spacing:.3px;color:#111;opacity:.9;background:" +
-      (STAGE_COLOR[stage] || "#666") + ";";
+      `letter-spacing:.3px;color:${themeVar("--c2c-scrimDark") || "#111"};` +
+      `opacity:.9;background:${stageColor(stage)};`;
   }
 
   const status = document.createElement("span");
@@ -62,7 +79,7 @@ function buildStrip(stage) {
 
 function setStatus(st, text, tone) {
   st.status.textContent = text || "";
-  st.status.style.color = tone === "error" ? "#e06c6c" : "";
+  st.status.style.color = tone === "error" ? themeVar("danger") : "";
   st.status.style.opacity = tone === "error" ? "1" : ".7";
   st.status.title = st.fullError || "";
 }

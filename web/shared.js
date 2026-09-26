@@ -8,15 +8,33 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
+// Each entry is a CHAIN, most specific first:
+//   1. --c2c-*   published on :root by CustomNodePacks' theme, which owns the
+//                house palette and its variants. When that pack is installed -
+//                the normal case here - this suite follows it, so a node from
+//                one pack and a node from another stop looking like they came
+//                from different products.
+//   2. a ComfyUI core var, so a MiniMaxSuite-only install still follows
+//      whatever palette the user picked in ComfyUI itself.
+//   3. a literal, which is the colour this pack already shipped.
+//
+// Nothing is IMPORTED from the other pack. A cross-pack import would 404 the
+// moment someone installed this suite on its own, and a 404 on a module import
+// takes down the whole pack's front-end, not just one widget.
 export const THEME_VARS = {
-  bg: ["--bg-color", "#1a1a1a"],
-  fg: ["--fg-color", "#ddd"],
-  menuBg: ["--comfy-menu-bg", "#353535"],
-  inputBg: ["--comfy-input-bg", "#222"],
-  border: ["--border-color", "#4a4a4a"],
-  inputText: ["--input-text", "#ccc"],
-  primary: ["--p-primary-color", "#4cc3ff"],
-  textPrimary: ["--text-primary", "#e8e8e8"],
+  bg: ["--c2c-bg", "--bg-color", "#1a1a1a"],
+  fg: ["--c2c-fg", "--fg-color", "#ddd"],
+  menuBg: ["--c2c-panelBg", "--comfy-menu-bg", "#353535"],
+  inputBg: ["--c2c-surface0", "--comfy-input-bg", "#222"],
+  border: ["--c2c-border", "--border-color", "#4a4a4a"],
+  inputText: ["--c2c-fg", "--input-text", "#ccc"],
+  primary: ["--c2c-mauve", "--p-primary-color", "#4cc3ff"],
+  textPrimary: ["--c2c-fg", "--text-primary", "#e8e8e8"],
+  dim: ["--c2c-dim", "--descrip-text", "#999"],
+  ok: ["--c2c-ok", null, "#7ee0a8"],
+  warn: ["--c2c-warn", null, "#ffd166"],
+  danger: ["--c2c-danger", null, "#f87171"],
+  well: ["--c2c-surface1", "--comfy-input-bg", "#222"],
 };
 
 export function themeVar(name) {
@@ -28,12 +46,28 @@ export function themeVar(name) {
   // A name that resolves to nothing now returns "" so the caller's own
   // `|| "#1e1e1e"` fallback takes effect instead of a wrong colour.
   const entry = THEME_VARS[name];
-  const key = entry ? entry[0] : (String(name).startsWith("--") ? name : null);
-  const fallback = entry ? entry[1] : "";
-  if (key === null) return fallback;
+  if (!entry) {
+    // A raw custom property, which callers do pass.
+    if (typeof document === "undefined" || !String(name).startsWith("--")) return "";
+    return read(name);
+  }
+  const fallback = entry[entry.length - 1];
   if (typeof document === "undefined") return fallback;
-  const v = getComputedStyle(document.documentElement).getPropertyValue(key).trim();
-  return v || fallback;
+  for (const key of entry.slice(0, -1)) {
+    if (!key) continue;
+    const v = read(key);
+    if (v) return v;
+  }
+  return fallback;
+}
+
+function read(prop) {
+  try {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue(prop).trim();
+  } catch {
+    return "";
+  }
 }
 
 export function rafThrottle(fn) {
