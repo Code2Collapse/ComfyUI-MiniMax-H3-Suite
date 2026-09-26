@@ -1,3 +1,25 @@
+# H3 Plate Fidelity — `h3_plate_fidelity_PRB.json`
+
+**Status: generated from `test_minimax_PRB_Chandhan.json` by a script; socket names and
+types checked against every node's real schema (0 mismatches) and link bookkeeping validated.
+Not run end to end here — no H3 weights on the authoring machine.** Diagnosis and design:
+`docs/PLAN_h3_plate_fidelity.md`.
+
+What changed from the original:
+
+| Where | Before | After | Why |
+|---|---|---|---|
+| Ingest | `VHS_LoadVideo` | core `Load Video` → `Get Video Components` (+ `Get Image Size` for frame count) | cv2 decode measured 26.5/255 colour error and 8-bit on a 10-bit BT.709 ProRes plate; core measured 0.4/255, float |
+| Sampling | model → guider | + `H3 Latent Colour Anchor` | removes the ref2va red drift each step, measured on the region the model keeps |
+| Finish | `MVEx Subject Uncrop` (whole rectangle pasted) | `Detail Match` → `Plate Restore` → `Reference Colour Match` (bypassed until wired) → `Pixel Repair` | puts the original plate back outside the edit, corrects offset and colour, restores sharpness and grain |
+
+The old VHS loader is left in the graph, muted, so the original filename stays visible.
+`Reference Colour Match` is bypassed on purpose: wire a tight crop of the subject's skin
+from `<Picture 1>` — the stitched references have a flat replaced background that would
+skew the statistics — then enable it.
+
+---
+
 # H3 Masked Face Pipeline — Stage 2 workflow
 
 **Status: untested at runtime on the authoring machine.** This JSON was built without H3 model weights or a GPU. It wires the MiniMaxSuite spine nodes to ComfyUI core H3 nodes using real `node_id` values from `comfy_extras/nodes_minimax_h3.py`.
