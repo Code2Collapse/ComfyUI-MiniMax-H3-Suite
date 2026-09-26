@@ -101,10 +101,15 @@ function build(node) {
   canvas.style.cssText =
     "width:100%;display:block;border-radius:4px;cursor:crosshair;touch-action:none;";
 
+  const chromeFg = themeVar("inputText") || "#ddd";
+  const chromeDim = themeVar("dim") || "#999";
+  const chromeBg = themeVar("inputBg") || "#222";
+  const chromeBorder = themeVar("border") || "#4a4a4a";
+
   const bar = document.createElement("div");
   bar.style.cssText =
     "display:flex;gap:6px;align-items:center;padding:5px 2px 0;" +
-    "font:11px system-ui,sans-serif;color:#9aa4b2;flex-wrap:wrap;";
+    `font:11px system-ui,sans-serif;color:${chromeDim};flex-wrap:wrap;`;
 
   const mkBtn = (label, title) => {
     const b = document.createElement("button");
@@ -112,14 +117,14 @@ function build(node) {
     b.textContent = label;
     b.title = title;
     b.style.cssText =
-      "font:11px system-ui,sans-serif;background:#23272e;color:#c9d1d9;" +
-      "border:1px solid #3b424d;border-radius:4px;padding:3px 7px;cursor:pointer;";
+      `font:11px system-ui,sans-serif;background:${chromeBg};color:${chromeFg};` +
+      `border:1px solid ${chromeBorder};border-radius:4px;padding:3px 7px;cursor:pointer;`;
     return b;
   };
   const prev = mkBtn("‹", "Previous frame");
   const next = mkBtn("›", "Next frame");
   const label = document.createElement("span");
-  label.style.cssText = "font:11px ui-monospace,monospace;color:#c9d1d9;min-width:88px;";
+  label.style.cssText = `font:11px ui-monospace,monospace;color:${chromeFg};min-width:88px;`;
   const reset = mkBtn("Reset point", "Put the selected point back where the detector had it");
   const note = document.createElement("span");
   note.style.cssText = "flex:1;text-align:right;opacity:.8;";

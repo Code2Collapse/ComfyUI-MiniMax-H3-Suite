@@ -113,6 +113,10 @@ function build(node) {
     const cssW = Math.max(120, (node.size?.[0] || 320) - 24);
     const ctx = setupDpiCanvas(canvas, cssW, h);
     const ink = themeVar("inputText") || "#ddd";
+    const danger = themeVar("danger") || "#f87171";
+    const warn = themeVar("warn") || "#ffd166";
+    const accent = themeVar("primary") || "#4cc3ff";
+    const onPanel = themeVar("bg") || "#1a1a1a";
     const w = cssW;
 
     ctx.clearRect(0, 0, w, h);
@@ -162,7 +166,7 @@ function build(node) {
       const mag = Math.abs(strength) * Math.abs(term.weight);
       const x = xOf(mag);
 
-      ctx.fillStyle = bad ? "#d16a6a" : (mag > SAFE ? "#d1a33a" : "#5aa8c8");
+      ctx.fillStyle = bad ? danger : (mag > SAFE ? warn : accent);
       ctx.fillRect(padL, y - 4, Math.max(1, x - padL), 8);
 
       ctx.fillStyle = ink;
@@ -182,7 +186,7 @@ function build(node) {
       const after = x + 4;
       const inside = after + lw > w - padR - 4;
       const tx = inside ? padL + 6 : after;
-      if (inside) ctx.fillStyle = "#14171a";
+      if (inside) ctx.fillStyle = onPanel;
       ctx.save();
       ctx.beginPath();
       ctx.rect(padL, y - 8, w - padL - padR, 16);
@@ -191,7 +195,7 @@ function build(node) {
       ctx.restore();
 
       ctx.globalAlpha = 1;
-      ctx.fillStyle = bad ? "#d16a6a" : ink;
+      ctx.fillStyle = bad ? danger : ink;
       ctx.textAlign = "right";
       ctx.fillText(bad ? "—" : `${(-mag).toFixed(2)}`, w - 5, y);
       ctx.textAlign = "left";
@@ -213,7 +217,7 @@ function build(node) {
       }
       parts.push("Rides in the same forward pass as the prompt, so unlike CFG it costs no extra step time.");
     }
-    caption.style.color = bad ? "#e06c6c" : "";
+    caption.style.color = bad ? danger : "";
     caption.textContent = parts.join(" ");
 
     // The caption wraps, and how far depends on the node's width and on how

@@ -114,6 +114,7 @@ function build(node) {
     const cssW = Math.max(160, (node.size?.[0] || 360) - 24);
     const ctx = setupDpiCanvas(canvas, cssW, PANEL_H);
     const ink = themeVar("inputText") || "#ddd";
+    const dim = themeVar("dim") || "#999";
     const w = cssW, h = PANEL_H;
 
     ctx.clearRect(0, 0, w, h);
@@ -133,16 +134,20 @@ function build(node) {
     const jawOn = active.has("jaw");
     ctx.save();
     if (!jawOn) ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = jawOn ? GROUP_COLOUR.jaw : "rgba(150,156,175,0.42)";
+    ctx.strokeStyle = jawOn ? GROUP_COLOUR.jaw : dim;
+    if (!jawOn) ctx.globalAlpha = 0.42;
     ctx.lineWidth = jawOn ? 2.2 : 1.5;
     ctx.beginPath();
     F.jaw.forEach((p, i) => { const [x, y] = P(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
     ctx.stroke();
+    ctx.globalAlpha = 1;
     ctx.restore();
 
     const stroke = (g, wdt = 2.2) => {
-      ctx.strokeStyle = active.has(g) ? GROUP_COLOUR[g] : "rgba(150,156,175,0.20)";
-      ctx.lineWidth = active.has(g) ? wdt : 1.2;
+      const on = active.has(g);
+      ctx.globalAlpha = on ? 1 : 0.20;
+      ctx.strokeStyle = on ? GROUP_COLOUR[g] : dim;
+      ctx.lineWidth = on ? wdt : 1.2;
     };
 
     stroke("brows");
@@ -168,8 +173,8 @@ function build(node) {
     // pupils: the only gaze signal, so they get their own mark
     for (const e of F.eyes) {
       const [x, y] = P(e);
-      ctx.fillStyle = active.has("pupils")
-        ? GROUP_COLOUR.pupils : "rgba(150,156,175,0.22)";
+      ctx.globalAlpha = active.has("pupils") ? 1 : 0.22;
+      ctx.fillStyle = active.has("pupils") ? GROUP_COLOUR.pupils : dim;
       ctx.beginPath();
       ctx.arc(x + size * 0.04, y, Math.max(1.5, size * 0.014), 0, Math.PI * 2);
       ctx.fill();
@@ -198,12 +203,14 @@ function build(node) {
     ctx.font = "9px system-ui,sans-serif";
     ctx.textBaseline = "middle";
     const jl = jawOn ? "jaw — head pose + chin drop" : "jaw — not driven";
-    ctx.fillStyle = jawOn ? "rgba(140,191,255,0.9)" : "rgba(150,156,175,0.75)";
+    ctx.globalAlpha = jawOn ? 0.9 : 0.75;
+    ctx.fillStyle = jawOn ? GROUP_COLOUR.jaw : dim;
     const jx = bx + size * 0.5 - ctx.measureText(jl).width / 2;
     const jy = by + size + 9;
     ctx.fillText(jl, jx, jy);
     if (!jawOn) {
-      ctx.strokeStyle = "rgba(150,156,175,0.5)";
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = dim;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(jx - 2, jy);
@@ -218,7 +225,8 @@ function build(node) {
     for (const g of ["jaw", "brows", "nose", "eyes", "pupils", "mouth",
                      "body", "feet", "left_hand", "right_hand"]) {
       const on = active.has(g);
-      ctx.fillStyle = on ? GROUP_COLOUR[g] : "rgba(150,156,175,0.22)";
+      ctx.globalAlpha = on ? 1 : 0.22;
+      ctx.fillStyle = on ? GROUP_COLOUR[g] : dim;
       ctx.fillRect(lx, ly - 3, 9, 6);
       ctx.fillStyle = ink;
       ctx.globalAlpha = on ? 0.92 : 0.34;
@@ -236,6 +244,7 @@ function build(node) {
     const mouthNote = mouthToAudio
       ? " drive_mouth is off: the lips are still masked, so they can change, but nothing is drawing them — lock an audio track or they have nothing to follow."
       : "";
+    ctx.globalAlpha = 1;
     caption.textContent = (SCOPE_NOTE[scope] || "") + jawNote + mouthNote;
     const capH = Math.max(16, caption.offsetHeight || 0) + 6;
     if (Math.abs(capH - st.capH) > 1) {

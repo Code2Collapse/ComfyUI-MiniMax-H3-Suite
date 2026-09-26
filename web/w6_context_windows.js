@@ -113,6 +113,8 @@ function draw(st) {
 
   const fg = themeVar("inputText") || "#ddd";
   const accent = themeVar("--c2c-accentVivid") || "#4ea1ff";
+  const warn = themeVar("warn") || "#ffd166";
+  const danger = themeVar("danger") || "#f87171";
 
   if (!st.plan || !st.plan.windows || !st.plan.windows.length) {
     drawPlaceholder(ctx, w, h, "Run the node to see the window plan", "empty");
@@ -163,14 +165,14 @@ function draw(st) {
     if (st.showCost && win.overlap_prev > 0) {
       const ox = fx(win.start), ow = Math.max(1, fx(win.start + win.overlap_prev) - ox);
       ctx.globalAlpha = 0.9;
-      ctx.fillStyle = "#e0a33a";
+      ctx.fillStyle = warn;
       ctx.fillRect(ox, y + 2, ow, ROW_H - 5);
     }
 
     // a short tail is a real gotcha — mark it
     if (win.short_tail) {
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = "#e06c6c";
+      ctx.strokeStyle = danger;
       ctx.lineWidth = 1;
       ctx.strokeRect(bx + 0.5, y + 2.5, bw - 1, ROW_H - 6);
     }

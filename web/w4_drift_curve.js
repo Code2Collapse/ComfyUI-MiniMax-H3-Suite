@@ -76,16 +76,18 @@ function buildDom(node) {
 }
 
 function setBadge(st, passed) {
+  const ok = themeVar("ok") || "#7ee0a8";
+  const danger = themeVar("danger") || "#f87171";
   if (passed === true) {
     st.badge.textContent = "PASS";
     st.badge.style.background = "rgba(34,197,94,0.25)";
-    st.badge.style.color = "#86efac";
-    st.badge.style.border = "1px solid rgba(34,197,94,0.5)";
+    st.badge.style.color = ok;
+    st.badge.style.border = `1px solid ${ok}80`;
   } else if (passed === false) {
     st.badge.textContent = "FAIL";
     st.badge.style.background = "rgba(239,68,68,0.25)";
-    st.badge.style.color = "#fca5a5";
-    st.badge.style.border = "1px solid rgba(239,68,68,0.5)";
+    st.badge.style.color = danger;
+    st.badge.style.border = `1px solid ${danger}80`;
   } else {
     st.badge.textContent = "—";
     st.badge.style.background = "rgba(100,100,100,0.2)";

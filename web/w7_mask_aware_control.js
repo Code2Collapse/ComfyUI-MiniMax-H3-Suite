@@ -106,7 +106,7 @@ function build(node) {
     boxSizing: "border-box",
     padding: "4px 2px 2px",
     font: "11px system-ui, sans-serif",
-    color: themeVar("--input-text") || "#ddd",
+    color: themeVar("inputText") || "#ddd",
   });
 
   const canvas = document.createElement("canvas");
@@ -186,9 +186,9 @@ function build(node) {
 
     const info = regime(preserved, softness);
     const curve =
-      info.tone === "error" ? "#e06c6c"
-      : info.tone === "warn" ? "#e0a24a"
-      : "#6fb36f";
+      info.tone === "error" ? (themeVar("danger") || "#f87171")
+      : info.tone === "warn" ? (themeVar("warn") || "#ffd166")
+      : (themeVar("ok") || "#7ee0a8");
 
     ctx.strokeStyle = curve;
     ctx.lineWidth = 2.5;
@@ -226,14 +226,16 @@ function build(node) {
     const by = h - 28;
     for (const b of blocks) {
       const bw = (b.n / 49) * plotW;
-      ctx.fillStyle = b.on ? b.colour : "rgba(255,255,255,0.10)";
+      ctx.globalAlpha = b.on ? 1 : 0.10;
+      ctx.fillStyle = b.on ? b.colour : ink;
       ctx.fillRect(bx, by, Math.max(1, bw - 1), 7);
       bx += bw;
     }
+    ctx.globalAlpha = 1;
     ctx.fillStyle = "rgba(255,255,255,0.5)";
     ctx.fillText("49 ch: control / vis / masked", pad, by - 2);
 
-    caption.style.color = info.tone === "error" ? "#e06c6c" : ink;
+    caption.style.color = info.tone === "error" ? (themeVar("danger") || "#f87171") : ink;
     const mode = ch.inpaint
       ? "inpaint \u2014 all 49 channels carry data"
       : "structural only \u2014 visibility filled with ONES, so nothing "
