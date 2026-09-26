@@ -90,6 +90,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.subject_crop", "MiniMaxH3_SubjectCrop"),
     (".mmx_nodes.subject_crop", "MiniMaxH3_SubjectCropAdvanced"),
     (".mmx_nodes.subject_crop", "MiniMaxH3_SubjectUncrop"),
+    (".mmx_nodes.plate_restore", "MiniMaxH3_PlateRestore"),
     (".mmx_nodes.mask_to_latent", "MiniMaxH3_MaskToLatentSpace"),
     (".mmx_nodes.mask_to_latent", "MiniMaxH3_LatentMaskToMask"),
     (".mmx_nodes.audio_mask", "MiniMaxH3_AudioMaskToLatent"),
@@ -353,6 +354,10 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.subject_crop import MiniMaxH3_SubjectUncrop
 
                 nodes.append(MiniMaxH3_SubjectUncrop)
+            elif mod_path.endswith("plate_restore"):
+                from .mmx_nodes.plate_restore import MiniMaxH3_PlateRestore
+
+                nodes.append(MiniMaxH3_PlateRestore)
             elif mod_path.endswith("mask_to_latent") and cls_name == "MiniMaxH3_MaskToLatentSpace":
                 from .mmx_nodes.mask_to_latent import MiniMaxH3_MaskToLatentSpace
 

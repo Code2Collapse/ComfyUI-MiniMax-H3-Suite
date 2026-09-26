@@ -21,6 +21,7 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
+from mmx_utils.plate_restore import uncrop_paste_frames
 from mmx_utils.subject_crop_planner import plan
 
 CATEGORY = "MiniMax H3/Crop"
@@ -452,33 +453,13 @@ class MiniMaxH3_SubjectUncrop(io.ComfyNode):
         else:
             boxes = [f[0] for f in (frames * n if len(frames) == 1 else frames[:n])]
 
-        img_h, img_w = original_images.shape[1], original_images.shape[2]
-        out = original_images.clone()
-        for i, b in enumerate(boxes):
-            x, y, w, h = (int(round(b[k])) for k in ("x", "y", "width", "height"))
-            crop = _resize_image(cropped_images[i], w, h)
-
-            alpha = torch.ones(h, w, dtype=out.dtype, device=out.device)
-            fx, fy = min(feather, w // 2), min(feather, h // 2)
-            if fy > 0:
-                ramp = torch.linspace(0, 1, fy + 2, dtype=out.dtype, device=out.device)[1:-1]
-                if y > 0:
-                    alpha[:fy, :] *= ramp[:, None]
-                if y + h < img_h:
-                    alpha[h - fy:, :] *= ramp.flip(0)[:, None]
-            if fx > 0:
-                ramp = torch.linspace(0, 1, fx + 2, dtype=out.dtype, device=out.device)[1:-1]
-                if x > 0:
-                    alpha[:, :fx] *= ramp[None, :]
-                if x + w < img_w:
-                    alpha[:, w - fx:] *= ramp.flip(0)[None, :]
-
-            if cropped_masks is not None:
-                m = _resize_mask(cropped_masks[i], w, h)
-                alpha = alpha * m.clamp(0.0, 1.0).to(dtype=out.dtype, device=out.device)
-
-            alpha = alpha[..., None]
-            region = out[i, y:y + h, x:x + w, :]
-            out[i, y:y + h, x:x + w, :] = crop.to(region) * alpha + region * (1 - alpha)
-
+        out = uncrop_paste_frames(
+            cropped_images,
+            original_images,
+            boxes,
+            feather,
+            cropped_masks,
+            resize_image=_resize_image,
+            resize_mask=_resize_mask,
+        )
         return io.NodeOutput(out)

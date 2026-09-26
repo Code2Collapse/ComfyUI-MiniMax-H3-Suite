@@ -55,3 +55,25 @@
 
 - **Sources:** vendored at `third_party/`.
 - **Not ported, with reasons** so this is not re-audited: the dual-clock sampler is already covered by `MiniMaxH3_TurboSampler` (legacy dual-clock Euler) plus `MiniMaxH3_DualClockShim`, which detects ComfyUI's native `ModelSamplingAV` and passes MODEL through when it is present. `ComfyUI-MiniMaxH3-Cache` is superseded by `MiniMaxH3_BlockCacheT8` and `MiniMaxH3_FirstBlockCache`, which between them cover both caching strategies with conflict detection neither original had.
+
+## scikit-image — masked normalised cross-correlation (Padfield 2012)
+
+- **Source:** scikit-image 0.26, `skimage/registration/_masked_phase_cross_correlation.py`.
+  Algorithm: D. Padfield, "Masked Object Registration in the Fourier Domain", IEEE
+  Transactions on Image Processing 21(5), 2012.
+- **Licence:** BSD-3-Clause.
+- **Ported into this pack:** `mmx_utils/registration.py` (torch, no scikit-image import at
+  runtime — it is not a dependency of this pack). Used by `MiniMaxH3_PlateRestore` for the
+  INTEGER part of the offset; the sub-pixel part is a masked Lucas–Kanade refinement
+  written here, using the same bilinear warp that later applies the correction so the
+  estimate and the correction agree.
+- **Why a port and not the plain phase correlation:** the evidence is a ring around the
+  edit, not the whole frame. Zeroing outside the ring and phase-correlating biases the peak
+  toward zero shift; Padfield's formulation normalises by the actual overlap at each lag.
+
+## Oklab — Björn Ottosson
+
+- **Source:** https://bottosson.github.io/posts/oklab/ (matrices and pipeline).
+- **Licence:** public domain / MIT, as published by the author.
+- **Ported into this pack:** `mmx_utils/color_space.py`, alongside the exact sRGB transfer
+  function. No clamp on the linear side: values above 1.0 survive.

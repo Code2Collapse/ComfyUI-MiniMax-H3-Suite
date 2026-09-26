@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 100   # +5 Director (GPL port) +1 all-in-one Director (MIT port)   # + native audio lock (3) + multishot (3) + first-block cache
+EXPECTED_NODE_COUNT = 101   # + PlateRestore (N2 plate fidelity slice 1)
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
@@ -86,6 +86,7 @@ MASK_NODES = {
     "MiniMaxH3_SubjectCrop",
     "MiniMaxH3_SubjectCropAdvanced",
     "MiniMaxH3_SubjectUncrop",
+    "MiniMaxH3_PlateRestore",
     "MiniMaxH3_MaskToLatentSpace",
     "MiniMaxH3_LatentMaskToMask",
     "MiniMaxH3_AudioMaskToLatent",
