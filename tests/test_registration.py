@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 101   # + PlateRestore (N2 plate fidelity slice 1)
+EXPECTED_NODE_COUNT = 102   # + PlateRestore (N2), LatentColorAnchor (N1)
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
@@ -45,6 +45,7 @@ SPINE_NODES = {
     "MiniMaxH3_FrameHandles",
 }
 SAMPLING_NODES = {
+    "MiniMaxH3_LatentColorAnchor",
     "MiniMaxH3_ProtectedLayerGuard",
     "MiniMaxH3_AcceleratorConflict",
     "MiniMaxH3_LegalScheduler",
