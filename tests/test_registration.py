@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 105   # + DetailMatch, ReferenceColorMatch, PixelRepair (N3–N5)
+EXPECTED_NODE_COUNT = 108   # + HybridHDR, HybridExtract, ColorQC
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
@@ -55,6 +55,8 @@ SAMPLING_NODES = {
     "MiniMaxH3_BlockCacheT8",
     "MiniMaxH3_SigmaInspector",
     "MiniMaxH3_TurboLoRA",
+    "MiniMaxH3_HybridHDR",
+    "MiniMaxH3_HybridExtract",
     "MiniMaxH3_TurboSampler",
     "MiniMaxH3_AudioQualityGate",
     "MiniMaxH3_SplitUpscale",
@@ -74,6 +76,7 @@ CONTROL_NODES = {
 }
 QC_NODES = {
     "MiniMaxH3_DriftQC",
+    "MiniMaxH3_ColorQC",
 }
 AUTHORING_NODES = {
     "MiniMaxH3_FamilyPresets",

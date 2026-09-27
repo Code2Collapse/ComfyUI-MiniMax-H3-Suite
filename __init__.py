@@ -73,6 +73,9 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.continuation", "MiniMaxH3_SplitAV"),
     (".mmx_nodes.continuation", "MiniMaxH3_MergeAV"),
     (".mmx_nodes.turbo_lora", "MiniMaxH3_TurboLoRA"),
+    (".mmx_nodes.hybrid_hdr", "MiniMaxH3_HybridHDR"),
+    (".mmx_nodes.hybrid_extract", "MiniMaxH3_HybridExtract"),
+    (".mmx_nodes.color_qc", "MiniMaxH3_ColorQC"),
     (".mmx_nodes.turbo_sampler", "MiniMaxH3_TurboSampler"),
     (".mmx_nodes.audio_quality_gate", "MiniMaxH3_AudioQualityGate"),
     (".mmx_nodes.ocio_bridge", "MiniMaxH3_OCIOBridge"),
@@ -290,6 +293,18 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.turbo_lora import MiniMaxH3_TurboLoRA
 
                 nodes.append(MiniMaxH3_TurboLoRA)
+            elif mod_path.endswith("hybrid_hdr"):
+                from .mmx_nodes.hybrid_hdr import MiniMaxH3_HybridHDR
+
+                nodes.append(MiniMaxH3_HybridHDR)
+            elif mod_path.endswith("hybrid_extract"):
+                from .mmx_nodes.hybrid_extract import MiniMaxH3_HybridExtract
+
+                nodes.append(MiniMaxH3_HybridExtract)
+            elif mod_path.endswith("color_qc") and cls_name == "MiniMaxH3_ColorQC":
+                from .mmx_nodes.color_qc import MiniMaxH3_ColorQC
+
+                nodes.append(MiniMaxH3_ColorQC)
             elif mod_path.endswith("turbo_sampler"):
                 from .mmx_nodes.turbo_sampler import MiniMaxH3_TurboSampler
 

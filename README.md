@@ -31,8 +31,33 @@ MIT/Apache node pack for MiniMax H3 production workflows (V3 `io.ComfyNode` API)
 | **H3 DCC Bridge** (N14) | External EXR sim ingest (no solver) |
 | **H3 Pose Puppeteer** (N15) | Driving pose → motion hints (Union blocked) |
 | **H3 HDR Roundtrip** (N16) | OCIO view↔scene with HDR tag propagation |
+| **H3 Hybrid HDR LoRA** | Apply extracted HDR LoRA to Ref2VA (constant strength) |
+| **H3 Hybrid HDR Extract** | Extract LoRA from Ref2VA/FL2VA/Singularity triple on GPU box |
+| **H3 Color QC** | Hasler-Süsstrunk + luma DR + texture/flicker for Hybrid A/B |
 
 N1 is a **planner**, not a detector — wire `subject_mask` and/or `bboxes_json`.
+
+## H3 Hybrid HDR (Singularity colour without FL2VA damage)
+
+Method: for matched checkpoints, `D = FL−Ref`, `Δ = Sing−Ref`, `a = clamp(⟨Δ,D⟩/⟨D,D⟩,0,1)`, `H = Δ−a·D`; compress `H` per layer to rank‑r LoRA.
+
+**Extract** (once, on GPU box):
+
+```bash
+python tools/h3_hybrid_extract.py \
+  --ref ref2va.safetensors --fl fl2va.safetensors --sing singularity.safetensors \
+  --out models/loras/h3_hybrid_hdr.safetensors --rank 64 --blocks 25-49 --report hybrid_report
+```
+
+Or use node **MiniMaxH3_HybridExtract** in ComfyUI.
+
+**Apply**: wire **MiniMaxH3_HybridHDR** on a Ref2VA MODEL before sampling (`strength` 0.5–1.0, blocks 25–49 default).
+
+**Late-step HDR** (two-stage — not hook keyframes): sample early steps with plain Ref2VA, then continue with HybridHDR MODEL via `KSamplerAdvanced` start/end steps or `SamplerCustomAdvanced`. Do **not** use SplitSigmas on H3.
+
+**A/B workflow**: `workflows/h3_hybrid_hdr_ab.json` — Ref2VA vs Singularity vs HybridHDR @0.5/1.0 into **MiniMaxH3_ColorQC**.
+
+See `docs/PLAN_h3_hybrid_hdr.md` for limits and report interpretation.
 
 ## Dual-clock shim (P4 — not shipped)
 

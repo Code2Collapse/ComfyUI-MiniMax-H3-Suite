@@ -27,6 +27,7 @@ CORE_NODE_IDS = frozenset(
         "LoadImage",
         "VAEEncode",
         "VAEDecode",
+        "Note",
     }
 )
 
@@ -58,6 +59,7 @@ def _pack_node_ids():
     [
         WORKFLOWS / "h3_masked_face_pipeline.json",
         WORKFLOWS / "h3_full_spine_pipeline.json",
+        WORKFLOWS / "h3_hybrid_hdr_ab.json",
     ],
 )
 def test_workflow_node_types_resolve(workflow_file):

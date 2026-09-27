@@ -1,0 +1,154 @@
+{
+  "last_node_id": 12,
+  "last_link_id": 0,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "Note",
+      "pos": [0, 0],
+      "size": [520, 220],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "properties": {},
+      "widgets_values": [
+        "H3 Hybrid HDR A/B (GPU box — connect checkpoints + sampler yourself)\n\nBranches:\n  A) Ref2VA base → decode → ColorQC\n  B) Singularity → decode → ColorQC\n  C) Ref2VA + HybridHDR LoRA strength 0.5 → decode → ColorQC\n  D) Ref2VA + HybridHDR LoRA strength 1.0 → decode → ColorQC\n\nLate HDR (two-stage, NOT hook keyframes):\n  1) Sample early steps with plain Ref2VA MODEL\n  2) Continue late steps with HybridHDR patched MODEL\n  Use KSamplerAdvanced start_at_step / end_at_step or SamplerCustomAdvanced — do NOT use SplitSigmas on H3.\n\nExtract LoRA once: MiniMaxH3_HybridExtract or tools/h3_hybrid_extract.py"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 2,
+      "type": "MiniMaxH3_HybridExtract",
+      "pos": [0, 260],
+      "size": [400, 420],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "lora_name", "type": "STRING", "links": null},
+        {"name": "report", "type": "STRING", "links": null}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3_HybridExtract"},
+      "widgets_values": [
+        "<ref checkpoint>",
+        "",
+        "<fl checkpoint>",
+        "",
+        "<singularity checkpoint>",
+        "",
+        64,
+        true,
+        25,
+        49,
+        "auto",
+        "h3_hybrid_hdr.safetensors"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "MiniMaxH3_HybridHDR",
+      "pos": [440, 260],
+      "size": [340, 200],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": null}],
+      "outputs": [
+        {"name": "model", "type": "MODEL", "links": null},
+        {"name": "report", "type": "STRING", "links": null}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3_HybridHDR"},
+      "widgets_values": ["h3_hybrid_hdr.safetensors", 0.5, 25, 49]
+    },
+    {
+      "id": 4,
+      "type": "MiniMaxH3_HybridHDR",
+      "pos": [440, 500],
+      "size": [340, 200],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [{"name": "model", "type": "MODEL", "link": null}],
+      "outputs": [
+        {"name": "model", "type": "MODEL", "links": null},
+        {"name": "report", "type": "STRING", "links": null}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3_HybridHDR"},
+      "widgets_values": ["h3_hybrid_hdr.safetensors", 1.0, 25, 49]
+    },
+    {
+      "id": 5,
+      "type": "MiniMaxH3_ColorQC",
+      "pos": [820, 260],
+      "size": [320, 120],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": null},
+        {"name": "reference", "type": "IMAGE", "link": null}
+      ],
+      "outputs": [
+        {"name": "report", "type": "STRING", "links": null},
+        {"name": "preview", "type": "IMAGE", "links": null}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3_ColorQC"},
+      "widgets_values": []
+    },
+    {
+      "id": 6,
+      "type": "MiniMaxH3_ColorQC",
+      "pos": [820, 400],
+      "size": [320, 120],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": null}],
+      "outputs": [
+        {"name": "report", "type": "STRING", "links": null},
+        {"name": "preview", "type": "IMAGE", "links": null}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3_ColorQC"},
+      "widgets_values": []
+    },
+    {
+      "id": 7,
+      "type": "MiniMaxH3_ColorQC",
+      "pos": [820, 540],
+      "size": [320, 120],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": null}],
+      "outputs": [
+        {"name": "report", "type": "STRING", "links": null},
+        {"name": "preview", "type": "IMAGE", "links": null}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3_ColorQC"},
+      "widgets_values": []
+    },
+    {
+      "id": 8,
+      "type": "MiniMaxH3_ColorQC",
+      "pos": [820, 680],
+      "size": [320, 120],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": null}],
+      "outputs": [
+        {"name": "report", "type": "STRING", "links": null},
+        {"name": "preview", "type": "IMAGE", "links": null}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3_ColorQC"},
+      "widgets_values": []
+    }
+  ],
+  "links": [],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

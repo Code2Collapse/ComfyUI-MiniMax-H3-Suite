@@ -112,3 +112,30 @@ N2 produces the video-side latent mask. N4 writes `latent["noise_mask"] = Nested
 - **P7** — needs LoRA asset.
 - **P8** — LongMedia-sized; deferred.
 - **P12 audio QC** — needs decoded H3 output; skipped.
+
+---
+
+# H3 Hybrid HDR A/B — `h3_hybrid_hdr_ab.json`
+
+**Status: layout + node placeholders only — not run end-to-end on the authoring machine (no H3 weights).** Design: `docs/PLAN_h3_hybrid_hdr.md`.
+
+## Branches (wire on GPU box)
+
+| Branch | MODEL | HybridHDR strength | ColorQC |
+|--------|-------|-------------------|---------|
+| A | Ref2VA base | — | yes |
+| B | Singularity | — | yes |
+| C | Ref2VA | 0.5 | yes |
+| D | Ref2VA | 1.0 | yes |
+
+1. Run **MiniMaxH3_HybridExtract** once (or `tools/h3_hybrid_extract.py`) with matched Ref2VA / FL2VA / Singularity variants.
+2. Decode each branch to IMAGE → **MiniMaxH3_ColorQC** (optional shared reference frame for Oklab distance).
+
+## Two-stage late HDR (not hook keyframes)
+
+HybridHDR applies **constant** LoRA strength. For “Ref2VA early, HDR late”:
+
+1. Sample steps `0 … N` with plain Ref2VA MODEL.
+2. Continue steps `N … end` with **MiniMaxH3_HybridHDR** patched MODEL.
+
+Use **KSamplerAdvanced** (`start_at_step` / `end_at_step`) or **SamplerCustomAdvanced** — **never SplitSigmas** on H3.
