@@ -28,6 +28,7 @@ import {
   app,
   chainOnRemoved,
   disposeState,
+  observeResize,
   rafThrottle,
   setupDpiCanvas,
   themeVar,
@@ -232,6 +233,7 @@ function build(node) {
   };
 
   st.paint = rafThrottle(paint);
+  observeResize(node, wrap, st.paint);
   addDomWidgetLast(node, "mmx_negpip_ledger", wrap,
     () => Math.max(MIN_H, HEAD_H + Math.min(st.rows, MAX_ROWS) * ROW_H + 6) + st.capH);
 

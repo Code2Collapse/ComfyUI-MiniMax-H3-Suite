@@ -37,6 +37,7 @@ import {
   disposeState,
   drawPlaceholder,
   parseJsonSafe,
+  observeResize,
   rafThrottle,
   setupDpiCanvas,
   themeVar,
@@ -253,6 +254,7 @@ function build(node) {
   };
 
   st.paint = rafThrottle(paint);
+  observeResize(node, wrap, st.paint);
 
   function hit(ev) {
     const r = canvas.getBoundingClientRect();

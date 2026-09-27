@@ -58,7 +58,7 @@ function buildStrip(stage) {
   const el = document.createElement("div");
   el.style.cssText =
     "display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;" +
-    `font:10px system-ui,sans-serif;color:${themeVar("inputText")};padding:1px 2px;`;
+    `font:10px system-ui,sans-serif;color:${themeVar("inputText")};padding:1px 2px;min-height:14px;`;
 
   const badge = document.createElement("span");
   if (stage) {
@@ -99,8 +99,11 @@ app.registerExtension({
           const ui = buildStrip(stage);
           const st = { ui, status: ui.status, t0: 0, fullError: "" };
           this[ST] = st;
-          const w = this.addDOMWidget("mmx_status", "div", ui.el, { serialize: false });
-          w.computeSize = (width) => [width, 15];
+          // ComfyUI insets a DOM widget by `margin` (default 10) on every side:
+          // a 15px slot gave the strip no room and its badge spilled past the
+          // node's bottom edge. 2px margin in an 18px slot fits the 14px strip.
+          const w = this.addDOMWidget("mmx_status", "div", ui.el, { serialize: false, margin: 2 });
+          w.computeSize = (width) => [width, 18];
           chainOnRemoved(this, () => { delete this[ST]; });
           setStatus(st, "", "");
         }

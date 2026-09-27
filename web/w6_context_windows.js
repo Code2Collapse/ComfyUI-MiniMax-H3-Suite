@@ -23,6 +23,7 @@ import {
   drawPlaceholder,
   firstUiString,
   parseJsonSafe,
+  observeResize,
   rafThrottle,
   setupDpiCanvas,
   themeVar,
@@ -70,6 +71,7 @@ function build(node) {
   };
   node[ST_KEY] = st;
   st.paint = rafThrottle(() => draw(st));
+  observeResize(node, box, st.paint);
 
   const pick = (clientX, clientY) => {
     if (!st.plan) return -1;
@@ -106,7 +108,7 @@ function build(node) {
 
 function draw(st) {
   const { canvas, ctx } = st;
-  const w = canvas.clientWidth || 320;
+  const w = canvas.parentElement?.clientWidth || canvas.clientWidth || 320;
   const h = canvas.clientHeight || MIN_H;
   setupDpiCanvas(canvas, w, h);
   ctx.clearRect(0, 0, w, h);

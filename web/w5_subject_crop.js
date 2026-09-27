@@ -25,6 +25,7 @@ import {
   drawPlaceholder,
   firstUiString,
   parseJsonSafe,
+  observeResize,
   rafThrottle,
   setupDpiCanvas,
   themeVar,
@@ -82,6 +83,7 @@ function buildDom(node) {
 
   const paint = rafThrottle(() => draw(st));
   st.paint = paint;
+  observeResize(node, box, paint);
 
   slider.addEventListener("input", () => {
     st.frame = Number(slider.value) || 0;
@@ -128,7 +130,7 @@ function setPlaying(st, on) {
 
 function draw(st) {
   const { canvas, ctx } = st;
-  const cssW = canvas.clientWidth || 300;
+  const cssW = canvas.parentElement?.clientWidth || canvas.clientWidth || 300;
   const cssH = canvas.clientHeight || MIN_H;
   setupDpiCanvas(canvas, cssW, cssH);
   ctx.clearRect(0, 0, cssW, cssH);

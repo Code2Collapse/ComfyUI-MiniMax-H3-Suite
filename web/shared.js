@@ -136,6 +136,16 @@ export function widgetByName(node, name) {
  * Append DOM widget LAST — built-in schema widgets are already present when JS runs.
  * Never call addWidget after addDOMWidget (Comfy-Org/ComfyUI_frontend#7942).
  */
+/** Repaint when `el` changes size - the node was resized. Without it a viewer
+ *  kept the width it was first painted at and the rest of a widened node was
+ *  dead space. Disconnected when the node is removed. */
+export function observeResize(node, el, repaint) {
+  if (typeof ResizeObserver !== "function" || !el) return;
+  const ro = new ResizeObserver(() => repaint());
+  ro.observe(el);
+  chainOnRemoved(node, () => ro.disconnect());
+}
+
 export function addDomWidgetLast(node, id, el, computeHeight) {
   const w = node.addDOMWidget(id, "div", el, { serialize: false });
   w.computeSize = (width) => [0, computeHeight(width)];
@@ -227,6 +237,26 @@ export function parseJsonSafe(text) {
   try { return JSON.parse(s); } catch (_) { return null; }
 }
 
+/** Split `text` into lines no wider than `maxW` in ctx's current font.
+ *  Explicit "\n" breaks are kept; a single word wider than maxW gets its own line. */
+export function wrapText(ctx, text, maxW) {
+  const out = [];
+  for (const para of String(text || "").split("\n")) {
+    let line = "";
+    for (const word of para.split(/\s+/).filter(Boolean)) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(next).width > maxW) {
+        out.push(line);
+        line = word;
+      } else {
+        line = next;
+      }
+    }
+    out.push(line);
+  }
+  return out;
+}
+
 export function drawPlaceholder(ctx, w, h, message, state = "empty") {
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = themeVar("menuBg");
@@ -237,7 +267,9 @@ export function drawPlaceholder(ctx, w, h, message, state = "empty") {
   ctx.font = "12px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const lines = String(message || "").split("\n");
+  // Word-wrapped to the box: centred single lines ran off both edges of any
+  // box narrower than the hint (Mask Prep's half-width pane, Pose Puppeteer).
+  const lines = wrapText(ctx, message, Math.max(40, w - 16));
   const lh = 16;
   const y0 = h / 2 - ((lines.length - 1) * lh) / 2;
   lines.forEach((ln, i) => ctx.fillText(ln, w / 2, y0 + i * lh));

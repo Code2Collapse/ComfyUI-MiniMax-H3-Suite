@@ -31,6 +31,7 @@ import {
   app,
   chainOnRemoved,
   disposeState,
+  observeResize,
   rafThrottle,
   setupDpiCanvas,
   themeVar,
@@ -255,6 +256,7 @@ function build(node) {
   };
 
   st.paint = rafThrottle(paint);
+  observeResize(node, wrap, st.paint);
   addDomWidgetLast(node, "mmx_swap_scope", wrap, () => PANEL_H + st.capH);
 
   for (const name of ["swap_scope", "drive_jaw", "drive_mouth"]) {
