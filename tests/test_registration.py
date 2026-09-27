@@ -276,7 +276,9 @@ def test_every_node_has_a_category_and_outputs():
     for node in _node_list(pack):
         s = node.define_schema()
         assert s.category, f"{s.node_id} has no category"
-        assert s.category.startswith("MiniMax H3/"), f"{s.node_id}: {s.category}"
+        # as registered: under the one Code2Collapse menu root (_c2c_menu.py)
+        assert s.category.startswith("\U0001F43A C2C/\U0001F39E️ MiniMax H3/"), (
+            f"{s.node_id}: {s.category}")
         assert s.outputs, f"{s.node_id} declares no outputs"
 
 

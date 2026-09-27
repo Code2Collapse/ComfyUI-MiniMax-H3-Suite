@@ -550,7 +550,17 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
 class MiniMaxH3Extension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        return _load_nodes()
+        nodes = _load_nodes()
+        # One menu root for every Code2Collapse pack: "🐺 C2C/<pack>/<family>"
+        # (see _c2c_menu.py). V3 categories come from define_schema, so it is
+        # wrapped there. Guarded: a menu placement must never cost the nodes.
+        try:
+            from ._c2c_menu import rebrand_v3
+
+            rebrand_v3(nodes, "\U0001F39E\uFE0F MiniMax H3", strip=("MiniMax H3",))
+        except Exception as exc:  # noqa: BLE001
+            _LOG.warning("C2C menu root not applied: %s", exc)
+        return nodes
 
 
 async def comfy_entrypoint() -> MiniMaxH3Extension:
