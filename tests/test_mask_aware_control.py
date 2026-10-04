@@ -380,12 +380,12 @@ def test_the_gate_plot_reads_widgets_that_exist():
     src = (PACK / "web" / "w7_mask_aware_control.js").read_text(encoding="utf-8")
     names = {getattr(i, "id", None)
              for i in MiniMaxH3_MaskAwareControlNet.define_schema().inputs}
-    for widget in re.findall(r'read\("([^"]+)"', src):
+    for widget in re.findall(r'read\((?:node,\s*)?"([^"]+)"', src):
         assert widget in names, (
             f"the gate plot reads widget {widget!r}, which this node does not have"
         )
     assert {"preserved_strength", "boundary_softness"} <= set(
-        re.findall(r'read\("([^"]+)"', src))
+        re.findall(r'read\((?:node,\s*)?"([^"]+)"', src))
 
 
 def test_the_plot_module_has_no_vue_and_chains_teardown():
@@ -399,4 +399,11 @@ def test_the_plot_module_has_no_vue_and_chains_teardown():
     vue = [spec for spec in imports if "vue" in spec.lower()]
     assert not vue, f"Vue is imported here: {vue}"
     assert "chainOnRemoved" in src, "an unchained onRemoved leaks the observer"
-    assert "rafThrottle" in src, "an unthrottled repaint runs on every widget pixel"
+    assert "lineChart" in src, "the gate curve must use the shared lineChart"
+    loop_pat = re.compile(r"requestAnimationFrame\s*\(\s*(?:function\s*)?\(?\s*(\w+)")
+    for m in loop_pat.finditer(src):
+        name = m.group(1)
+        if re.search(rf"requestAnimationFrame\s*\(\s*{name}\b", src):
+            raise AssertionError(
+                "a per-frame rAF loop must not drive widget repaints",
+            )

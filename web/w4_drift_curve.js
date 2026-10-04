@@ -3,180 +3,183 @@
  * Reads structured mmx_drift JSON from UI payload.
  */
 import {
-  addDomWidgetLast,
   app,
   bindExecutionLifecycle,
   chainOnRemoved,
   disposeState,
-  drawLoadingSpinner,
-  drawPlaceholder,
   firstUiString,
   parseJsonSafe,
-  rafThrottle,
-  setupDpiCanvas,
-  startLoadingLoop,
-  stopLoadingLoop,
-  themeVar,
+  widgetByName,
 } from "./shared.js";
+import {
+  lineChart,
+  mountPanel,
+  installZoomRepaint,
+} from "./c2c_ui/index.js";
 
 const NODE = "MiniMaxH3_DriftQC";
 const ST_KEY = "_mmxW4";
-const MIN_H = 130;
+const PANEL_MIN = 230;
+const NODE_MIN_W = 380;
+
+function buildHeaderText(series, threshold, peakPx, peakFrame, passed) {
+  const over = series.filter((v) => v > threshold).length;
+  const peakStr = Number(peakPx).toFixed(1);
+  const thrStr = Number(threshold).toFixed(1);
+  const frameStr = peakFrame >= 0 ? peakFrame : 0;
+  if (!passed) {
+    const overNote = over > 0 ? ` (${over} frame${over === 1 ? "" : "s"} over)` : "";
+    return `Peak ${peakStr} px at frame ${frameStr} is above ${thrStr} px${overNote}`;
+  }
+  return `Peak ${peakStr} px at frame ${frameStr} stays under ${thrStr} px`;
+}
+
+function setHeader(st, passed, text) {
+  const pill = st.pill;
+  pill.textContent = passed === true ? "PASS" : passed === false ? "FAIL" : "—";
+  pill.classList.remove("c2c-ui-chart__pill--ok", "c2c-ui-chart__pill--danger");
+  if (passed === true) pill.classList.add("c2c-ui-chart__pill--ok");
+  else if (passed === false) pill.classList.add("c2c-ui-chart__pill--danger");
+  st.summary.textContent = text || "";
+}
+
+function applyPayload(st, data, node) {
+  const series = (data.drift_px || []).map(Number);
+  const threshold = Number(
+    data.threshold_px ?? widgetByName(node, "threshold_px")?.value ?? 2.0,
+  );
+  const peakPx = data.peak_px != null
+    ? Number(data.peak_px)
+    : (series.length ? Math.max(...series) : 0);
+  const peakFrame = data.peak_frame != null
+    ? Number(data.peak_frame)
+    : (series.length ? series.indexOf(Math.max(...series)) : -1);
+  const passed = Boolean(data.passed);
+
+  st.series = series;
+  st.threshold = threshold;
+  st.passed = passed;
+
+  const xs = series.map((_, i) => i);
+  st.chart.setThresholds([{
+    axis: "y",
+    value: threshold,
+    label: `${threshold.toFixed(1)} px`,
+    kind: "danger",
+  }]);
+  st.chart.setData(xs, { drift: series });
+  if (peakFrame >= 0 && series.length) {
+    st.chart.setMarkers([{
+      x: peakFrame,
+      seriesId: "drift",
+      label: `peak ${peakPx.toFixed(1)} px · f${peakFrame}`,
+    }]);
+  } else {
+    st.chart.setMarkers([]);
+  }
+  st.chart.setState("ready");
+  setHeader(st, passed, buildHeaderText(series, threshold, peakPx, peakFrame, passed));
+}
 
 function buildDom(node) {
   if (node[ST_KEY]) return node[ST_KEY];
-  const box = document.createElement("div");
-  box.style.cssText = "width:100%;height:100%;position:relative;";
-  const badge = document.createElement("div");
-  badge.style.cssText = "position:absolute;top:6px;right:8px;padding:2px 8px;border-radius:4px;font:600 11px sans-serif;z-index:2;";
-  const canvas = document.createElement("canvas");
-  canvas.style.cssText = "width:100%;height:100%;display:block;";
-  box.append(badge, canvas);
+
+  const root = document.createElement("div");
+  root.style.display = "flex";
+  root.style.flexDirection = "column";
+  root.style.gap = "4px";
+  root.style.width = "100%";
+  root.style.height = "100%";
+
+  const header = document.createElement("div");
+  header.className = "c2c-ui-chart__header";
+
+  const pill = document.createElement("span");
+  pill.className = "c2c-ui-chart__pill";
+  pill.textContent = "—";
+
+  const summary = document.createElement("span");
+  summary.className = "c2c-ui-chart__header-text";
+
+  header.appendChild(pill);
+  header.appendChild(summary);
+  root.appendChild(header);
+
+  const chart = lineChart({
+    minHeight: 130,
+    xLabel: "frame",
+    yLabel: "drift px",
+    xFormat: (v) => String(Math.round(v)),
+    series: [
+      { id: "drift", label: "drift", color: "--cu-series-2", axis: "y", points: true },
+    ],
+    empty: {
+      title: "Drift QC",
+      hint: "Run the node to see exterior drift.",
+    },
+  });
+  chart.setState("empty");
+  root.appendChild(chart.el);
 
   const st = {
-    box,
-    canvas,
-    badge,
+    root,
+    chart,
+    header,
+    pill,
+    summary,
     state: "empty",
     message: "Run the node to see exterior drift.",
     series: null,
+    threshold: 2,
     passed: null,
-    raf: 0,
     apiOff: [],
+    zoomOff: null,
+    panelWidget: null,
   };
   node[ST_KEY] = st;
 
-  addDomWidgetLast(node, "mmx_drift_curve", box, (width) => {
-    const w = Math.max(220, width || node.size?.[0] || 300);
-    return Math.max(MIN_H, Math.round(w * 0.35));
-  });
+  st.panelWidget = mountPanel(node, "mmx_drift_curve", root, { minHeight: PANEL_MIN });
+  st.panelWidget.onPanelResize = () => chart.redraw();
+  st.zoomOff = installZoomRepaint(node, () => chart.redraw(), "_c2cW4Zoom");
 
-  const paint = () => paintFrame(node);
-  const render = rafThrottle(paint);
-  st.resizeObs = new ResizeObserver(render);
-  st.resizeObs.observe(box);
   st.apiOff.push(bindExecutionLifecycle(node, st, {
     onStart: () => {
       st.state = "loading";
-      startLoadingLoop(st, paint);
+      chart.setState("loading");
     },
     onAbort: (msg) => {
-      stopLoadingLoop(st);
       if (st.state === "loading") {
         st.state = "error";
         st.message = msg || "Execution failed.";
-        render();
+        chart.setState("error", st.message);
+        setHeader(st, null, st.message);
       }
     },
   }));
 
-  chainOnRemoved(node, () => disposeState(node, ST_KEY));
-  render();
+  chainOnRemoved(node, () => {
+    try { st.zoomOff?.(); } catch (_e) { /* ignore */ }
+    try { chart.destroy(); } catch (_e) { /* ignore */ }
+    disposeState(node, ST_KEY);
+  });
+
   return st;
-}
-
-function setBadge(st, passed) {
-  const ok = themeVar("ok") || "#7ee0a8";
-  const danger = themeVar("danger") || "#f87171";
-  if (passed === true) {
-    st.badge.textContent = "PASS";
-    st.badge.style.background = "rgba(34,197,94,0.25)";
-    st.badge.style.color = ok;
-    st.badge.style.border = `1px solid ${ok}80`;
-  } else if (passed === false) {
-    st.badge.textContent = "FAIL";
-    st.badge.style.background = "rgba(239,68,68,0.25)";
-    st.badge.style.color = danger;
-    st.badge.style.border = `1px solid ${danger}80`;
-  } else {
-    st.badge.textContent = "—";
-    st.badge.style.background = "rgba(100,100,100,0.2)";
-    st.badge.style.color = themeVar("inputText");
-    st.badge.style.border = `1px solid ${themeVar("border")}`;
-  }
-}
-
-function paintFrame(node) {
-  const st = node[ST_KEY];
-  if (!st) return;
-  const rect = st.box.getBoundingClientRect();
-  const w = Math.max(1, Math.floor(rect.width));
-  const h = Math.max(1, Math.floor(rect.height));
-  const ctx = setupDpiCanvas(st.canvas, w, h);
-  setBadge(st, st.passed);
-
-  if (st.state === "loading") {
-    drawLoadingSpinner(ctx, w, h);
-    return;
-  }
-  if (st.state === "error" || st.state === "empty") {
-    drawPlaceholder(ctx, w, h, st.message, st.state === "error" ? "error" : "empty");
-    return;
-  }
-
-  const series = st.series || [];
-  if (!series.length) {
-    drawPlaceholder(ctx, w, h, "No drift samples.", "error");
-    return;
-  }
-
-  const pad = { l: 32, r: 10, t: 20, b: 22 };
-  const pw = w - pad.l - pad.r;
-  const ph = h - pad.t - pad.b;
-  ctx.fillStyle = themeVar("menuBg");
-  ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = themeVar("border");
-  ctx.strokeRect(pad.l, pad.t, pw, ph);
-
-  const maxY = Math.max(...series, 0.001);
-  const xAt = (i) => pad.l + (i / Math.max(series.length - 1, 1)) * pw;
-  const yAt = (v) => pad.t + ph - (v / maxY) * ph;
-
-  ctx.beginPath();
-  series.forEach((v, i) => {
-    const x = xAt(i);
-    if (i === 0) ctx.moveTo(x, yAt(v));
-    else ctx.lineTo(x, yAt(v));
-  });
-  ctx.strokeStyle = themeVar("primary");
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  series.forEach((v, i) => {
-    ctx.fillStyle = themeVar("primary");
-    ctx.beginPath();
-    ctx.arc(xAt(i), yAt(v), 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  ctx.fillStyle = themeVar("inputText");
-  ctx.font = "10px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("frame", pad.l + pw / 2, h - 4);
-  ctx.save();
-  ctx.translate(10, pad.t + ph / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText("drift px", 0, 0);
-  ctx.restore();
 }
 
 function handleExecuted(node, output) {
   const st = buildDom(node);
-  stopLoadingLoop(st);
   const raw = firstUiString(output, "mmx_drift");
   const data = parseJsonSafe(raw);
   if (!data || !Array.isArray(data.drift_px)) {
     st.state = "error";
     st.message = raw ? "Malformed mmx_drift UI payload." : "No mmx_drift in UI output.";
     st.passed = null;
-    paintFrame(node);
+    st.chart.setState("error", st.message);
+    setHeader(st, null, st.message);
     return;
   }
-  st.series = data.drift_px.map(Number);
-  st.passed = Boolean(data.passed);
-  st.state = "success";
-  st.message = "";
-  paintFrame(node);
+  st.state = "ready";
+  applyPayload(st, data, node);
 }
 
 app.registerExtension({
@@ -186,6 +189,7 @@ app.registerExtension({
     const _created = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       const r = _created?.apply(this, arguments);
+      if (this.size[0] < NODE_MIN_W) this.size[0] = NODE_MIN_W;
       buildDom(this);
       return r;
     };

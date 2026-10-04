@@ -238,6 +238,8 @@ def build_sigma_inspector_json(
     payload = {
         "shift_video": sv,
         "shift_audio": sa,
+        "trained_shift_video": TRAINED_SHIFT_VIDEO,
+        "trained_shift_audio": TRAINED_SHIFT_AUDIO,
         "sigmas_v": sig_list,
         "steps": steps,
     }

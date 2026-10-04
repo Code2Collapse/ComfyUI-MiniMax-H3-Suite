@@ -22,29 +22,28 @@
  * sampled with, which happens long after this node returns, and a number that
  * confident would be a guess. They go to the log instead.
  *
- * Plain ES module, no Vue, rAF-throttled, chained onRemoved.
+ * Plain ES module, no Vue, chained onRemoved.
  */
 import {
-  addDomWidgetLast,
   app,
   chainOnRemoved,
   disposeState,
-  rafThrottle,
-  setupDpiCanvas,
-  themeVar,
   widgetByName,
 } from "./shared.js";
+import {
+  lineChart,
+  mountPanel,
+  statusLine,
+  installZoomRepaint,
+} from "./c2c_ui/index.js";
 
 const NODE_ID = "MiniMaxH3_MaskAwareControlNet";
 const STATE = "_mmxMaskGate";
-const PLOT_H = 176;
+const PANEL_MIN = 280;
+const NODE_MIN_W = 380;
 
 /** The gate the node actually applies, for one row's mask value in 0..1. */
 function gateAt(maskValue, preservedStrength, softness) {
-  // soften_rows blurs the mask spatially; on this axis the effect is a ramp of
-  // width ~softness patches around the boundary, so the profile is drawn as a
-  // smoothstep whose width follows the setting. The ENDS are exact: a fully
-  // preserved row gets preserved_strength, a fully generated row gets 1.
   let m = maskValue;
   if (softness > 0) {
     const w = Math.min(0.9, softness / 8);
@@ -99,176 +98,152 @@ function regime(preserved, softness) {
   };
 }
 
+function read(node, name, fallback) {
+  const w = widgetByName(node, name);
+  return w ? Number(w.value) : fallback;
+}
+
+function buildChannelChips() {
+  const row = document.createElement("div");
+  row.className = "c2c-ui-chart__chips";
+  row.style.flexWrap = "wrap";
+  const specs = [
+    { id: "control", label: "control (24)", colour: "#6fa8d1" },
+    { id: "vis", label: "vis (1)", colour: "#6fb36f" },
+    { id: "masked", label: "masked (24)", colour: "#c89a4a" },
+  ];
+  const chips = {};
+  for (const s of specs) {
+    const chip = document.createElement("span");
+    chip.className = "c2c-ui-chart__chip";
+    chip.style.cursor = "default";
+    chip.style.pointerEvents = "none";
+    const dot = document.createElement("span");
+    dot.className = "c2c-ui-chart__chip-dot";
+    dot.style.background = s.colour;
+    chip.appendChild(dot);
+    const lbl = document.createElement("span");
+    lbl.textContent = s.label;
+    chip.appendChild(lbl);
+    row.appendChild(chip);
+    chips[s.id] = chip;
+  }
+  return { row, chips };
+}
+
+function updateChannelChips(st, ch) {
+  const on = { control: ch.hasControl, vis: true, masked: ch.hasMask };
+  for (const [id, chip] of Object.entries(st.channelChips)) {
+    chip.style.opacity = on[id] ? "1" : "0.18";
+  }
+}
+
+function rebuild(st, node) {
+  const preserved = read(node, "preserved_strength", 0);
+  const softness = read(node, "boundary_softness", 1);
+  const strength = read(node, "strength", 1);
+  const N = 64;
+  const xs = [];
+  const gate = [];
+  for (let i = 0; i < N; i++) {
+    const m = i / (N - 1);
+    xs.push(m);
+    gate.push(gateAt(m, preserved, softness) * Math.min(1, strength));
+  }
+  st.chart.setData(xs, { gate });
+
+  const thresholds = [
+    { axis: "y", value: preserved, label: `preserved ${preserved.toFixed(2)}` },
+    { axis: "y", value: 1, label: "full control" },
+  ];
+  if (softness > 0) {
+    const w = Math.min(0.9, softness / 8);
+    thresholds.push(
+      { axis: "x", value: 0.5 - w / 2, label: "ramp start" },
+      { axis: "x", value: 0.5 + w / 2, label: "ramp end" },
+    );
+  }
+  st.chart.setThresholds(thresholds);
+  st.chart.setMarkers([]);
+
+  const info = regime(preserved, softness);
+  st.regimeLine.setText(`${info.title}. ${info.body}`, info.tone);
+
+  const ch = channels(node);
+  updateChannelChips(st, ch);
+  const mode = ch.inpaint
+    ? "inpaint — all 49 channels carry data"
+    : "structural only — visibility filled with ONES, so nothing reads as a hole";
+  st.modeLine.setText(mode, "default");
+
+  st.chart.setState("ready");
+}
+
 function build(node) {
-  const wrap = document.createElement("div");
-  Object.assign(wrap.style, {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "4px 2px 2px",
-    font: "11px system-ui, sans-serif",
-    color: themeVar("inputText") || "#ddd",
+  const root = document.createElement("div");
+  root.style.display = "flex";
+  root.style.flexDirection = "column";
+  root.style.gap = "4px";
+  root.style.width = "100%";
+  root.style.height = "100%";
+
+  const chart = lineChart({
+    minHeight: 150,
+    xLabel: "mask fraction (preserved → generated)",
+    yLabel: "control strength",
+    xFormat: (v) => v.toFixed(2),
+    yFormat: (v) => v.toFixed(2),
+    series: [
+      { id: "gate", label: "gate", color: "--cu-series-1", axis: "y" },
+    ],
   });
 
-  const canvas = document.createElement("canvas");
-  Object.assign(canvas.style, {
-    width: "100%",
-    height: `${PLOT_H}px`,
-    display: "block",
-    borderRadius: "4px",
-  });
+  const { row: channelRow, chips: channelChips } = buildChannelChips();
+  const regimeLine = statusLine();
+  const modeLine = statusLine();
 
-  const caption = document.createElement("div");
-  Object.assign(caption.style, {
-    padding: "4px 4px 0",
-    lineHeight: "1.45",
-    whiteSpace: "pre-line",
-  });
-
-  wrap.append(canvas, caption);
+  root.appendChild(chart.el);
+  root.appendChild(channelRow);
+  root.appendChild(regimeLine.el);
+  root.appendChild(modeLine.el);
 
   const st = {
-    // no raf handle here: rafThrottle owns its own, and st.dead makes a late
-    // frame a no-op
     dead: false,
-    el: wrap,
-    canvas,
-    caption,
+    root,
+    chart,
+    channelChips,
+    regimeLine,
+    modeLine,
+    zoomOff: null,
   };
   node[STATE] = st;
 
-  const read = (name, fallback) => {
-    const w = widgetByName(node, name);
-    return w ? Number(w.value) : fallback;
+  st.zoomOff = installZoomRepaint(node, () => chart.redraw(), "_c2cW7Zoom");
+  mountPanel(node, "mmx_mask_gate", root, { minHeight: PANEL_MIN });
+  chart.el.querySelector(".c2c-ui-chart__plot-wrap").style.minHeight = "150px";
+
+  const repaint = () => {
+    if (st.dead) return;
+    rebuild(st, node);
   };
 
-  const paint = () => {
-    if (st.dead || !canvas.isConnected || !canvas.clientWidth) return;
-    // setupDpiCanvas returns the context and has ALREADY applied the
-    // device-pixel transform, so everything below is in CSS pixels.
-    const w = canvas.clientWidth;
-    const h = PLOT_H;
-    const ctx = setupDpiCanvas(canvas, w, h);
-    if (!ctx) return;
-
-    const preserved = read("preserved_strength", 0);
-    const softness = read("boundary_softness", 1);
-    const strength = read("strength", 1);
-
-    // short key, not the raw var: see themeVar in shared.js. A wrong
-    // name here paints the whole plot white in a dark theme.
-    const bg = themeVar("inputBg") || "#1e1e1e";
-    const grid = "rgba(255,255,255,0.10)";
-    const ink = themeVar("inputText") || "#ddd";
-
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, w, h);
-
-    // The two ends of the axis are what the user is reasoning about, so they
-    // get a band each rather than a bare tick.
-    const pad = 22;
-    const plotW = w - pad * 2;
-    const plotH = h - pad - 34;
-
-    ctx.fillStyle = "rgba(90,120,160,0.16)";
-    ctx.fillRect(pad, 6, plotW * 0.18, plotH);
-    ctx.fillStyle = "rgba(120,160,90,0.16)";
-    ctx.fillRect(pad + plotW * 0.82, 6, plotW * 0.18, plotH);
-
-    ctx.strokeStyle = grid;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let i = 0; i <= 4; i++) {
-      const y = 6 + (plotH * i) / 4;
-      ctx.moveTo(pad, y);
-      ctx.lineTo(pad + plotW, y);
-    }
-    ctx.stroke();
-
-    const info = regime(preserved, softness);
-    const curve =
-      info.tone === "error" ? (themeVar("danger") || "#f87171")
-      : info.tone === "warn" ? (themeVar("warn") || "#ffd166")
-      : (themeVar("ok") || "#7ee0a8");
-
-    ctx.strokeStyle = curve;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    const N = Math.max(48, Math.round(plotW));
-    for (let i = 0; i < N; i++) {
-      const m = i / (N - 1);
-      const g = gateAt(m, preserved, softness) * Math.min(1, strength);
-      const x = pad + m * plotW;
-      const y = 6 + plotH - Math.min(1, Math.max(0, g)) * plotH;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.font = "10px system-ui, sans-serif";
-    ctx.fillText("preserved", pad + 2, h - 4);
-    const rightLabel = "generated";
-    const tw = ctx.measureText(rightLabel).width;
-    ctx.fillText(rightLabel, pad + plotW - tw - 2, h - 4);
-    ctx.fillText("full control", pad + 2, 14);
-
-    // The channel budget, drawn as three blocks. The visibility block is
-    // the one worth seeing: ComfyUI leaves it at ZERO when no mask is
-    // connected, and zero means "this is a hole", so a control-only graph
-    // silently asks the Union model to inpaint the whole frame. Here it is
-    // always live.
-    const ch = channels(node);
-    const blocks = [
-      { n: 24, on: ch.hasControl, colour: "#6fa8d1" },
-      { n: 1, on: true, colour: "#6fb36f" },
-      { n: 24, on: ch.hasMask, colour: "#c89a4a" },
-    ];
-    let bx = pad;
-    const by = h - 28;
-    for (const b of blocks) {
-      const bw = (b.n / 49) * plotW;
-      ctx.globalAlpha = b.on ? 1 : 0.10;
-      ctx.fillStyle = b.on ? b.colour : ink;
-      ctx.fillRect(bx, by, Math.max(1, bw - 1), 7);
-      bx += bw;
-    }
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.fillText("49 ch: control / vis / masked", pad, by - 2);
-
-    caption.style.color = info.tone === "error" ? (themeVar("danger") || "#f87171") : ink;
-    const mode = ch.inpaint
-      ? "inpaint \u2014 all 49 channels carry data"
-      : "structural only \u2014 visibility filled with ONES, so nothing "
-        + "reads as a hole";
-    caption.textContent = `${info.title}\n${info.body}\n${mode}`;
-  };
-
-  st.paint = rafThrottle(paint);
-
-  // The curve reads three widgets, so it repaints on any of them moving.
   for (const w of node.widgets || []) {
     const prev = w.callback;
     w.callback = function (...args) {
       const r = prev?.apply(this, args);
-      st.paint();
+      repaint();
       return r;
     };
   }
 
-  if (typeof ResizeObserver !== "undefined") {
-    st.ro = new ResizeObserver(() => st.paint());
-    st.ro.observe(canvas);
-  }
-
-  addDomWidgetLast(node, "mmx_mask_gate", wrap, () => PLOT_H + 58);
-
   chainOnRemoved(node, () => {
     st.dead = true;
-    st.ro?.disconnect();
+    try { st.zoomOff?.(); } catch (_e) { /* ignore */ }
+    try { chart.destroy(); } catch (_e) { /* ignore */ }
     disposeState(node, STATE);
   });
 
-  st.paint();
+  rebuild(st, node);
   return st;
 }
 
@@ -281,6 +256,7 @@ app.registerExtension({
     const onCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       const r = onCreated?.apply(this, arguments);
+      if (this.size[0] < NODE_MIN_W) this.size[0] = NODE_MIN_W;
       try {
         build(this);
       } catch (_e) {
@@ -292,7 +268,7 @@ app.registerExtension({
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function (...args) {
       const r = onConfigure?.apply(this, args);
-      this[STATE]?.paint?.();
+      if (!this[STATE]?.dead) rebuild(this[STATE], this);
       return r;
     };
   },

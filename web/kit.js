@@ -63,10 +63,14 @@ function buildStrip(stage) {
   const badge = document.createElement("span");
   if (stage) {
     badge.textContent = stage;
+    // a ghost chip: the stage hue as text and edge over a faint tint of it -
+    // a solid pastel pill read as a stock tag on the night body
+    const hue = stageColor(stage);
     badge.style.cssText =
-      "flex:0 0 auto;padding:0 5px;border-radius:7px;font-size:9px;" +
-      `letter-spacing:.3px;color:${themeVar("--c2c-scrimDark") || "#111"};` +
-      `opacity:.9;background:${stageColor(stage)};`;
+      "flex:0 0 auto;padding:0 6px;border-radius:4px;font-size:9px;font-weight:600;" +
+      `letter-spacing:.06em;text-transform:uppercase;line-height:12px;color:${hue};` +
+      `background:color-mix(in srgb, ${hue} 14%, transparent);` +
+      `border:1px solid color-mix(in srgb, ${hue} 45%, transparent);`;
   }
 
   const status = document.createElement("span");

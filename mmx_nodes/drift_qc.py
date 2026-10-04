@@ -117,8 +117,18 @@ class MiniMaxH3_DriftQC(io.ComfyNode):
         if not result.passed:
             report = "FAILED — " + report
         heatmap = result.drift_heatmap.to(original.device, original.dtype)
+        peak_px = max(result.drift_per_frame) if result.drift_per_frame else 0.0
+        peak_frame = (
+            result.drift_per_frame.index(peak_px) if result.drift_per_frame else -1
+        )
         drift_ui_json = json.dumps(
-            {"drift_px": result.drift_per_frame, "passed": bool(result.passed)},
+            {
+                "drift_px": result.drift_per_frame,
+                "passed": bool(result.passed),
+                "threshold_px": float(threshold_px),
+                "peak_px": float(peak_px),
+                "peak_frame": int(peak_frame),
+            },
             separators=(",", ":"),
         )
         # First frame only — PreviewImage writes one PNG per batch frame. The curve the

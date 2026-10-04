@@ -24,23 +24,26 @@
  * Colours mirror GROUP_COLOUR in mmx_utils/swap_control.py and are pinned by
  * tests/test_js_python_parity.py.
  *
- * Plain ES module, no Vue, rAF-throttled, chained onRemoved.
+ * Plain ES module, no Vue, chained onRemoved.
  */
 import {
-  addDomWidgetLast,
   app,
   chainOnRemoved,
   disposeState,
-  observeResize,
-  rafThrottle,
-  setupDpiCanvas,
-  themeVar,
   widgetByName,
 } from "./shared.js";
+import {
+  mountPanel,
+  statusLine,
+  installZoomRepaint,
+  canvasBackingScale,
+} from "./c2c_ui/index.js";
 
 const NODE_ID = "MiniMaxH3_SwapControl";
 const STATE = "_mmxSwapScope";
-const PANEL_H = 196;
+const PANEL_MIN = 220;
+const NODE_MIN_W = 380;
+const PANEL_H = 148;
 
 /** Mirrors GROUP_COLOUR in mmx_utils/swap_control.py. */
 const GROUP_COLOUR = {
@@ -74,6 +77,21 @@ const SCOPE_NOTE = {
   person: "Everything the dupe does — body, hands, face, gaze.",
 };
 
+const LEGEND_GROUPS = [
+  "jaw", "brows", "nose", "eyes", "pupils", "mouth",
+  "body", "feet", "left_hand", "right_hand",
+];
+
+function resolveCu(root, token, fallback) {
+  try {
+    const prop = token.startsWith("--") ? token : `--${token}`;
+    const v = getComputedStyle(root).getPropertyValue(prop).trim();
+    return v || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /** Schematic face in 0..1 box coordinates. Not a mean face — see the header. */
 function facePaths() {
   return {
@@ -87,177 +105,205 @@ function facePaths() {
   };
 }
 
+function syncLegend(st, active) {
+  for (const g of LEGEND_GROUPS) {
+    const chip = st.legendChips[g];
+    if (!chip) continue;
+    const on = active.has(g);
+    chip.style.opacity = on ? "1" : "0.22";
+    chip.querySelector(".c2c-ui-chart__chip-dot").style.opacity = on ? "1" : "0.4";
+  }
+}
+
+function paint(st, node) {
+  const scope = String(widgetByName(node, "swap_scope")?.value ?? "face");
+  const driveJaw = widgetByName(node, "drive_jaw")?.value !== false;
+  const driveMouth = widgetByName(node, "drive_mouth")?.value !== false;
+  const active = new Set(SCOPE_GROUPS[scope] || SCOPE_GROUPS.face);
+  if (!driveJaw) active.delete("jaw");
+  if (!driveMouth) active.delete("mouth");
+  const facey = ["brows", "nose", "eyes", "mouth"].some((g) => active.has(g));
+  const jawOn2 = active.has("jaw");
+
+  st.pill.textContent = scope;
+  syncLegend(st, active);
+
+  const cssW = Math.max(160, st.canvasWrap.clientWidth || 360);
+  const cssH = PANEL_H;
+  const scale = canvasBackingScale(cssW, cssH);
+  const bw = Math.max(1, Math.round(cssW * scale));
+  const bh = Math.max(1, Math.round(cssH * scale));
+  const canvas = st.canvas;
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw;
+    canvas.height = bh;
+  }
+  canvas.style.width = `${cssW}px`;
+  canvas.style.height = `${cssH}px`;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+
+  const ink = resolveCu(st.root, "--cu-ink", "#e8e6f7");
+  const dim = resolveCu(st.root, "--cu-ink-dim", "#6f6d9b");
+  const w = cssW;
+  const h = cssH;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "rgba(255,255,255,0.04)";
+  ctx.fillRect(0, 0, w, h);
+
+  const size = Math.min(h - 8, w * 0.55);
+  const bx = 12;
+  const by = (h - size) / 2;
+  const P = (p) => [bx + p[0] * size, by + p[1] * size];
+  const F = facePaths();
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const jawOn = active.has("jaw");
+  ctx.save();
+  if (!jawOn) ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = jawOn ? GROUP_COLOUR.jaw : dim;
+  if (!jawOn) ctx.globalAlpha = 0.42;
+  ctx.lineWidth = jawOn ? 2.2 : 1.5;
+  ctx.beginPath();
+  F.jaw.forEach((p, i) => { const [x, y] = P(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  const stroke = (g, wdt = 2.2) => {
+    const on = active.has(g);
+    ctx.globalAlpha = on ? 1 : 0.20;
+    ctx.strokeStyle = on ? GROUP_COLOUR[g] : dim;
+    ctx.lineWidth = on ? wdt : 1.2;
+  };
+
+  stroke("brows");
+  for (const arc of F.brows) {
+    ctx.beginPath();
+    arc.forEach((p, i) => { const [x, y] = P(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+  }
+
+  stroke("nose");
+  ctx.beginPath();
+  F.nose.forEach((p, i) => { const [x, y] = P(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke();
+
+  stroke("eyes");
+  for (const e of F.eyes) {
+    const [x, y] = P(e);
+    ctx.beginPath();
+    ctx.ellipse(x + size * 0.04, y, size * 0.075, size * 0.036, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  for (const e of F.eyes) {
+    const [x, y] = P(e);
+    ctx.globalAlpha = active.has("pupils") ? 1 : 0.22;
+    ctx.fillStyle = active.has("pupils") ? GROUP_COLOUR.pupils : dim;
+    ctx.beginPath();
+    ctx.arc(x + size * 0.04, y, Math.max(1.5, size * 0.014), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const mouthInScope = (SCOPE_GROUPS[scope] || []).includes("mouth");
+  const mouthToAudio = mouthInScope && !driveMouth;
+  ctx.save();
+  if (mouthToAudio) ctx.setLineDash([3, 3]);
+  stroke("mouth", 2.6);
+  if (mouthToAudio) {
+    ctx.strokeStyle = "rgba(255,77,115,0.45)";
+    ctx.lineWidth = 1.6;
+  }
+  const [mx, my] = P(F.mouth);
+  ctx.beginPath();
+  ctx.ellipse(mx, my, size * 0.135, size * 0.055, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(mx - size * 0.135, my);
+  ctx.lineTo(mx + size * 0.135, my);
+  ctx.stroke();
+  ctx.restore();
+
+  const jl = jawOn ? "jaw — head pose + chin drop" : "jaw — not driven";
+  const jawNote = !facey
+    ? " No face group is driven in this scope."
+    : jawOn2
+      ? " A strong jaw control pulls face width toward the dupe — lower the ControlNet strength if the head starts taking their shape."
+      : " drive_jaw is off: the reference actor's skull is unopposed, but a profile will read as a front-on face and the mouth cannot open as far.";
+  const mouthNote = mouthToAudio
+    ? " drive_mouth is off: the lips are still masked, so they can change, but nothing is drawing them — lock an audio track or they have nothing to follow."
+    : "";
+  st.caption.setText(`${jl}. ${SCOPE_NOTE[scope] || ""}${jawNote}${mouthNote}`, "default");
+}
+
 function build(node) {
   disposeState(node, STATE);
 
-  const wrap = document.createElement("div");
-  wrap.style.cssText = "width:100%;box-sizing:border-box;padding:2px 2px 0;";
-  const canvas = document.createElement("canvas");
-  canvas.style.cssText = "width:100%;display:block;border-radius:4px;";
-  const caption = document.createElement("div");
-  caption.style.cssText =
-    "font:10px system-ui,sans-serif;opacity:.78;padding:4px 2px 0;line-height:1.4;";
-  wrap.append(canvas, caption);
+  const root = document.createElement("div");
+  root.style.display = "flex";
+  root.style.flexDirection = "column";
+  root.style.gap = "4px";
+  root.style.width = "100%";
 
-  const st = { canvas, caption, capH: 30 };
+  const header = document.createElement("div");
+  header.className = "c2c-ui-chart__header";
+  const pill = document.createElement("span");
+  pill.className = "c2c-ui-chart__pill";
+  pill.textContent = "face";
+  const summary = document.createElement("span");
+  summary.className = "c2c-ui-chart__header-text";
+  summary.textContent = "Groups lit in the colour the renderer uses";
+  header.appendChild(pill);
+  header.appendChild(summary);
+
+  const legend = document.createElement("div");
+  legend.className = "c2c-ui-chart__chips";
+  legend.style.flexWrap = "wrap";
+  const legendChips = {};
+  for (const g of LEGEND_GROUPS) {
+    const chip = document.createElement("span");
+    chip.className = "c2c-ui-chart__chip";
+    chip.style.pointerEvents = "none";
+    const dot = document.createElement("span");
+    dot.className = "c2c-ui-chart__chip-dot";
+    dot.style.background = GROUP_COLOUR[g];
+    chip.appendChild(dot);
+    const lbl = document.createElement("span");
+    lbl.textContent = g.replace("_", " ");
+    chip.appendChild(lbl);
+    legend.appendChild(chip);
+    legendChips[g] = chip;
+  }
+
+  const canvasWrap = document.createElement("div");
+  canvasWrap.style.cssText = "position:relative;min-height:160px;";
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "display:block;width:100%;height:160px;border-radius:4px;";
+  canvasWrap.appendChild(canvas);
+
+  const caption = statusLine();
+  root.append(header, legend, canvasWrap, caption.el);
+
+  const st = {
+    root, canvasWrap, canvas, pill, caption, legendChips,
+    zoomOff: null, resizeObs: null,
+  };
   node[STATE] = st;
 
-  const paint = () => {
-    const scope = String(widgetByName(node, "swap_scope")?.value ?? "face");
-    const driveJaw = widgetByName(node, "drive_jaw")?.value !== false;
-    const driveMouth = widgetByName(node, "drive_mouth")?.value !== false;
-    const active = new Set(SCOPE_GROUPS[scope] || SCOPE_GROUPS.face);
-    if (!driveJaw) active.delete("jaw");
-    if (!driveMouth) active.delete("mouth");
-    const facey = ["brows", "nose", "eyes", "mouth"].some((g) => active.has(g));
-    const jawOn2 = active.has("jaw");
+  st.paint = () => paint(st, node);
 
-    const cssW = Math.max(160, (node.size?.[0] || 360) - 24);
-    const ctx = setupDpiCanvas(canvas, cssW, PANEL_H);
-    const ink = themeVar("inputText") || "#ddd";
-    const dim = themeVar("dim") || "#999";
-    const w = cssW, h = PANEL_H;
+  const panelWidget = mountPanel(node, "mmx_swap_scope", root, { minHeight: PANEL_MIN });
+  panelWidget.onPanelResize = () => st.paint();
+  st.zoomOff = installZoomRepaint(node, () => st.paint(), "_c2cW9Zoom");
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
-    ctx.fillRect(0, 0, w, h);
-
-    // face box, left; legend, right
-    const size = Math.min(h - 26, w * 0.44);
-    const bx = 12, by = (h - size) / 2 + 6;
-    const P = (p) => [bx + p[0] * size, by + p[1] * size];
-    const F = facePaths();
-
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    // --- the jaw: lit when driven, dashed and grey when not ---
-    const jawOn = active.has("jaw");
-    ctx.save();
-    if (!jawOn) ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = jawOn ? GROUP_COLOUR.jaw : dim;
-    if (!jawOn) ctx.globalAlpha = 0.42;
-    ctx.lineWidth = jawOn ? 2.2 : 1.5;
-    ctx.beginPath();
-    F.jaw.forEach((p, i) => { const [x, y] = P(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.restore();
-
-    const stroke = (g, wdt = 2.2) => {
-      const on = active.has(g);
-      ctx.globalAlpha = on ? 1 : 0.20;
-      ctx.strokeStyle = on ? GROUP_COLOUR[g] : dim;
-      ctx.lineWidth = on ? wdt : 1.2;
-    };
-
-    stroke("brows");
-    for (const arc of F.brows) {
-      ctx.beginPath();
-      arc.forEach((p, i) => { const [x, y] = P(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-      ctx.stroke();
-    }
-
-    stroke("nose");
-    ctx.beginPath();
-    F.nose.forEach((p, i) => { const [x, y] = P(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-    ctx.stroke();
-
-    stroke("eyes");
-    for (const e of F.eyes) {
-      const [x, y] = P(e);
-      ctx.beginPath();
-      ctx.ellipse(x + size * 0.04, y, size * 0.075, size * 0.036, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // pupils: the only gaze signal, so they get their own mark
-    for (const e of F.eyes) {
-      const [x, y] = P(e);
-      ctx.globalAlpha = active.has("pupils") ? 1 : 0.22;
-      ctx.fillStyle = active.has("pupils") ? GROUP_COLOUR.pupils : dim;
-      ctx.beginPath();
-      ctx.arc(x + size * 0.04, y, Math.max(1.5, size * 0.014), 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    const mouthInScope = (SCOPE_GROUPS[scope] || []).includes("mouth");
-    const mouthToAudio = mouthInScope && !driveMouth;
-    ctx.save();
-    if (mouthToAudio) ctx.setLineDash([3, 3]);
-    stroke("mouth", 2.6);
-    if (mouthToAudio) {                    // masked, just not by the control
-      ctx.strokeStyle = "rgba(255,77,115,0.45)";
-      ctx.lineWidth = 1.6;
-    }
-    const [mx, my] = P(F.mouth);
-    ctx.beginPath();
-    ctx.ellipse(mx, my, size * 0.135, size * 0.055, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();                       // the lip line — an open mouth reads
-    ctx.moveTo(mx - size * 0.135, my);
-    ctx.lineTo(mx + size * 0.135, my);
-    ctx.stroke();
-    ctx.restore();
-
-    // jaw label: what it is doing right now, not a fixed claim
-    ctx.font = "9px system-ui,sans-serif";
-    ctx.textBaseline = "middle";
-    const jl = jawOn ? "jaw — head pose + chin drop" : "jaw — not driven";
-    ctx.globalAlpha = jawOn ? 0.9 : 0.75;
-    ctx.fillStyle = jawOn ? GROUP_COLOUR.jaw : dim;
-    const jx = bx + size * 0.5 - ctx.measureText(jl).width / 2;
-    const jy = by + size + 9;
-    ctx.fillText(jl, jx, jy);
-    if (!jawOn) {
-      ctx.globalAlpha = 0.5;
-      ctx.strokeStyle = dim;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(jx - 2, jy);
-      ctx.lineTo(jx + ctx.measureText(jl).width + 2, jy);
-      ctx.stroke();
-    }
-
-    // --- legend ---
-    const lx = bx + size + 18;
-    let ly = by + 2;
-    ctx.font = "10px system-ui,sans-serif";
-    for (const g of ["jaw", "brows", "nose", "eyes", "pupils", "mouth",
-                     "body", "feet", "left_hand", "right_hand"]) {
-      const on = active.has(g);
-      ctx.globalAlpha = on ? 1 : 0.22;
-      ctx.fillStyle = on ? GROUP_COLOUR[g] : dim;
-      ctx.fillRect(lx, ly - 3, 9, 6);
-      ctx.fillStyle = ink;
-      ctx.globalAlpha = on ? 0.92 : 0.34;
-      ctx.fillText(g.replace("_", " "), lx + 14, ly);
-      ctx.globalAlpha = 1;
-      ly += 15;
-      if (ly > h - 12) break;
-    }
-
-    const jawNote = !facey
-      ? " No face group is driven in this scope."
-      : jawOn2
-        ? " A strong jaw control pulls face width toward the dupe — lower the ControlNet strength if the head starts taking their shape."
-        : " drive_jaw is off: the reference actor's skull is unopposed, but a profile will read as a front-on face and the mouth cannot open as far.";
-    const mouthNote = mouthToAudio
-      ? " drive_mouth is off: the lips are still masked, so they can change, but nothing is drawing them — lock an audio track or they have nothing to follow."
-      : "";
-    ctx.globalAlpha = 1;
-    caption.textContent = (SCOPE_NOTE[scope] || "") + jawNote + mouthNote;
-    const capH = Math.max(16, caption.offsetHeight || 0) + 6;
-    if (Math.abs(capH - st.capH) > 1) {
-      st.capH = capH;
-      node.setDirtyCanvas(true, true);
-      node.setSize?.(node.computeSize?.() || node.size);
-    }
-  };
-
-  st.paint = rafThrottle(paint);
-  observeResize(node, wrap, st.paint);
-  addDomWidgetLast(node, "mmx_swap_scope", wrap, () => PANEL_H + st.capH);
+  if (typeof ResizeObserver !== "undefined") {
+    st.resizeObs = new ResizeObserver(() => st.paint());
+    st.resizeObs.observe(canvasWrap);
+  }
 
   for (const name of ["swap_scope", "drive_jaw", "drive_mouth"]) {
     const wdg = widgetByName(node, name);
@@ -270,8 +316,12 @@ function build(node) {
     };
   }
 
-  chainOnRemoved(node, () => disposeState(node, STATE));
-  paint();
+  chainOnRemoved(node, () => {
+    try { st.zoomOff?.(); } catch (_e) { /* ignore */ }
+    try { st.resizeObs?.disconnect(); } catch (_e) { /* ignore */ }
+    disposeState(node, STATE);
+  });
+  st.paint();
 }
 
 app.registerExtension({
@@ -283,6 +333,7 @@ app.registerExtension({
     const onCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       const r = onCreated?.apply(this, arguments);
+      if (this.size[0] < NODE_MIN_W) this.size[0] = NODE_MIN_W;
       try { build(this); } catch (_e) { /* a broken diagram must not kill the node */ }
       return r;
     };

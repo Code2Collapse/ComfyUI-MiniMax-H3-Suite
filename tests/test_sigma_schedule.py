@@ -63,6 +63,8 @@ def test_build_sigma_inspector_json_matches_table_steps():
 
     data = json.loads(payload)
     assert data["sigmas_v"] == [1.0, 0.5, 0.0]
+    assert data["trained_shift_video"] == TRAINED_SHIFT_VIDEO
+    assert data["trained_shift_audio"] == TRAINED_SHIFT_AUDIO
     assert len(data["steps"]) == 3
     assert data["steps"][0]["sigma_v"] == 1.0
     assert "dsigma_a_dsigma_v_fd" in data["steps"][0]

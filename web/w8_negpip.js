@@ -21,37 +21,27 @@
  *
  * Also hides prompt_prefix unless context_mode needs it.
  *
- * Plain ES module, no Vue, rAF-throttled, chained onRemoved.
+ * Plain ES module, no Vue, chained onRemoved.
  */
 import {
-  addDomWidgetLast,
   app,
   chainOnRemoved,
   disposeState,
-  observeResize,
-  rafThrottle,
-  setupDpiCanvas,
-  themeVar,
   widgetByName,
 } from "./shared.js";
+import {
+  mountPanel,
+  statusLine,
+} from "./c2c_ui/index.js";
 
 const NODE_ID = "MiniMaxH3_NegPiP";
 const STATE = "_mmxNegPiP";
-const ROW_H = 17;
-const HEAD_H = 26;
-const MIN_H = 62;
+const MIN_H = 100;
+const NODE_MIN_W = 380;
 const MAX_ROWS = 9;
-// Mirrors MAX_WEIGHT in mmx_utils/negpip.py. The python side refuses past it.
 const MAX_WEIGHT = 10.0;
-// Where the method stops behaving; not a hard limit, a drawn one.
 const SAFE = 2.0;
 
-/**
- * Same grammar as parse_terms() in mmx_utils/negpip.py: one phrase per line,
- * "# " comments and blanks dropped, an optional trailing ":number" weight.
- * Kept deliberately small and mirrored rather than shared - if the two ever
- * disagree the python side is authoritative and will say so on execute.
- */
 function parseTerms(text) {
   const out = [];
   for (const raw of String(text || "").split("\n")) {
@@ -70,172 +60,138 @@ function problemWith(term) {
   return null;
 }
 
+function rebuild(st, node) {
+  const termsW = widgetByName(node, "terms");
+  const strengthW = widgetByName(node, "strength");
+  const modeW = widgetByName(node, "context_mode");
+  const prefixW = widgetByName(node, "prompt_prefix");
+
+  if (prefixW) {
+    const needed = String(modeW?.value ?? "standalone") === "prompt_prefix";
+    if (prefixW.hidden !== !needed) {
+      prefixW.hidden = !needed;
+      if (prefixW.element) prefixW.element.hidden = !needed;
+      node.setDirtyCanvas(true, true);
+    }
+  }
+
+  const terms = parseTerms(termsW?.value);
+  const strength = Number(strengthW?.value ?? 1);
+  const shown = terms.slice(0, MAX_ROWS);
+  const span = Math.max(SAFE * 1.5, Math.abs(strength) * Math.max(
+    1, ...terms.map((t) => Math.abs(t.weight) || 1)));
+
+  st.axisHint.textContent = terms.length
+    ? `V × 0 → −${span.toFixed(1)}`
+    : "one phrase per line — 'blurry' or 'blurry : 1.5'";
+
+  const degradePct = shown.length && SAFE < span
+    ? `${((1 - SAFE / span) * 100).toFixed(1)}%`
+    : "0%";
+  st.tbody.innerHTML = "";
+  st.table.style.display = shown.length ? "" : "none";
+
+  shown.forEach((term) => {
+    const bad = problemWith(term);
+    const mag = Math.abs(strength) * Math.abs(term.weight);
+    const pct = Math.min(100, (mag / span) * 100);
+    const tr = document.createElement("tr");
+
+    const tdPhrase = document.createElement("td");
+    tdPhrase.className = "c2c-ui-ledger__phrase";
+    tdPhrase.textContent = bad ? `${term.phrase} — ${bad}` : term.phrase;
+    if (bad) tdPhrase.style.opacity = "0.65";
+
+    const tdBar = document.createElement("td");
+    tdBar.className = "c2c-ui-ledger__bar";
+    if (shown.length && SAFE < span) {
+      tdBar.classList.add("c2c-ui-ledger__bar--degrade");
+      tdBar.style.setProperty("--ledger-degrade-pct", degradePct);
+    }
+    const fill = document.createElement("div");
+    fill.className = "c2c-ui-ledger__fill";
+    fill.style.width = `${pct}%`;
+    fill.style.background = bad ? "var(--cu-danger, #f27a92)"
+      : (mag > SAFE ? "var(--cu-warn, #f3d288)" : "var(--cu-accent, #b494ff)");
+    tdBar.appendChild(fill);
+
+    const tdVal = document.createElement("td");
+    tdVal.className = "c2c-ui-ledger__val";
+    tdVal.textContent = bad ? "—" : `${(-mag).toFixed(2)}`;
+    if (bad) tdVal.style.color = "var(--cu-danger, #f27a92)";
+
+    tr.append(tdPhrase, tdBar, tdVal);
+    st.tbody.appendChild(tr);
+  });
+
+  if (st.rows !== shown.length) {
+    st.rows = shown.length;
+    node.setDirtyCanvas(true, true);
+  }
+
+  const hidden = terms.length - shown.length;
+  const badCount = terms.filter(problemWith).length;
+  const parts = [];
+  if (!terms.length) {
+    parts.push("No terms — the node passes the model and conditioning straight through.");
+  } else {
+    parts.push(
+      `${terms.length} term${terms.length === 1 ? "" : "s"} appended to the prompt; ` +
+      "their attention values are negated, their keys are not.");
+    if (hidden > 0) parts.push(`${hidden} more not drawn.`);
+    if (badCount) parts.push(`${badCount} line${badCount === 1 ? "" : "s"} will be refused on run.`);
+    if (Math.abs(strength) === 0) {
+      parts.push("strength 0 — the terms are in the sequence but contribute nothing.");
+    }
+    parts.push("Rides in the same forward pass as the prompt, so unlike CFG it costs no extra step time.");
+  }
+  st.caption.setText(parts.join(" "), badCount ? "danger" : "default");
+}
+
 function build(node) {
   disposeState(node, STATE);
 
-  const wrap = document.createElement("div");
-  wrap.style.cssText = "width:100%;box-sizing:border-box;padding:2px 2px 0;";
-  const canvas = document.createElement("canvas");
-  canvas.style.cssText = "width:100%;display:block;border-radius:4px;";
-  const caption = document.createElement("div");
-  caption.style.cssText =
-    "font:10px system-ui,sans-serif;opacity:.75;padding:3px 2px 0;line-height:1.35;";
-  wrap.append(canvas, caption);
+  const root = document.createElement("div");
+  root.style.display = "flex";
+  root.style.flexDirection = "column";
+  root.style.gap = "2px";
+  root.style.width = "100%";
 
-  const st = { canvas, caption, rows: 0, capH: 30 };
+  const axisHint = document.createElement("div");
+  axisHint.className = "c2c-ui-status";
+  axisHint.style.cssText = "font-variant-numeric:tabular-nums;padding:0 2px;margin:0;";
+
+  const table = document.createElement("table");
+  table.className = "c2c-ui-ledger";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  for (const h of ["term", "magnitude", "value"]) {
+    const th = document.createElement("th");
+    th.textContent = h;
+    if (h === "magnitude") th.style.width = "38%";
+    if (h === "value") th.style.width = "52px";
+    headRow.appendChild(th);
+  }
+  thead.appendChild(headRow);
+  const tbody = document.createElement("tbody");
+  table.append(thead, tbody);
+
+  const caption = statusLine();
+  root.append(axisHint, table, caption.el);
+
+  const st = { root, axisHint, table, tbody, caption, rows: 0 };
   node[STATE] = st;
 
-  const paint = () => {
-    const termsW = widgetByName(node, "terms");
-    const strengthW = widgetByName(node, "strength");
-    const modeW = widgetByName(node, "context_mode");
-    const prefixW = widgetByName(node, "prompt_prefix");
-
-    // prompt_prefix is dead weight in standalone mode; hiding it is the whole
-    // difference between "which of these two do I fill in" and a clear node.
-    if (prefixW) {
-      const needed = String(modeW?.value ?? "standalone") === "prompt_prefix";
-      if (prefixW.hidden !== !needed) {
-        prefixW.hidden = !needed;
-        if (prefixW.element) prefixW.element.hidden = !needed;
-        node.setDirtyCanvas(true, true);
-      }
-    }
-
-    const terms = parseTerms(termsW?.value);
-    const strength = Number(strengthW?.value ?? 1);
-    const shown = terms.slice(0, MAX_ROWS);
-    const h = Math.max(MIN_H, HEAD_H + shown.length * ROW_H + 6);
-    if (st.rows !== shown.length) {
-      st.rows = shown.length;
-      node.setDirtyCanvas(true, true);
-    }
-
-    const cssW = Math.max(120, (node.size?.[0] || 320) - 24);
-    const ctx = setupDpiCanvas(canvas, cssW, h);
-    const ink = themeVar("inputText") || "#ddd";
-    const danger = themeVar("danger") || "#f87171";
-    const warn = themeVar("warn") || "#ffd166";
-    const accent = themeVar("primary") || "#4cc3ff";
-    const onPanel = themeVar("bg") || "#1a1a1a";
-    const w = cssW;
-
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
-    ctx.fillRect(0, 0, w, h);
-
-    // axis: 0 on the left, -MAX on the right. Everything here is negative, so
-    // a longer bar is a harder push and the direction never has to be read.
-    const padL = 6;
-    const padR = 44;
-    const axisW = Math.max(20, w - padL - padR);
-    const span = Math.max(SAFE * 1.5, Math.abs(strength) * Math.max(
-      1, ...terms.map((t) => Math.abs(t.weight) || 1)));
-    const xOf = (mag) => padL + (Math.min(mag, span) / span) * axisW;
-
-    ctx.font = "9px system-ui,sans-serif";
-    ctx.textBaseline = "middle";
-
-    // the safe/degrading boundary, drawn once. Not drawn with no terms:
-    // an empty red zone floating next to a placeholder reads as damage,
-    // not as a scale.
-    if (shown.length && SAFE < span) {
-      const sx = xOf(SAFE);
-      ctx.fillStyle = "rgba(209,106,106,0.13)";
-      ctx.fillRect(sx, HEAD_H - 4, padL + axisW - sx, h - HEAD_H);
-      ctx.strokeStyle = "rgba(209,106,106,0.5)";
-      ctx.beginPath();
-      ctx.moveTo(sx, HEAD_H - 4);
-      ctx.lineTo(sx, h - 3);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(209,106,106,0.8)";
-      ctx.fillText("degrades", sx + 3, HEAD_H - 11);
-    }
-
-    ctx.fillStyle = ink;
-    ctx.globalAlpha = 0.55;
-    ctx.fillText(
-      terms.length
-        ? `V x  0${" ".repeat(2)}→  -${span.toFixed(1)}`
-        : "one phrase per line — 'blurry' or 'blurry : 1.5'",
-      padL, HEAD_H - 11);
-    ctx.globalAlpha = 1;
-
-    shown.forEach((term, i) => {
-      const y = HEAD_H + i * ROW_H + ROW_H / 2 - 2;
-      const bad = problemWith(term);
-      const mag = Math.abs(strength) * Math.abs(term.weight);
-      const x = xOf(mag);
-
-      ctx.fillStyle = bad ? danger : (mag > SAFE ? warn : accent);
-      ctx.fillRect(padL, y - 4, Math.max(1, x - padL), 8);
-
-      ctx.fillStyle = ink;
-      ctx.globalAlpha = bad ? 0.55 : 0.92;
-      // the reason is long; the phrase must survive the truncation, so the
-      // reason is dropped rather than eating it.
-      const room = w - padR - padL - 10;
-      const full = bad ? `${term.phrase} — ${bad}` : term.phrase;
-      const label = (bad && ctx.measureText(full).width > room)
-        ? `${term.phrase} — refused` : full;
-
-      // The label normally sits just after the bar. A long bar is exactly the
-      // row you most need to read - the one past the degrade line - and that
-      // is where the least space is left, so once the label no longer fits
-      // after the bar it moves INSIDE it and flips to dark ink for contrast.
-      const lw = ctx.measureText(label).width;
-      const after = x + 4;
-      const inside = after + lw > w - padR - 4;
-      const tx = inside ? padL + 6 : after;
-      if (inside) ctx.fillStyle = onPanel;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(padL, y - 8, w - padL - padR, 16);
-      ctx.clip();
-      ctx.fillText(label, tx, y);
-      ctx.restore();
-
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = bad ? danger : ink;
-      ctx.textAlign = "right";
-      ctx.fillText(bad ? "—" : `${(-mag).toFixed(2)}`, w - 5, y);
-      ctx.textAlign = "left";
-    });
-
-    const hidden = terms.length - shown.length;
-    const bad = terms.filter(problemWith).length;
-    const parts = [];
-    if (!terms.length) {
-      parts.push("No terms — the node passes the model and conditioning straight through.");
-    } else {
-      parts.push(
-        `${terms.length} term${terms.length === 1 ? "" : "s"} appended to the prompt; ` +
-        "their attention values are negated, their keys are not.");
-      if (hidden > 0) parts.push(`${hidden} more not drawn.`);
-      if (bad) parts.push(`${bad} line${bad === 1 ? "" : "s"} will be refused on run.`);
-      if (Math.abs(strength) === 0) {
-        parts.push("strength 0 — the terms are in the sequence but contribute nothing.");
-      }
-      parts.push("Rides in the same forward pass as the prompt, so unlike CFG it costs no extra step time.");
-    }
-    caption.style.color = bad ? danger : "";
-    caption.textContent = parts.join(" ");
-
-    // The caption wraps, and how far depends on the node's width and on how
-    // many terms there are. A fixed allowance clipped the last line off the
-    // bottom of the node, so measure it and re-lay-out when it changes.
-    const capH = Math.max(16, caption.offsetHeight || 0) + 6;
-    if (Math.abs(capH - st.capH) > 1) {
-      st.capH = capH;
-      node.setDirtyCanvas(true, true);
-      node.setSize?.(node.computeSize?.() || node.size);
-    }
+  const panelWidget = mountPanel(node, "mmx_negpip_ledger", root, { minHeight: MIN_H });
+  panelWidget.computeSize = (w) => {
+    const rowH = 22;
+    const headH = st.rows > 0 ? 18 : 0;
+    const tableH = headH + Math.min(st.rows, MAX_ROWS) * rowH;
+    const capH = 22;
+    return [w, 18 + tableH + capH + 4];
   };
 
-  st.paint = rafThrottle(paint);
-  observeResize(node, wrap, st.paint);
-  addDomWidgetLast(node, "mmx_negpip_ledger", wrap,
-    () => Math.max(MIN_H, HEAD_H + Math.min(st.rows, MAX_ROWS) * ROW_H + 6) + st.capH);
+  const repaint = () => rebuild(st, node);
 
   for (const name of ["terms", "strength", "context_mode"]) {
     const wdg = widgetByName(node, name);
@@ -243,14 +199,13 @@ function build(node) {
     const prev = wdg.callback;
     wdg.callback = function (...args) {
       const r = prev?.apply(this, args);
-      st.paint();
+      repaint();
       return r;
     };
   }
-  // the terms box is a textarea: typing does not fire the widget callback
   const termsW = widgetByName(node, "terms");
   if (termsW?.element) {
-    const onInput = () => st.paint();
+    const onInput = () => repaint();
     termsW.element.addEventListener("input", onInput);
     st.detach = () => termsW.element.removeEventListener("input", onInput);
   }
@@ -259,7 +214,7 @@ function build(node) {
     st.detach?.();
     disposeState(node, STATE);
   });
-  paint();
+  repaint();
 }
 
 app.registerExtension({
@@ -271,6 +226,7 @@ app.registerExtension({
     const onCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       const r = onCreated?.apply(this, arguments);
+      if (this.size[0] < NODE_MIN_W) this.size[0] = NODE_MIN_W;
       try {
         build(this);
       } catch (_e) {
@@ -282,7 +238,8 @@ app.registerExtension({
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function (...args) {
       const r = onConfigure?.apply(this, args);
-      this[STATE]?.paint?.();
+      const st = this[STATE];
+      if (st) rebuild(st, this);
       return r;
     };
   },

@@ -3,26 +3,25 @@
  * Reads sigma_json on execute; recomputes curve client-side when shift widgets change.
  */
 import {
-  addDomWidgetLast,
   app,
   bindExecutionLifecycle,
   chainOnRemoved,
   disposeState,
-  drawLoadingSpinner,
-  drawPlaceholder,
   firstUiString,
   parseJsonSafe,
-  rafThrottle,
-  setupDpiCanvas,
-  startLoadingLoop,
-  stopLoadingLoop,
-  themeVar,
   widgetByName,
 } from "./shared.js";
+import {
+  lineChart,
+  mountPanel,
+  statusLine,
+  installZoomRepaint,
+} from "./c2c_ui/index.js";
 
 const NODE = "MiniMaxH3_SigmaInspector";
 const ST_KEY = "_mmxW3";
-const MIN_H = 160;
+const PANEL_MIN = 250;
+const NODE_MIN_W = 380;
 
 function timeShiftSigma(sigma, fromShift, toShift) {
   const s = Number(sigma);
@@ -74,48 +73,106 @@ function recomputeSteps(sigmasV, shiftVideo, shiftAudio) {
   return steps;
 }
 
+function stepsToChartData(steps) {
+  const xs = steps.map((s) => s.step);
+  return {
+    xs,
+    values: {
+      video: steps.map((s) => s.sigma_v),
+      audio: steps.map((s) => s.sigma_a),
+      ratio: steps.map((s) => s.dsigma_a_dsigma_v),
+      carry: steps.map((s) => s.carry_factor),
+    },
+  };
+}
+
+function updateShiftStatus(st, shiftVideo, shiftAudio) {
+  const tv = Number(st.trainedVideo ?? 12);
+  const ta = Number(st.trainedAudio ?? 3);
+  const sv = Number(shiftVideo);
+  const sa = Number(shiftAudio);
+  if (Math.abs(sv - tv) < 1e-4 && Math.abs(sa - ta) < 1e-4) {
+    st.status.setText(`Trained shifts ${tv} / ${ta}`, "ok");
+  } else {
+    st.status.setText(
+      `Shifts ${sv} / ${sa} differ from the trained ${tv} / ${ta} — audio and video may drift apart`,
+      "warn",
+    );
+  }
+}
+
+function pushSteps(st) {
+  if (!st.steps?.length) return;
+  const { xs, values } = stepsToChartData(st.steps);
+  st.chart.setData(xs, values);
+  updateShiftStatus(st, st.shiftVideo, st.shiftAudio);
+}
+
 function buildDom(node) {
   if (node[ST_KEY]) return node[ST_KEY];
-  const box = document.createElement("div");
-  box.style.cssText = "width:100%;height:100%;position:relative;";
-  const canvas = document.createElement("canvas");
-  canvas.style.cssText = "width:100%;height:100%;display:block;";
-  box.appendChild(canvas);
+
+  const root = document.createElement("div");
+  root.style.display = "flex";
+  root.style.flexDirection = "column";
+  root.style.gap = "4px";
+  root.style.width = "100%";
+  root.style.height = "100%";
+
+  const chart = lineChart({
+    minHeight: 150,
+    xLabel: "step",
+    yLabel: "σ",
+    y2Label: "dσa/dσv",
+    xFormat: (v) => String(Math.round(v)),
+    series: [
+      { id: "video", label: "σ video", color: "--cu-series-1", axis: "y" },
+      { id: "audio", label: "σ audio", color: "--cu-series-3", axis: "y" },
+      { id: "ratio", label: "dσa/dσv", color: "--cu-series-4", axis: "y2", dashed: true },
+      { id: "carry", label: "carry σv/σa", color: "--cu-series-2", plot: false, readout: true },
+    ],
+    empty: {
+      title: "Sigma Inspector",
+      hint: "Run the node to see the sigma curve.",
+    },
+  });
+  chart.setState("empty");
+
+  const status = statusLine();
+  root.appendChild(chart.el);
+  root.appendChild(status.el);
 
   const st = {
-    box,
-    canvas,
+    root,
+    chart,
+    status,
     state: "empty",
     message: "Run the node to see the sigma curve.",
     sigmasV: null,
     steps: null,
     shiftVideo: 12,
     shiftAudio: 3,
-    raf: 0,
+    trainedVideo: 12,
+    trainedAudio: 3,
     apiOff: [],
+    zoomOff: null,
+    panelWidget: null,
   };
   node[ST_KEY] = st;
 
-  addDomWidgetLast(node, "mmx_sigma_plot", box, (width) => {
-    const w = Math.max(240, width || node.size?.[0] || 320);
-    return Math.max(MIN_H, Math.round(w * 0.45));
-  });
+  st.panelWidget = mountPanel(node, "mmx_sigma_plot", root, { minHeight: PANEL_MIN });
+  st.panelWidget.onPanelResize = () => chart.redraw();
+  st.zoomOff = installZoomRepaint(node, () => chart.redraw(), "_c2cW3Zoom");
 
-  const paint = () => paintFrame(node);
-  const render = rafThrottle(paint);
-  st.resizeObs = new ResizeObserver(render);
-  st.resizeObs.observe(box);
   st.apiOff.push(bindExecutionLifecycle(node, st, {
     onStart: () => {
       st.state = "loading";
-      startLoadingLoop(st, paint);
+      chart.setState("loading");
     },
     onAbort: (msg) => {
-      stopLoadingLoop(st);
       if (st.state === "loading") {
         st.state = "error";
         st.message = msg || "Execution failed.";
-        render();
+        chart.setState("error", st.message);
       }
     },
   }));
@@ -130,8 +187,11 @@ function buildDom(node) {
       if (name === "shift_audio") st.shiftAudio = Number(v);
       if (st.sigmasV) {
         st.steps = recomputeSteps(st.sigmasV, st.shiftVideo, st.shiftAudio);
-        st.state = "success";
-        render();
+        st.state = "ready";
+        chart.setState("ready");
+        pushSteps(st);
+      } else {
+        updateShiftStatus(st, st.shiftVideo, st.shiftAudio);
       }
       return r;
     };
@@ -139,109 +199,34 @@ function buildDom(node) {
   hookWidget("shift_video");
   hookWidget("shift_audio");
 
-  chainOnRemoved(node, () => disposeState(node, ST_KEY));
-  render();
+  chainOnRemoved(node, () => {
+    try { st.zoomOff?.(); } catch (_e) { /* ignore */ }
+    try { chart.destroy(); } catch (_e) { /* ignore */ }
+    disposeState(node, ST_KEY);
+  });
+
   return st;
-}
-
-function paintFrame(node) {
-  const st = node[ST_KEY];
-  if (!st) return;
-  const rect = st.box.getBoundingClientRect();
-  const w = Math.max(1, Math.floor(rect.width));
-  const h = Math.max(1, Math.floor(rect.height));
-  const ctx = setupDpiCanvas(st.canvas, w, h);
-
-  if (st.state === "loading") {
-    drawLoadingSpinner(ctx, w, h);
-    return;
-  }
-  if (st.state === "error" || st.state === "empty") {
-    drawPlaceholder(ctx, w, h, st.message, st.state === "error" ? "error" : "empty");
-    return;
-  }
-
-  const steps = st.steps || [];
-  if (!steps.length) {
-    drawPlaceholder(ctx, w, h, "No sigma steps to plot.", "error");
-    return;
-  }
-
-  const pad = { l: 36, r: 12, t: 14, b: 24 };
-  const pw = w - pad.l - pad.r;
-  const ph = h - pad.t - pad.b;
-  ctx.fillStyle = themeVar("menuBg");
-  ctx.fillRect(0, 0, w, h);
-
-  const maxV = Math.max(...steps.map((s) => s.sigma_v), 0.001);
-  const maxA = Math.max(...steps.map((s) => s.sigma_a), 0.001);
-  const maxDs = Math.max(...steps.map((s) => Math.abs(s.dsigma_a_dsigma_v)), 0.001);
-
-  const xAt = (i) => pad.l + (i / Math.max(steps.length - 1, 1)) * pw;
-  const yV = (v) => pad.t + ph - (v / maxV) * ph;
-  const yA = (v) => pad.t + ph - (v / maxA) * ph;
-  const yDs = (v) => pad.t + ph / 2 - (v / maxDs) * (ph / 2);
-
-  ctx.strokeStyle = themeVar("border");
-  ctx.strokeRect(pad.l, pad.t, pw, ph);
-
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  steps.forEach((s, i) => {
-    const x = xAt(i);
-    if (i === 0) ctx.moveTo(x, yV(s.sigma_v));
-    else ctx.lineTo(x, yV(s.sigma_v));
-  });
-  ctx.strokeStyle = themeVar("primary");
-  ctx.stroke();
-
-  ctx.beginPath();
-  steps.forEach((s, i) => {
-    const x = xAt(i);
-    if (i === 0) ctx.moveTo(x, yA(s.sigma_a));
-    else ctx.lineTo(x, yA(s.sigma_a));
-  });
-  ctx.strokeStyle = "#fbbf24";
-  ctx.stroke();
-
-  ctx.beginPath();
-  steps.forEach((s, i) => {
-    const x = xAt(i);
-    if (i === 0) ctx.moveTo(x, yDs(s.dsigma_a_dsigma_v));
-    else ctx.lineTo(x, yDs(s.dsigma_a_dsigma_v));
-  });
-  ctx.strokeStyle = "#a78bfa";
-  ctx.setLineDash([4, 3]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.fillStyle = themeVar("inputText");
-  ctx.font = "10px sans-serif";
-  ctx.textAlign = "left";
-  ctx.fillText("σv", pad.l + 4, pad.t + 10);
-  ctx.fillStyle = "#fbbf24";
-  ctx.fillText("σa", pad.l + 24, pad.t + 10);
-  ctx.fillStyle = "#a78bfa";
-  ctx.fillText("dσa/dσv (analytic)", pad.l + 44, pad.t + 10);
 }
 
 function handleExecuted(node, output) {
   const st = buildDom(node);
-  stopLoadingLoop(st);
   const raw = firstUiString(output, "mmx_sigma");
   const data = parseJsonSafe(raw);
   if (!data || !Array.isArray(data.sigmas_v)) {
     st.state = "error";
     st.message = raw ? "Malformed mmx_sigma UI payload." : "No mmx_sigma in UI output.";
-    paintFrame(node);
+    st.chart.setState("error", st.message);
     return;
   }
   st.sigmasV = data.sigmas_v;
+  st.trainedVideo = Number(data.trained_shift_video ?? 12);
+  st.trainedAudio = Number(data.trained_shift_audio ?? 3);
   st.shiftVideo = Number(widgetByName(node, "shift_video")?.value ?? data.shift_video ?? 12);
   st.shiftAudio = Number(widgetByName(node, "shift_audio")?.value ?? data.shift_audio ?? 3);
   st.steps = recomputeSteps(st.sigmasV, st.shiftVideo, st.shiftAudio);
-  st.state = "success";
-  paintFrame(node);
+  st.state = "ready";
+  st.chart.setState("ready");
+  pushSteps(st);
 }
 
 app.registerExtension({
@@ -251,6 +236,7 @@ app.registerExtension({
     const _created = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       const r = _created?.apply(this, arguments);
+      if (this.size[0] < NODE_MIN_W) this.size[0] = NODE_MIN_W;
       buildDom(this);
       return r;
     };

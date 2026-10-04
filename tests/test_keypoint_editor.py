@@ -197,10 +197,15 @@ def test_drag_listeners_live_on_the_window():
 def test_it_saves_once_per_drag_not_once_per_pixel():
     """Saving on every move makes a drag sixty undo steps."""
     src = source()
-    move = src[src.index("const move ="):src.index("const up =")]
-    assert "save()" not in move, "the editor saves mid-drag"
-    up = src[src.index("const up ="):src.index("// On the window")]
-    assert "save()" in up
+    # Dragging happens in the full-screen editor: a move only moves the point,
+    # the drag's end records ONE undo step, and only Save writes the widget.
+    move = src[src.index("const onMove ="):src.index("const onUp =")]
+    assert "pushUndo(" not in move and "wdg.value" not in move, "the editor records mid-drag"
+    up = src[src.index("const onUp ="):src.index("editCanvas.addEventListener(\"pointerdown\"")]
+    assert "pushUndo(" in up
+    save = src[src.index("onSave:"):src.index("onClose:")]
+    assert "wdg.value = writeDoc(" in save
+    assert src.count("wdg.value =") == 1, "keypoints_json must be written by Save only"
 
 
 def test_it_does_not_pretend_to_detect():
@@ -216,8 +221,9 @@ def test_the_editor_uses_the_shared_kit():
     """Every other widget in this pack does; a second set of helpers is a
     second set of theme bugs."""
     src = source()
-    assert 'from "./shared.js"' in src
-    for fn in ("chainOnRemoved", "disposeState", "rafThrottle", "setupDpiCanvas"):
+    assert 'from "./shared.js"' in src and 'from "./c2c_ui/index.js"' in src
+    # lifecycle from shared.js; panel, editor and canvas sizing from c2c_ui
+    for fn in ("chainOnRemoved", "disposeState", "mountPanel", "openEditor", "canvasBackingScale"):
         assert fn in src, f"{fn} is not used - lifecycle or theming will drift"
 
 
@@ -227,3 +233,29 @@ def test_the_shared_kit_import_depth_is_right():
     takes out every widget in the pack."""
     assert 'from "../../scripts/app.js"' in SHARED.read_text(encoding="utf-8")
     assert re.search(r'from\s+"\./shared\.js"', source())
+
+
+def test_without_a_backdrop_the_view_fits_the_keypoints_not_a_unit_square():
+    """Keypoints are PIXELS on driving_pose. A 0..1 view put x=400 far off
+    screen and capped the x/y fields at 1 (found live 2026-09-28)."""
+    src = source()
+    view = src[src.index("function view("):src.index("function drawSkeleton(")]
+    assert "extentOf(doc)" in view
+    assert "srcW = 1;" not in view
+    fields = src[src.index("function syncFields()"):src.index("function onField(")]
+    assert "extentOf(workDoc)" in fields and "|| 1;" not in fields
+
+
+def test_undo_and_redo_refresh_the_point_fields():
+    """Undo cleared the selection but the panel kept showing the undone
+    point's numbers."""
+    src = source()
+    for hook in ("onUndo:", "onRedo:"):
+        body = src[src.index(hook):src.index("},", src.index(hook))]
+        assert "syncFields()" in body, hook
+
+
+def test_point_fields_are_shown_and_hidden_with_display_not_hidden():
+    """The rows carry an inline display:flex, which beats the [hidden] attribute."""
+    src = source()
+    assert "pointFields.hidden" not in src and "pointHint.hidden" not in src
