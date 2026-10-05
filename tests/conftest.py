@@ -21,7 +21,12 @@ _COMFY_CANDIDATES = (
 )
 for candidate in reversed(_COMFY_CANDIDATES):
     p = str(candidate)
-    if (candidate / "comfy_api").is_dir() and p not in sys.path:
+    if (candidate / "comfy_api").is_dir():
+        # Move, do not skip: run_tests.py puts the installed core on sys.path BEFORE pytest loads this file,
+        # and skipping an entry that is already present let the 0.33.0 fallback land in front of it, so the
+        # repo's own runner imported the old comfy_extras while plain pytest imported the new one (ledger L8.16).
+        while p in sys.path:
+            sys.path.remove(p)
         sys.path.insert(0, p)
 
 # Materialise spectrum_h3 from third_party before any test imports spectrum nodes.

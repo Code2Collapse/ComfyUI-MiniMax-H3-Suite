@@ -223,3 +223,6 @@ __marimo__/
 # web/ has the same exposure: the JS widgets are the frontend, not build output.
 !tests/
 !web/
+
+# run_tests.py writes its last run here (repo test runner artefact)
+_pytest_last_run.txt
