@@ -46,6 +46,51 @@ AUDIO_SR = 44100
 # path helpers
 # --------------------------------------------------------------------------------------
 
+_MEDIA_KEYS = ("imageFile", "fileName", "audioFile", "file")
+
+
+def media_fingerprint(timeline_data, resolve=None) -> tuple:
+    """(reference, size, mtime_ns) for every input file a timeline names, for the Directors'
+    cache key.
+
+    A timeline refers to its media by NAME, so re-uploading a different clip under the same
+    name (this pack's chunked upload route writes in place) changed nothing ComfyUI hashes and
+    the Director served the old render (the stale-cache bug class of issue #11.4, ledger L2.05).
+    Size and mtime of each resolved file make any re-upload visible; a missing file is (-1, -1).
+    `resolve` defaults to resolve_input_path; the All-in-One Director passes its own lookup."""
+    if isinstance(timeline_data, str):
+        try:
+            data = json.loads(timeline_data) if timeline_data.strip() else {}
+        except ValueError:
+            return ()            # unparseable: the raw string is already in the cache key
+    else:
+        data = timeline_data or {}
+    refs: set[str] = set()
+
+    def walk(obj):
+        if isinstance(obj, dict):
+            for key, val in obj.items():
+                if key in _MEDIA_KEYS and isinstance(val, str) and val:
+                    refs.add(val)
+                else:
+                    walk(val)
+        elif isinstance(obj, list):
+            for val in obj:
+                walk(val)
+
+    walk(data)
+    lookup = resolve or resolve_input_path
+    out = []
+    for ref in sorted(refs):
+        try:
+            path = lookup(ref)
+            st = os.stat(path) if path else None
+        except OSError:
+            st = None
+        out.append((ref, st.st_size if st else -1, st.st_mtime_ns if st else -1))
+    return tuple(out)
+
+
 def resolve_input_path(rel_name: str):
     """Resolve a timeline file reference to an absolute path inside ComfyUI/input."""
     if not rel_name:

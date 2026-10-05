@@ -417,6 +417,11 @@ class MiniMaxH3Director(io.ComfyNode):
     # ------------------------------------------------------------ lazy models
 
     @classmethod
+    def fingerprint_inputs(cls, timeline_data="", **_):
+        """Re-run when a referenced media file changes on disk (same name, new content)."""
+        return media.media_fingerprint(timeline_data)
+
+    @classmethod
     def check_lazy_status(cls, timeline_data="", model=_UNCONNECTED,
                           model_ref2va=_UNCONNECTED, **_):
         """Ask for the one checkpoint the toolbar switch calls for, and only that one.

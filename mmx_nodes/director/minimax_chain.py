@@ -173,6 +173,11 @@ class MiniMaxH3DirectorChain(io.ComfyNode):
         )
 
     @classmethod
+    def fingerprint_inputs(cls, timeline_data="", **_):
+        """Re-run when a referenced media file changes on disk (same name, new content)."""
+        return media.media_fingerprint(timeline_data)
+
+    @classmethod
     def check_lazy_status(cls, timeline_data="", model=director._UNCONNECTED,
                           model_ref2va=director._UNCONNECTED, **kwargs):
         """Ask for one checkpoint, exactly as the Director does.

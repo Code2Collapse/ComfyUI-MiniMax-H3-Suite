@@ -158,6 +158,14 @@ def adapt(v1_cls, *, node_id: str, display_name: str, category: str,
                 result = (result,)
             return io.NodeOutput(*result)
 
+    # A classic IS_CHANGED is V3's fingerprint_inputs. Core only consults the V3 hook, so without
+    # this forward a wrapped node's cache key silently ignored the state its IS_CHANGED tracks.
+    is_changed = getattr(v1_cls, "IS_CHANGED", None)
+    if callable(is_changed):
+        def fingerprint_inputs(cls, **kwargs):
+            return is_changed(**kwargs)
+        Adapted.fingerprint_inputs = classmethod(fingerprint_inputs)
+
     Adapted.__name__ = f"{v1_cls.__name__}V3"
     Adapted.__qualname__ = Adapted.__name__
     Adapted.__doc__ = doc or v1_cls.__doc__

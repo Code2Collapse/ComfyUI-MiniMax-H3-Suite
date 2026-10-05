@@ -789,6 +789,13 @@ def _bucket_segments_into_chunks(tdata: dict, duration_seconds: float, chunk_dur
 
 class MuseMinimaxDirector:
     @classmethod
+    def IS_CHANGED(cls, timeline_data="{}", **_):
+        """Re-run when a referenced character/reference file changes on disk under the same
+        name - the timeline names files, so ComfyUI's input hash cannot see a re-upload."""
+        from .minimax_media import media_fingerprint
+        return media_fingerprint(timeline_data, resolve=_resolve_path)
+
+    @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
