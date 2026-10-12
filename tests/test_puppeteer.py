@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from mmx_utils.puppeteer import render_motion_hints
@@ -59,3 +60,29 @@ def test_keypoints_json_renders_skeleton():
     hints_json, _ = render_motion_hints(pose, ref, rig_type="human_to_creature", keypoints_json=json.dumps(kps))
     assert not torch.equal(hints_plain, hints_json)
     assert float(hints_json.max()) > float(hints_plain.max())
+
+
+# L7.93 (owner's Linux log 2026-10-12): the node computes on the GPU but must hand IMAGE / MASK back on ComfyUI's
+# intermediate device (the CPU), or core Batch Images fails with "Expected all tensors to be on the same device".
+_needs_gpu = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a GPU to compute on")
+
+
+def _on_gpu(monkeypatch, module):
+    """The node's own device choice, pinned to the GPU; ComfyUI's intermediate device stays the CPU."""
+    import types
+
+    stub = types.SimpleNamespace(get_torch_device=lambda: torch.device("cuda"),
+                                 intermediate_device=lambda: torch.device("cpu"))
+    monkeypatch.setattr(module, "mm", stub, raising=False)
+    import mmx_utils.device as d
+
+    monkeypatch.setattr(d, "mm", stub, raising=False)
+
+
+@_needs_gpu
+def test_puppeteer_node_hands_back_on_the_intermediate_device(monkeypatch):
+    import mmx_nodes.puppeteer as mod
+
+    _on_gpu(monkeypatch, mod)
+    out = mod.MiniMaxH3_PosePuppeteer.execute(torch.rand(2, 32, 32, 3), character_ref=torch.rand(2, 32, 32, 3))
+    assert out[0].device.type == "cpu"

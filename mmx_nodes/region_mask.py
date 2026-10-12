@@ -14,7 +14,7 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
-from mmx_utils.device import run_with_cpu_fallback
+from mmx_utils.device import output_device, run_with_cpu_fallback
 from mmx_utils.region_mask import (
     REGION_MODES,
     compute_clip_global_threshold,
@@ -186,7 +186,7 @@ class MiniMaxH3_RegionMask(io.ComfyNode):
 
         mask_b, preview, note = run_with_cpu_fallback(_work, device=dev, label="MiniMaxH3_RegionMask")
         return io.NodeOutput(
-            mask_b.to(images.device),
-            preview.to(images.dtype),
+            mask_b.to(output_device()),
+            preview.to(device=output_device(), dtype=images.dtype),
             note,
         )

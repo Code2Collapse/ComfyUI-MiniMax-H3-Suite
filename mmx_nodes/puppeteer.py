@@ -14,7 +14,7 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
-from mmx_utils.device import run_with_cpu_fallback
+from mmx_utils.device import output_device, run_with_cpu_fallback
 from mmx_utils.puppeteer import RIG_TYPES, render_motion_hints
 
 try:
@@ -88,4 +88,4 @@ class MiniMaxH3_PosePuppeteer(io.ComfyNode):
             return hints, text, report
 
         hints, text, report = run_with_cpu_fallback(_work, device=dev, label="MiniMaxH3_PosePuppeteer")
-        return io.NodeOutput(hints.to(driving_pose.dtype), text, report)
+        return io.NodeOutput(hints.to(device=output_device(), dtype=driving_pose.dtype), text, report)

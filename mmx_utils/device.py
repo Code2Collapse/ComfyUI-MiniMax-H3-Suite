@@ -32,6 +32,19 @@ def _should_fallback(exc: BaseException) -> bool:
     return False
 
 
+def output_device() -> torch.device:
+    """Where ComfyUI keeps IMAGE / MASK between nodes: ``intermediate_device()`` - the CPU unless the server runs
+    with --gpu-only. A node that computes on the GPU must hand its result back there: core nodes such as Batch
+    Images join it with other nodes' tensors and fail with "Expected all tensors to be on the same device"
+    (owner's Linux log 2026-10-12, ledger L7.93)."""
+    if mm is not None:
+        try:
+            return torch.device(mm.intermediate_device())
+        except Exception:
+            pass
+    return torch.device("cpu")
+
+
 def run_with_cpu_fallback(
     work: Callable[[torch.device], T],
     *,

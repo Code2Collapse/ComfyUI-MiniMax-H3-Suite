@@ -14,7 +14,7 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
-from mmx_utils.device import run_with_cpu_fallback
+from mmx_utils.device import output_device, run_with_cpu_fallback
 from mmx_utils.hdr_roundtrip import assert_hdr_not_clamped, tag_out_for_direction, transform_hdr_batch
 from mmx_utils.ocio_config import config_source_note, list_colorspaces, list_displays, list_views
 
@@ -122,4 +122,4 @@ class MiniMaxH3_HDRRoundtrip(io.ComfyNode):
             f"colorspace={colorspace!r} display={display!r} view={view!r}\n"
             f"{src_note}\n{audit}"
         )
-        return io.NodeOutput(out.to(image.dtype), tag_out, report)
+        return io.NodeOutput(out.to(device=output_device(), dtype=image.dtype), tag_out, report)

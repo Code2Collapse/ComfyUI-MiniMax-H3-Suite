@@ -82,3 +82,17 @@ def test_cuda_oom_type_falls_back():
     out = run_with_cpu_fallback(work, device=torch.device("cuda"), label="t")
     assert out == 1
     assert len(calls) == 2
+
+
+def test_output_device_is_comfys_intermediate_device(monkeypatch):
+    """L7.93: IMAGE / MASK outputs go to ComfyUI's intermediate device, the CPU unless --gpu-only."""
+    import types
+
+    import mmx_utils.device as d
+
+    monkeypatch.setattr(d, "mm", types.SimpleNamespace(intermediate_device=lambda: torch.device("cpu")))
+    assert d.output_device() == torch.device("cpu")
+    monkeypatch.setattr(d, "mm", types.SimpleNamespace(intermediate_device=lambda: "cuda:0"))
+    assert d.output_device() == torch.device("cuda:0")       # --gpu-only keeps everything on the GPU
+    monkeypatch.setattr(d, "mm", None)
+    assert d.output_device() == torch.device("cpu")

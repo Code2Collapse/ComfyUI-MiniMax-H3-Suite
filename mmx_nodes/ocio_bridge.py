@@ -14,7 +14,7 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
-from mmx_utils.device import run_with_cpu_fallback
+from mmx_utils.device import output_device, run_with_cpu_fallback
 from mmx_utils.ocio_bridge import OCIO_FORCES_PER_FRAME_PLANES, transform_image_batch
 from mmx_utils.ocio_config import config_source_note, list_colorspaces, list_displays, list_views
 
@@ -134,4 +134,4 @@ class MiniMaxH3_OCIOBridge(io.ComfyNode):
             f"{src_note}\n"
             f"frames={int(image.shape[0])} chunk={chunk} per_frame_ocio={per_frame}"
         )
-        return io.NodeOutput(out.to(image.dtype), report)
+        return io.NodeOutput(out.to(device=output_device(), dtype=image.dtype), report)
