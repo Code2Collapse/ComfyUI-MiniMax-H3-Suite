@@ -193,3 +193,13 @@ def test_missing_h3_gives_a_sentence_not_an_import_error():
         assert "installed correctly" in msg
     except Exception as exc:  # pragma: no cover - only if H3 IS present
         pytest.fail(f"expected RuntimeError with a sentence, got {type(exc).__name__}")
+
+
+def test_nested_tensor_comes_from_core_comfy_nested_tensor():
+    # L7.87 (2026-10-12): the factory only tried comfy.ldm.minimax.model, which never defined NestedTensor (core
+    # 0.36 and 0.39 keep it in comfy.nested_tensor) - Pack / Merge AV and Prepare / Stitch Continuation failed on
+    # every core build. It now resolves like split_upscale._nested_tensor_factory.
+    nested = pytest.importorskip("comfy.nested_tensor")
+    from mmx_nodes import continuation as cont_mod
+
+    assert cont_mod._nested_factory() is nested.NestedTensor

@@ -53,12 +53,21 @@ _H3_MISSING = (
 
 
 def _nested_factory():
-    """Resolve H3's NestedTensor on demand, with a sentence if it is absent."""
+    """Resolve H3's NestedTensor on demand, with a sentence if it is absent.
+
+    Core keeps it in comfy.nested_tensor (0.36 and 0.39 alike); comfy.ldm.minimax.model never defined it, so the old
+    import made Pack / Merge AV and Prepare / Stitch Continuation fail on every core build (L7.87, measured on core
+    0.39 2026-10-12). Same resolution as split_upscale._nested_tensor_factory.
+    """
     try:
-        from comfy.ldm.minimax.model import NestedTensor  # type: ignore
-    except Exception as exc:  # noqa: BLE001 - comfy_kitchen skew raises AttributeError
-        raise RuntimeError(_H3_MISSING.format(err=exc)) from exc
-    return NestedTensor
+        import comfy.nested_tensor as nested_tensor
+        return nested_tensor.NestedTensor
+    except Exception:  # noqa: BLE001
+        try:
+            from comfy.ldm.minimax.model import NestedTensor  # type: ignore
+        except Exception as exc:  # noqa: BLE001 - comfy_kitchen skew raises AttributeError
+            raise RuntimeError(_H3_MISSING.format(err=exc)) from exc
+        return NestedTensor
 
 
 class MiniMaxH3_PrepareContinuation(io.ComfyNode):
