@@ -39,7 +39,7 @@ H3 Family Presets ──> Prompt Preview & Edit ──> (prompt)            │ 
    source, the head size, the pose and what stays untouched. The same settings always give the same prompt.
 3. **MiniMax H3 Prompt Preview & Edit** shows that prompt after a run. Typing in its box turns `use_edited_text`
    on, and from then on your edit is sent instead. Turn it off to take the template again, for example after
-   changing the family. For a free-form prompt, the Promptor LLM director still works in its place.
+   changing the family. For a free-form prompt, the Promptor LLM director still works in its place. **MiniMax H3 Prompt Writer v2** can stand in for Family Presets: the same template, refined from a plain-language brief by a local or cloud model, with the template as its fallback.
 4. **Reference To Video** (core) takes the character as `ref_image_0` and the cropped plate as `ref_video_0`. Tasks 2
    and 4 also take the driving clip as `ref_video_1`.
 5. **H3 Mask To Latent Space**: `head_room_masks` becomes the latent mask. **H3 Masked Replace** then keeps

@@ -75,6 +75,28 @@ there must match the one on H3 Subject Crop. **MiniMax H3 Prompt Preview & Edit*
 typing in it turns `use_edited_text` on, so your edit is what runs next. Optional and experimental: `face_closeup_reference` names a tight face crop of the character, wired as `ref_image_1`, as `<Picture 2>`, the authority for facial identity. The graphs are checked in both renderers and
 by the server's validation, but **not yet run on H3 weights**; the settings are the official r2v template's, not tuned.
 
+## MiniMax H3 Prompt Writer v2
+
+Writes the structured H3 prompt for any H3 Family Presets task from a plain-language brief. It plans 8 fields (scene
+and style, performance to preserve, identity to transfer, face motion, body and camera, mask region, temporal rules,
+negative rules) and writes them into H3's six sections. The reference roles come from the task's template, so a model
+cannot rebind `<Video 1>` or invent a `<Picture 3>`.
+
+- **`template (no LLM)`** (default): deterministic, offline, no model. Replacement tasks state the plate's performance
+  (expressions, mouth, head, body, timing) as the authority, plus the mask and consistency rules.
+- **LLM backends**: Ollama, any OpenAI-compatible server (llama-server, LM Studio, vLLM), or the OpenAI / Anthropic /
+  Gemini APIs. They refine the descriptive fields over HTTP only. **No model runtime is loaded inside ComfyUI.** The
+  llama.cpp-based writer died with an *illegal instruction* when its prebuilt wheel met a CPU without AVX-512, and
+  that kills the whole ComfyUI process. To use llama.cpp, run `llama-server` and pick `openai-compatible server`.
+- Each backend is checked before the request: is it reachable, is the model present, is the key set. Transient errors
+  (429 / 5xx / network) are retried. On any failure the node falls back to the template, or stops if `on_failure`
+  says so. The report names the backend used, the time taken, which fields came from the model, and every repair.
+- API keys are read from an environment variable that you name (`api_key_env`), are sent only in request headers,
+  and never appear in the workflow, the outputs or the report. `MMX_PROMPT_WRITER_OFFLINE=1` forces the template
+  everywhere.
+- The server settings appear only when an LLM backend is selected. The Promptor LLM director still covers free-form
+  prompts.
+
 ## H3 Hybrid HDR (Singularity colour without FL2VA damage)
 
 Method: for matched checkpoints, `D = FL−Ref`, `Δ = Sing−Ref`, `a = clamp(⟨Δ,D⟩/⟨D,D⟩,0,1)`, `H = Δ−a·D`; compress `H` per layer to rank‑r LoRA.

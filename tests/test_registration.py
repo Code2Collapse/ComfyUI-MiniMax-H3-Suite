@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 108   # + HybridHDR, HybridExtract, ColorQC
+EXPECTED_NODE_COUNT = 109   # + HybridHDR, HybridExtract, ColorQC; + PromptWriter (L8.24)
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
@@ -105,6 +105,7 @@ PROMPT_NODES = {
     "MiniMaxH3_Vision",
     "MiniMaxH3_PromptEditor",
     "MiniMaxH3_PromptComposer",
+    "MiniMaxH3_PromptWriter",
 }
 SPECTRUM_NODES = {
     "MiniMaxH3_SpectrumApply",

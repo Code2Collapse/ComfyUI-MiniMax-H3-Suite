@@ -123,6 +123,7 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.promptor", "MiniMaxH3_Vision"),
     (".mmx_nodes.promptor", "MiniMaxH3_PromptEditor"),
     (".mmx_nodes.promptor", "MiniMaxH3_PromptComposer"),
+    (".mmx_nodes.prompt_writer", "MiniMaxH3_PromptWriter"),
     (".mmx_nodes.split_upscale", "MiniMaxH3_SplitUpscale"),
     (".mmx_nodes.split_upscale", "MiniMaxH3_SpatialSplitParams"),
     (".mmx_nodes.split_upscale", "MiniMaxH3_TemporalSplitParams"),
@@ -531,6 +532,10 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                     MiniMaxH3_ImageSamplingPreset,
                     MiniMaxH3_DetailToneLock,
                 ])
+            elif mod_path.endswith("prompt_writer"):
+                from .mmx_nodes.prompt_writer import MiniMaxH3_PromptWriter
+
+                nodes.append(MiniMaxH3_PromptWriter)
             elif mod_path.endswith("native_audio") and cls_name == "MiniMaxH3_NativeAudioLock":
                 from .mmx_nodes.native_audio import (
                     MiniMaxH3_AudioTrimStart,

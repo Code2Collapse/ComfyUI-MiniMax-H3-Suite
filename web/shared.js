@@ -288,4 +288,110 @@ export function drawLoadingSpinner(ctx, w, h) {
   ctx.stroke();
 }
 
+// ── show / hide a widget in both renderers ──────────────────────────────────
+// PORTED FROM: ComfyUI-CustomNodePacks js/_widget_visibility.js (Code2Collapse, Apache-2.0; same author) - copied,
+// not imported, for the reason at the top of this file. Classic: type "hidden" + a collapsed computeSize, and the
+// DOM element / .dom-widget wrapper hidden too (DOM widgets otherwise stay drawn over the node). Nodes 2.0 decides
+// from options.hidden and only rebuilds its rows when a widget is ADDED, so vueSyncNodeWidgets mirrors the state and
+// nudges a rebuild; vueFitNodeHeight then fits the node to its content.
+
+export function setWidgetVisible(widget, visible) {
+  if (!widget) return;
+  if (visible) {
+    if ("__mec_origType" in widget) {
+      const t = widget.__mec_origType;
+      if (t === undefined) delete widget.type; else widget.type = t;
+      delete widget.__mec_origType;
+    }
+    if ("__mec_origComputeSize" in widget) {
+      const cs = widget.__mec_origComputeSize;
+      if (cs === undefined) delete widget.computeSize; else widget.computeSize = cs;
+      delete widget.__mec_origComputeSize;
+    }
+    widget.hidden = false;
+    const el = widget.element;
+    if (el) {
+      el.style.display = ("__mec_origElDisplay" in widget) ? (widget.__mec_origElDisplay ?? "") : "";
+      delete widget.__mec_origElDisplay;
+      const wrap = el.parentElement;
+      if (wrap && wrap.classList?.contains("dom-widget")) {
+        wrap.style.display = ("__mec_origWrapDisplay" in widget) ? (widget.__mec_origWrapDisplay ?? "") : "";
+        delete widget.__mec_origWrapDisplay;
+      }
+    }
+    delete widget.__mec_hidden;
+    if (widget.options) widget.options.hidden = false;
+  } else {
+    if (!("__mec_origType" in widget)) widget.__mec_origType = widget.type;
+    if (!("__mec_origComputeSize" in widget)) widget.__mec_origComputeSize = widget.computeSize;
+    widget.type = "hidden";
+    widget.computeSize = () => [0, -4];
+    widget.hidden = true;
+    widget.options = widget.options || {};
+    widget.options.hidden = true;
+    const el = widget.element;
+    if (el) {
+      if (!("__mec_origElDisplay" in widget)) widget.__mec_origElDisplay = el.style.display;
+      el.style.display = "none";
+      const wrap = el.parentElement;
+      if (wrap && wrap.classList?.contains("dom-widget")) {
+        if (!("__mec_origWrapDisplay" in widget)) widget.__mec_origWrapDisplay = wrap.style.display;
+        wrap.style.display = "none";
+      }
+    }
+    widget.__mec_hidden = true;
+  }
+}
+
+function vueNodesActive() {
+  try {
+    return app?.ui?.settings?.getSettingValue?.("Comfy.VueNodes.Enabled") === true;
+  } catch (_e) { return false; }
+}
+
+export function vueSyncNodeWidgets(node) {
+  if (!node?.widgets || !vueNodesActive()) return;
+  for (const w of node.widgets) {
+    if (!w) continue;
+    w.options = w.options || {};
+    w.options.hidden = String(w.type).includes("hidden") || w.hidden === true;
+  }
+  if (!document.querySelector(`[data-node-id="${node.id}"]`)) return;   // before the first mount: nothing to nudge
+  if (node.__mecVueNudgePending) return;
+  node.__mecVueNudgePending = true;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    node.__mecVueNudgePending = false;
+    try {
+      const d = node.addWidget("number", "__mec_vue_sync__", 0, () => {}, { serialize: false });
+      const i = node.widgets.indexOf(d);
+      if (i >= 0) node.widgets.splice(i, 1);
+    } catch (_e) { /* node may be mid-removal */ }
+  }));
+}
+
+export function vueFitNodeHeight(node) {
+  if (!node || !vueNodesActive() || node.__mecVueFitPending) return;
+  node.__mecVueFitPending = true;
+  let wait = 60, settle = 3;
+  const done = () => { node.__mecVueFitPending = false; };
+  const step = () => {
+    const el = document.querySelector(`[data-node-id="${node.id}"]`);
+    if ((!el || node.__mecVueNudgePending) && --wait > 0) { requestAnimationFrame(step); return; }
+    if (--settle > 0) { requestAnimationFrame(step); return; }
+    if (!el || !node.graph) { done(); return; }
+    const width = node.size[0];
+    try { node.setSize([width, 1]); } catch (_e) { done(); return; }
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      done();
+      const title = globalThis.LiteGraph?.NODE_TITLE_HEIGHT ?? 30;
+      const h = (el.isConnected ? el.offsetHeight : 0) - title;
+      try {
+        if (h > 0 && node.graph) node.setSize([width, h]);
+        node.setDirtyCanvas?.(true, true);
+      } catch (_e) { /* node may be mid-removal */ }
+    }));
+  };
+  requestAnimationFrame(step);
+}
+
 export { app, api };
