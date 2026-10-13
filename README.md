@@ -72,7 +72,7 @@ and replace across a whole take. Each carries its guide as a note on the canvas,
 Mode, starting settings, and the GPU A/B to run before trusting the result). **H3 Family Presets** has six matching
 families that write a fixed, structured prompt per task. `<Video 1>` is always the cropped plate. The `head_size_mode`
 there must match the one on H3 Subject Crop. **MiniMax H3 Prompt Preview & Edit** now shows that prompt after a run;
-typing in it turns `use_edited_text` on, so your edit is what runs next. The graphs are checked in both renderers and
+typing in it turns `use_edited_text` on, so your edit is what runs next. Optional and experimental: `face_closeup_reference` names a tight face crop of the character, wired as `ref_image_1`, as `<Picture 2>`, the authority for facial identity. The graphs are checked in both renderers and
 by the server's validation, but **not yet run on H3 weights**; the settings are the official r2v template's, not tuned.
 
 ## H3 Hybrid HDR (Singularity colour without FL2VA damage)

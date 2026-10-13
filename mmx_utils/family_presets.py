@@ -283,6 +283,23 @@ def _replacement_sections(family: str, subject: str, notes: str, prefix: str, he
     raise ValueError(f"Unknown replacement family {family!r}")
 
 
+_FACE_CLOSEUP = ("<Picture 2> is a close-up of the same <Subject 1>'s face: the authority for facial identity "
+                 "details; <Picture 1> stays the authority for hair, body and wardrobe.")
+
+
+def _face_closeup(family: str, sections: dict[str, str], wanted: bool) -> str:
+    """Lynx feeds its identity path a tight aligned face (C2C L8.22, BUILD as a prompt helper): with an aligned face
+    crop of the character wired as ref_image_1, name it as <Picture 2> right after <Subject 1>. Expression transfer
+    keeps the plate's own person, so there is no character face to add."""
+    if not wanted:
+        return "off"
+    if family == "expression_transfer":
+        return "ignored: identity comes from <Video 1>"
+    lines = sections["subject_definitions"].split("\n")
+    sections["subject_definitions"] = "\n".join([lines[0], _FACE_CLOSEUP, *lines[1:]])
+    return "on: <Picture 2> = aligned face crop of <Subject 1>"
+
+
 def _family_sections(
     family: str,
     *,
@@ -573,6 +590,7 @@ def build_family_package(
     frame_count: int = 22,
     guidance_scale: float = 1.0,
     head_size_mode: str = HEAD_SIZE_MODES[0],
+    face_closeup_reference: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     fam = (family or "lipsync").lower()
     if fam not in FAMILY_IDS:
@@ -599,6 +617,7 @@ def build_family_package(
     }
     if fam in REPLACEMENT_FAMILIES:
         pipeline_notes["head_size_mode"] = head_size_mode
+        pipeline_notes["face_closeup_reference"] = _face_closeup(fam, sections, face_closeup_reference)
 
     prompt = build_six_section_prompt(sections)
     return prompt, pipeline_notes

@@ -38,6 +38,9 @@ class MiniMaxH3_FamilyPresets(io.ComfyNode):
                 io.Combo.Input("head_size_mode", options=list(HEAD_SIZE_MODES), default=HEAD_SIZE_MODES[0],
                                optional=True,
                                tooltip="Character replacement families: how big the new head is - match character proportions (the reference's own head-to-body ratio) or keep original composition (the original head's size and position). Set the same mode on H3 Subject Crop."),
+                # C2C L8.22 BUILD (prompt helper): appended, default off = the prompt is unchanged
+                io.Boolean.Input("face_closeup_reference", default=False, optional=True,
+                                 tooltip="Character replacement families: you also wire a tight face crop of the character as ref_image_1 (e.g. H3 Face Track + Crop on the character image). The prompt then names it <Picture 2>, the authority for facial identity. Ignored by expression_transfer. Experimental: not A/B-tested on H3 weights."),
             ],
             outputs=[
                 io.String.Output("prompt"),
@@ -56,8 +59,10 @@ class MiniMaxH3_FamilyPresets(io.ComfyNode):
         references_manifest="",
         frame_count=22,
         head_size_mode=HEAD_SIZE_MODES[0],
+        face_closeup_reference=False,
     ):
-        blob = f"{family}|{subject_name}|{task_notes}|{style_notes}|{references_manifest}|{frame_count}|{head_size_mode}"
+        blob = (f"{family}|{subject_name}|{task_notes}|{style_notes}|{references_manifest}|{frame_count}|"
+                f"{head_size_mode}|{bool(face_closeup_reference)}")
         return hashlib.md5(blob.encode()).hexdigest()
 
     @classmethod
@@ -70,6 +75,7 @@ class MiniMaxH3_FamilyPresets(io.ComfyNode):
         references_manifest="",
         frame_count=22,
         head_size_mode=HEAD_SIZE_MODES[0],
+        face_closeup_reference=False,
     ) -> io.NodeOutput:
         prompt, notes = build_family_package(
             family,
@@ -79,6 +85,7 @@ class MiniMaxH3_FamilyPresets(io.ComfyNode):
             references_manifest=references_manifest,
             frame_count=int(frame_count),
             head_size_mode=head_size_mode or HEAD_SIZE_MODES[0],
+            face_closeup_reference=bool(face_closeup_reference),
             # PINNED, never a widget. H3 is guidance-distilled: anything above 1.0
             # applies guidance twice and degrades output. A 0-4 slider here was the
             # exact trap N13 EditValidator exists to refuse, offered by the node that

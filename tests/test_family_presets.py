@@ -110,3 +110,26 @@ def test_expression_source_differs_from_identity_replacement():
 def test_existing_families_unchanged_by_the_head_mode():
     for fam in ("lipsync", "face_swap", "element_swap"):
         assert build_family_package(fam)[0] == build_family_package(fam, head_size_mode="keep original composition")[0]
+
+
+# ── aligned face crop as <Picture 2> (C2C L8.22 BUILD, prompt helper; opt-in) ─────────────────────────────────
+
+def test_face_closeup_off_leaves_every_prompt_unchanged():
+    from mmx_utils.family_presets import FAMILY_IDS
+    for fam in FAMILY_IDS:
+        assert build_family_package(fam)[0] == build_family_package(fam, face_closeup_reference=False)[0]
+
+
+def test_face_closeup_names_picture_2_right_after_the_character():
+    for fam in ("replace_keep_composition", "replace_change_pose", "replace_keep_pose_change_look",
+                "replace_masked_subject", "replace_across_video"):
+        prompt, notes = build_family_package(fam, face_closeup_reference=True)
+        lines = parse_six_sections(prompt)["subject_definitions"].split("\n")
+        assert lines[0].startswith("<Subject 1> is") and lines[1].startswith("<Picture 2> is a close-up")
+        assert notes["face_closeup_reference"].startswith("on")
+
+
+def test_face_closeup_is_ignored_by_expression_transfer():
+    on, notes = build_family_package("expression_transfer", face_closeup_reference=True)
+    assert on == build_family_package("expression_transfer")[0]
+    assert notes["face_closeup_reference"].startswith("ignored")

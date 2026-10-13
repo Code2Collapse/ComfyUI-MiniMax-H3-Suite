@@ -88,9 +88,15 @@ H3 Family Presets ──> Prompt Preview & Edit ──> (prompt)            │ 
 7. **Pose render** (tasks 2 and 3). Load a drawn pose video in `pose render`, for example a DWPose or SDPose render,
    or **H3 Swap Control** for face-only landmarks. Task 2 uses a render of the **driving** clip, task 3 a render of
    the **plate**. **H3 Mask-Aware ControlNet** keeps it off the plate you keep (`preserved_strength` 0).
-8. **Prompt.** Set `subject_name` on Family Presets, for example "a woman in a red coat". Add details in
+8. **Optional, experimental: face close-up.** Lynx gives its identity path a tight, aligned face. The H3 equivalent
+   is a second reference. Run **H3 Face Track + Crop** on the character image (`crop_factor` about 1.6). It needs
+   an ultralytics face detector such as `face_yolov8m.pt` in `models/ultralytics/bbox`. Wire its `crops` output into
+   Reference to Video `ref_image_1`. Then turn on `face_closeup_reference` on Family Presets, which names
+   it `<Picture 2>`, the authority for facial identity. Expression transfer ignores it. This is not A/B-tested yet;
+   see run E below.
+9. **Prompt.** Set `subject_name` on Family Presets, for example "a woman in a red coat". Add details in
    `task_notes`. Queue once. Read the prompt in Prompt Preview & Edit and change it there if needed.
-9. **Run.** The output is saved under `output/h3_replace/<task>`.
+10. **Run.** The output is saved under `output/h3_replace/<task>`.
 
 ## Starting settings
 
@@ -120,6 +126,7 @@ identity match. Use a fixed seed (123) and the settings above unless a row says 
 | B | this pack's crop with Head Size Mode | same |
 | C | B + the cropped plate as `<Video 1>` and the template prompt | same + mouth / eye openness against the plate |
 | D | C + pose control through H3 Mask-Aware ControlNet | same |
+| E | C + the aligned face crop as `<Picture 2>` (`face_closeup_reference`) | ArcFace similarity to the character, against C |
 
 What is already pinned by tests on CPU: the crop window holds the target head on every frame. The head-room mask
 covers that head plus its padding. Outside the mask the result equals the plate exactly. Crop then uncrop maps a
