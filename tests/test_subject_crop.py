@@ -42,7 +42,7 @@ def test_point_maps_into_the_crop_and_back_within_one_pixel():
     images = torch.zeros(T, H, W, 3)
     px, py = 196, 101                                                     # a marked point on the subject
     images[:, py, px] = 1.0
-    crops, cmasks, boxes, _ = _crop(images, masks, mp=0.25)
+    crops, cmasks, boxes, *_ = _crop(images, masks, mp=0.25)
     b = boxes[0][0]
     sx, sy = crops.shape[2] / b["width"], crops.shape[1] / b["height"]
     peak = crops[0, ..., 0]
@@ -53,14 +53,14 @@ def test_point_maps_into_the_crop_and_back_within_one_pixel():
 def test_identity_round_trip_keeps_the_exterior_exactly_and_the_interior_close():
     images = _gradient_plate()
     masks = torch.stack([_ellipse(180, 120, 40, 50)] * T)
-    crops, cmasks, boxes, _ = _crop(images, masks, mp=0.0)               # no resize: exact to float rounding
+    crops, cmasks, boxes, *_ = _crop(images, masks, mp=0.0)              # no resize: exact to float rounding
     out = _vals(MiniMaxH3_SubjectUncrop.execute(crops, images, boxes, 16))[0]
     b0 = boxes[0][0]
     box0 = torch.zeros(H, W, dtype=torch.bool)
     box0[b0["y"]:b0["y"] + b0["height"], b0["x"]:b0["x"] + b0["width"]] = True
     assert torch.equal(out[:, ~box0], images[:, ~box0])                  # outside the crop: untouched
     assert float((out - images).abs().max()) < 1e-6                      # inside: the feather blend's rounding only
-    crops2, _m, boxes2, _ = _crop(images, masks, mp=0.25)                # resized crop: close inside, exact outside
+    crops2, _m, boxes2, *_ = _crop(images, masks, mp=0.25)               # resized crop: close inside, exact outside
     out2 = _vals(MiniMaxH3_SubjectUncrop.execute(crops2, images, boxes2, 16))[0]
     b = boxes2[0][0]
     inside = torch.zeros(H, W, dtype=torch.bool)
@@ -81,7 +81,7 @@ def test_tight_crop_leaves_no_room_for_a_larger_head():
     # the original head; a head 1.5x larger about the same neck point does not fit in the crop window
     rx, ry, cx, cy = 30.0, 38.0, 180.0, 110.0
     masks = torch.stack([_ellipse(cx, cy, rx, ry)] * T)
-    _crops, _cm, boxes, _ = _crop(_gradient_plate(), masks, scale=1.2, div=16)
+    _crops, _cm, boxes, *_ = _crop(_gradient_plate(), masks, scale=1.2, div=16)
     b = boxes[0][0]
     neck = cy + ry
     shares = {}

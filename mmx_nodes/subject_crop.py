@@ -21,7 +21,9 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
+from mmx_utils.head_room import MODES as HEAD_SIZE_MODES, head_room
 from mmx_utils.plate_restore import uncrop_paste_frames
+from mmx_utils.pose_interop import pose_keypoint_to_wholebody
 from mmx_utils.subject_crop_planner import plan
 
 CATEGORY = "MiniMax H3/Crop"
@@ -141,7 +143,9 @@ def _debug_summary(binary, boxes, scale, sel, info, output_size):
 
 
 def _plan_and_crop(original_images, masks, sel, p, divisible_by,
-                   mask_threshold, upscale_megapixels=0.0):
+                   mask_threshold, upscale_megapixels=0.0, plan_masks=None, room_masks=None, head_line=""):
+    """plan_masks: what the planner keeps in the window (default: masks). room_masks: cropped like the masks and
+    returned last (Head Size Mode, C2C D8.21)."""
     if original_images.shape[0] != masks.shape[0]:
         raise ValueError(
             f"original_images ({original_images.shape[0]}) and masks "
@@ -155,7 +159,7 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
         raise ValueError("crop_scale must be 0 (full frame) or at least 1.0")
     full_frame = p["crop_scale"] <= 0.0
 
-    binary = masks.detach().cpu().numpy() > mask_threshold
+    binary = (plan_masks if plan_masks is not None else masks).detach().cpu().numpy() > mask_threshold
     if full_frame:
         img_h, img_w = masks.shape[1], masks.shape[2]
         boxes = [{"x": 0, "y": 0, "width": img_w, "height": img_h}
@@ -187,6 +191,9 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
     report = _debug_summary(binary, boxes, p["crop_scale"],
                             f"{sel} (full frame)" if full_frame else sel,
                             info, size or (bw, bh))
+    if head_line:
+        report = f"{report}\n{head_line}"
+    room = room_masks if room_masks is not None else (masks > mask_threshold).float()
 
     if size is not None:
         tw, th = size
@@ -198,6 +205,10 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
             _resize_mask(masks[i, b["y"]:b["y"] + b["height"], b["x"]:b["x"] + b["width"]], tw, th, mask_method)
             for i, b in enumerate(boxes)
         ])
+        cropped_room = torch.stack([
+            _resize_mask(room[i, b["y"]:b["y"] + b["height"], b["x"]:b["x"] + b["width"]], tw, th, mask_method)
+            for i, b in enumerate(boxes)
+        ])
     else:
         cropped_images = torch.stack([
             original_images[i, b["y"]:b["y"] + b["height"], b["x"]:b["x"] + b["width"], :]
@@ -205,6 +216,10 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
         ])
         cropped_masks = torch.stack([
             masks[i, b["y"]:b["y"] + b["height"], b["x"]:b["x"] + b["width"]]
+            for i, b in enumerate(boxes)
+        ])
+        cropped_room = torch.stack([
+            room[i, b["y"]:b["y"] + b["height"], b["x"]:b["x"] + b["width"]]
             for i, b in enumerate(boxes)
         ])
     # UI payload. Socket values never reach the browser - only NodeOutput.ui
@@ -231,7 +246,7 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
         "crop_scale": float(p.get("crop_scale", 0.0) or 0.0),
     })
     return io.NodeOutput(cropped_images, cropped_masks,
-                         [[b] for b in boxes], report,
+                         [[b] for b in boxes], report, cropped_room.to(cropped_masks.dtype),
                          ui={"mmx_crop_plan": [plan_json]})
 
 
@@ -244,7 +259,33 @@ _OUTPUTS = [
     io.Mask.Output(display_name="cropped_masks", tooltip="The input masks cropped to the same boxes. Feed to Subject Uncrop to confine the paste to the subject."),
     io.BoundingBox.Output(display_name="bboxes", tooltip="One box per frame, for Subject Uncrop."),
     io.String.Output(display_name="report", tooltip="Summary of the plan: chosen shape, box sizes, movement, and how much of the padding promise was kept."),
+    io.Mask.Output(display_name="head_room_masks", tooltip="Where the new head may be drawn, cropped like cropped_masks: the subject mask plus the room the head size mode asks for, with padding. Feed it to the latent mask and to Subject Uncrop's cropped_masks so the regenerated and the composited region match."),
 ]
+
+# Head Size Mode (owner 2026-10-13, C2C D8.21): appended after every existing input, so saved workflows keep their values
+_HEAD_INPUTS = [
+    io.Combo.Input("head_size_mode", options=list(HEAD_SIZE_MODES), default=HEAD_SIZE_MODES[0], optional=True,
+                   tooltip="match character proportions: room for the new character's own head-to-body ratio (from the poses, or head_scale), anchored at the chin. keep original composition: the original performer's head size and position. Decides the crop room, the mask padding and head_room_masks; the head is never stretched."),
+    io.Float.Input("head_scale", default=0.0, min=0.0, max=2.0, step=0.01, optional=True,
+                   tooltip="New head size / original head size. 0 = measure it from original_pose and reference_pose (face width against shoulder width); without poses it is 1. Ignored in keep original composition."),
+    io.Custom("POSE_KEYPOINT").Input("original_pose", optional=True,
+                                     tooltip="Pose of the original performer, per frame (DWPose / SDPose / OpenPose JSON). Gives the face size, the chin and the shoulders."),
+    io.Custom("POSE_KEYPOINT").Input("reference_pose", optional=True,
+                                     tooltip="Pose of the new character's reference image: its face width against its shoulder width sets the head scale. Needs the shoulders in the picture."),
+]
+
+
+def _head_room_args(masks, head_size_mode, head_scale, original_pose, reference_pose, threshold=0.1):
+    """plan_masks / room_masks / report line for _plan_and_crop. Nothing connected and head_scale 0 -> the planner
+    sees the input mask exactly as before (bit-identical crops)."""
+    h, w = int(masks.shape[1]), int(masks.shape[2])
+    orig = pose_keypoint_to_wholebody(original_pose, canvas=(w, h))[0] if original_pose else None
+    ref = pose_keypoint_to_wholebody(reference_pose)[0] if reference_pose else None
+    union, room, line = head_room(masks.detach().cpu().float(), head_size_mode or HEAD_SIZE_MODES[0],
+                                  float(head_scale or 0.0), orig, ref, threshold)
+    if not original_pose and not reference_pose and not head_scale:
+        union = None                                   # identical planning input to before the mode existed
+    return union, room.to(masks.device), line
 
 
 class MiniMaxH3_SubjectCrop(io.ComfyNode):
@@ -301,20 +342,24 @@ class MiniMaxH3_SubjectCrop(io.ComfyNode):
                 io.Int.Input("divisible_by", default=16, min=1,
                              tooltip="Crop width and height are rounded up to a multiple of this. Match the model's resolution requirement."),
                 _UPSCALE_MEGAPIXELS,
+                *_HEAD_INPUTS,
             ],
             outputs=_OUTPUTS,
         )
 
     @classmethod
-    def execute(cls, original_images, masks, mode, divisible_by, upscale_megapixels=0.0) -> io.NodeOutput:
+    def execute(cls, original_images, masks, mode, divisible_by, upscale_megapixels=0.0,
+                head_size_mode=HEAD_SIZE_MODES[0], head_scale=0.0, original_pose=None,
+                reference_pose=None) -> io.NodeOutput:
         sel = mode["mode"]
         if sel == "combined":
             p = {"crop_scale": mode["crop_scale"],
                  "aspect_ratio": mode["aspect_ratio"]}
         else:
             p = _cell_params(mode)
+        plan_masks, room, line = _head_room_args(masks, head_size_mode, head_scale, original_pose, reference_pose)
         return _plan_and_crop(original_images, masks, sel, p,
-                              divisible_by, 0.1, upscale_megapixels)
+                              divisible_by, 0.1, upscale_megapixels, plan_masks, room, line)
 
 
 class MiniMaxH3_SubjectCropAdvanced(io.ComfyNode):
@@ -387,18 +432,23 @@ class MiniMaxH3_SubjectCropAdvanced(io.ComfyNode):
                 io.Int.Input("divisible_by", default=16, min=1,
                              tooltip="Crop width and height are rounded up to a multiple of this."),
                 _UPSCALE_MEGAPIXELS,
+                *_HEAD_INPUTS,
             ],
             outputs=_OUTPUTS,
         )
 
     @classmethod
-    def execute(cls, original_images, masks, mode, mask_threshold, divisible_by, upscale_megapixels=0.0) -> io.NodeOutput:
+    def execute(cls, original_images, masks, mode, mask_threshold, divisible_by, upscale_megapixels=0.0,
+                head_size_mode=HEAD_SIZE_MODES[0], head_scale=0.0, original_pose=None,
+                reference_pose=None) -> io.NodeOutput:
         p = dict(mode)
         for key, val in (("resize_cost", 2.0), ("zoom_step", 1.0),
                          ("max_zoom_rate", 0.0)):
             p.setdefault(key, val)
+        plan_masks, room, line = _head_room_args(masks, head_size_mode, head_scale, original_pose, reference_pose,
+                                                 mask_threshold)
         return _plan_and_crop(original_images, masks, mode["mode"], p,
-                              divisible_by, mask_threshold, upscale_megapixels)
+                              divisible_by, mask_threshold, upscale_megapixels, plan_masks, room, line)
 
 
 class MiniMaxH3_SubjectUncrop(io.ComfyNode):

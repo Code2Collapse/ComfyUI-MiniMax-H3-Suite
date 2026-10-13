@@ -45,9 +45,21 @@ signal of a crop -> mask -> regenerate -> uncrop replacement comes from the ORIG
 be no bigger than the room the crop and the mask leave. Measured with MVEx / H3 Subject Crop `combined`
 `crop_scale` 1.2, mask expand 40 px, 32 px tokens (`docs/research/l820_minimax_character_replacement.md` in the
 C2C workspace): a head 1.3x the original has 86 % of its area in the regenerated region, 1.5x only 67 % - the model
-has to draw it smaller. Until the head-room options land (ledger L8.21): raise `crop_scale` and the mask expand so
-the crop and the mask cover the new head's expected size, and use **H3 Mask-Aware ControlNet** instead of the core
-apply when a pose / depth control runs next to a latent mask (core adds the control to the kept plate too).
+has to draw it smaller.
+
+**Head Size Mode** on **H3 Subject Crop** / **H3 Subject Crop (Advanced)** (owner decision 2026-10-13) makes the
+room explicit:
+- `head_size_mode`: **match character proportions** (default) - room for the new character's own head-to-body ratio,
+  anchored at the chin; or **keep original composition** - the original performer's head size and position.
+- `head_scale`: new head / original head; 0 = measure it from `original_pose` and `reference_pose` (any
+  POSE_KEYPOINT: DWPose, SDPose, controlnet_aux) as reference face-width/shoulder-width over the original's, so
+  resolution and framing cancel. Without poses it is 1 and the report says why.
+- `head_room_masks` (new output): the subject mask plus the target head, padded by 10 % of the head height - feed it
+  to the latent mask and to **H3 Subject Uncrop**'s `cropped_masks`, so the regenerated and the composited region
+  match. The head is scaled uniformly about the chin, never stretched.
+With nothing connected and `head_scale` 0 the crops are bit-identical to before. When a pose / depth control runs
+next to a latent mask, use **H3 Mask-Aware ControlNet** instead of the core apply (core adds the control to the kept
+plate too).
 **H3 Swap Control** renders only brows / eyes / nose / mouth so the control carries the performance, not the
 original skull. Quality effects are not yet A/B-tested on H3 weights.
 

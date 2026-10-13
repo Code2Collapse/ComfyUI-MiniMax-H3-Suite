@@ -44,7 +44,7 @@ def test_combined_crop_emits_one_bbox_per_frame():
     images = torch.rand(n, h, w, 3)
     masks = torch.zeros(n, h, w)
     masks[:, 40:88, 40:88] = 1.0
-    crops, cm, bboxes, report = MiniMaxH3_SubjectCrop.execute(
+    crops, cm, bboxes, report, *_ = MiniMaxH3_SubjectCrop.execute(   # + head_room_masks (L8.21, appended)
         images,
         masks,
         {"mode": "combined", "crop_scale": 1.5, "aspect_ratio": 0.0},
