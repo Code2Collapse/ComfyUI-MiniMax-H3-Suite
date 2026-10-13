@@ -144,7 +144,7 @@ def test_offline_switch_forces_the_template(monkeypatch):
 
 def test_key_value_never_reaches_outputs(monkeypatch):
     # INVARIANT: with a key set and the request failing, neither prompt, plan nor report contains the key.
-    secret = "sk-live-NEVER-SHOW-0987654321"
+    secret = "fake-live-key-NEVER-SHOW-0987654321"
     monkeypatch.setenv("C2C_TEST_KEY", secret)
     outs = _run(family="replace_keep_composition", backend=L.OPENAI, base_url="http://127.0.0.1:9/v1", model="m",
                 api_key_env="C2C_TEST_KEY", retries=0)
@@ -154,7 +154,7 @@ def test_key_value_never_reaches_outputs(monkeypatch):
 
 def test_fingerprint_holds_no_secret_and_follows_inputs(monkeypatch):
     # INVARIANT: the cache key is built from inputs only (the key's variable NAME, never its value).
-    monkeypatch.setenv("C2C_TEST_KEY", "sk-SECRET-abcdef")
+    monkeypatch.setenv("C2C_TEST_KEY", "fake-key-SECRET-abcdef")
     N = _node()
     a = N.fingerprint_inputs(family="lipsync", brief="x", api_key_env="C2C_TEST_KEY")
     assert a == N.fingerprint_inputs(family="lipsync", brief="x", api_key_env="C2C_TEST_KEY")

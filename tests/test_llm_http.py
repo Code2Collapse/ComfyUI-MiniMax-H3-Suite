@@ -19,7 +19,7 @@ if str(PACK) not in sys.path:
 
 from mmx_utils import llm_http as L  # noqa: E402
 
-SECRET = "sk-test-SECRET-1234567890"
+SECRET = "fake-test-key-SECRET-1234567890"
 
 
 class _Fake:
