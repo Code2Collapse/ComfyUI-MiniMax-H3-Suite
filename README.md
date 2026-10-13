@@ -1,6 +1,6 @@
 # ComfyUI-MiniMaxSuite — H3 geometric spine + sampling guards
 
-MIT/Apache node pack for MiniMax H3 production workflows (V3 `io.ComfyNode` API).
+GPL-3.0 node pack (see `LICENSE`) for MiniMax H3 production workflows (V3 `io.ComfyNode` API).
 
 ## Nodes
 
@@ -8,7 +8,7 @@ MIT/Apache node pack for MiniMax H3 production workflows (V3 `io.ComfyNode` API)
 |------|------|
 | **H3 Frame Handles** (N7) | Editorial head/tail handles + H3/WAN/LTX2 grid padding; audio resync |
 | **H3 Track + Crop** (N1) | TV/L1 crop planner; `crops` + `H3_TRANSFORM` |
-| **H3 Control Hints** (N3) | Crop-space canny / passthrough hints (no Union consumer yet) |
+| **H3 Control Hints** (N3) | Crop-space canny / passthrough hints (feed core's Apply MiniMax H3 Fun ControlNet, or H3 Mask-Aware ControlNet below) |
 | **H3 Mask Prep** (N2) | Video-side latent mask |
 | **H3 Masked Replace** (N4) | Inject crops + `noise_mask` NestedTensor (lipsync via audio lock) |
 | **H3 Stitch Back** (N5) | Inverse affine paste; exterior = literal plate |
@@ -36,6 +36,20 @@ MIT/Apache node pack for MiniMax H3 production workflows (V3 `io.ComfyNode` API)
 | **H3 Color QC** | Hasler-Süsstrunk + luma DR + texture/flicker for Hybrid A/B |
 
 N1 is a **planner**, not a detector — wire `subject_mask` and/or `bboxes_json`.
+
+## Character replacement: room for the new head
+
+H3 has no face or expression input: identity comes from `<Picture N>` references, structure and expression only
+from pixels it sees (the kept plate, a reference video, or the Fun ControlNet's control video). Every geometric
+signal of a crop -> mask -> regenerate -> uncrop replacement comes from the ORIGINAL performer, so the new head can
+be no bigger than the room the crop and the mask leave. Measured with MVEx / H3 Subject Crop `combined`
+`crop_scale` 1.2, mask expand 40 px, 32 px tokens (`docs/research/l820_minimax_character_replacement.md` in the
+C2C workspace): a head 1.3x the original has 86 % of its area in the regenerated region, 1.5x only 67 % - the model
+has to draw it smaller. Until the head-room options land (ledger L8.21): raise `crop_scale` and the mask expand so
+the crop and the mask cover the new head's expected size, and use **H3 Mask-Aware ControlNet** instead of the core
+apply when a pose / depth control runs next to a latent mask (core adds the control to the kept plate too).
+**H3 Swap Control** renders only brows / eyes / nose / mouth so the control carries the performance, not the
+original skull. Quality effects are not yet A/B-tested on H3 weights.
 
 ## H3 Hybrid HDR (Singularity colour without FL2VA damage)
 
