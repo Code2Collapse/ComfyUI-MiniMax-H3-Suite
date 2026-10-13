@@ -87,7 +87,7 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
 - **LLM backends**: Ollama, any OpenAI-compatible server (llama-server, LM Studio, vLLM), or the OpenAI / Anthropic /
   Gemini APIs. They refine the descriptive fields over HTTP only. **No model runtime is loaded inside ComfyUI.** The
   llama.cpp-based writer died with an *illegal instruction* when its prebuilt wheel met a CPU without AVX-512, and
-  that kills the whole ComfyUI process. To use llama.cpp, run `llama-server` and pick `openai-compatible server`.
+  that kills the whole ComfyUI process. To use llama.cpp, run `llama-server` and pick `openai-compatible server`. `python tools/llama_cpp_probe.py [--model x.gguf]`, run with ComfyUI's Python, checks whether a llama-cpp-python install would hit that crash on this CPU, safely in a child process.
 - Each backend is checked before the request: is it reachable, is the model present, is the key set. Transient errors
   (429 / 5xx / network) are retried. On any failure the node falls back to the template, or stops if `on_failure`
   says so. The report names the backend used, the time taken, which fields came from the model, and every repair.
