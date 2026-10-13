@@ -1,3 +1,11 @@
+# Character replacement — `character_replacement/1_…6_*.json`
+
+Six task workflows (replace keeping composition, change pose, change look, expression transfer, masked subject,
+across a take). Guide: `docs/character_replacement.md`. **Status: built in the real front end, validated by the
+server (only missing model / media files reported), not run on H3 weights.**
+
+---
+
 # H3 Plate Fidelity — `h3_plate_fidelity_PRB.json`
 
 **Status: generated from `test_minimax_PRB_Chandhan.json` by a script; socket names and

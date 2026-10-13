@@ -38,7 +38,17 @@ FAMILY_IDS: tuple[str, ...] = (
     "element_swap",
     "ui_on_device",
     "dub_reperformance",
+    # Character replacement tasks (owner 2026-10-13, C2C D8.21b): deterministic, editable templates
+    "replace_keep_composition",
+    "replace_change_pose",
+    "replace_keep_pose_change_look",
+    "expression_transfer",
+    "replace_masked_subject",
+    "replace_across_video",
 )
+
+REPLACEMENT_FAMILIES: tuple[str, ...] = FAMILY_IDS[-6:]
+HEAD_SIZE_MODES: tuple[str, ...] = ("match character proportions", "keep original composition")
 
 # Catalog Part 7 (§7.2–§7.12) — legal task-type combinations only.
 TASK_TYPE_PREFIXES: dict[str, str] = {
@@ -53,6 +63,12 @@ TASK_TYPE_PREFIXES: dict[str, str] = {
     "element_swap": "video editing",
     "ui_on_device": "video editing",  # §7.9 localised device composite
     "dub_reperformance": "video editing + audio reuse",  # §7.5 reperformance
+    "replace_keep_composition": "video editing + reference generation",
+    "replace_change_pose": "video editing + reference generation",
+    "replace_keep_pose_change_look": "video editing + reference generation",
+    "expression_transfer": "video editing + reference generation",
+    "replace_masked_subject": "video editing + reference generation",
+    "replace_across_video": "video editing + reference generation",
 }
 
 RETENTION_MARKERS: frozenset[str] = frozenset(
@@ -141,17 +157,146 @@ def _shot_block(action: str, style_note: str = "") -> str:
     )
 
 
+def _head_clause(head_size_mode: str) -> str:
+    """How big the new head is (C2C D8.21: Head Size Mode; must match H3 Subject Crop's head_size_mode)."""
+    if head_size_mode == HEAD_SIZE_MODES[1]:
+        return ("<Subject 1>'s head takes the size and screen position of the original performer's head in <Video 1>; "
+                "only identity and appearance change")
+    return ("<Subject 1> keeps the head-to-body proportions of <Picture 1>; the head sits on the original performer's "
+            "neck and shoulders in <Video 1>, never stretched or squeezed to fit")
+
+
+_PLATE = ("<Video 1> is the source video for the target video edit: it defines framing, camera motion, timing and "
+          "composition.")
+_OUTSIDE = ("<Video 1> (everything outside the masked region): fully_preserved - background, lighting, camera, "
+            "framing and timing are retained; no camera rewrite, no restyle.")
+
+
+def _replacement_sections(family: str, subject: str, notes: str, prefix: str, head_size_mode: str) -> dict[str, str]:
+    head = _head_clause(head_size_mode)
+    sound = "Copied from <Video 1>."
+    if family == "replace_keep_composition":
+        return {
+            "subject_definitions": (
+                f"<Subject 1> is {subject} whose identity, face, hair and appearance come from <Picture 1>.\n"
+                "<Subject 2> is the original performer in <Video 1>; the performer is replaced.\n" + _PLATE),
+            "summary": (
+                f"[{prefix}] The target video is an edited version of <Video 1>. Inside the masked region <Subject 2> "
+                f"is replaced by <Subject 1>. {head}. Pose, expression, lip movement and timing follow <Subject 2> "
+                "in <Video 1>."),
+            "retention_analysis": (
+                "<Subject 1> (appears in [Shot 1]): attribute_transfer - identity and appearance only.\n"
+                "<Subject 2> (performance): partially_preserved - pose, expression and timing kept; identity replaced.\n"
+                + _OUTSIDE),
+            "detailed_description": _shot_block(
+                f"Continuous take from <Video 1>. <Subject 1> performs exactly as <Subject 2> did, lit by the plate's "
+                f"light. {notes}".strip()),
+            "overall_soundscape": sound, "non_diegetic_music": "none.",
+        }
+    if family == "replace_change_pose":
+        return {
+            "subject_definitions": (
+                f"<Subject 1> is {subject} whose identity, face, hair and appearance come from <Picture 1>.\n"
+                "<Video 2> is the driving performance: <Subject 1> adopts its body pose and motion.\n" + _PLATE),
+            "summary": (
+                f"[{prefix}] The target video is an edited version of <Video 1>. Inside the masked region the subject "
+                f"becomes <Subject 1>, moving with the pose and motion of <Video 2>. {head}. Identity stays that of "
+                "<Picture 1> in every frame."),
+            "retention_analysis": (
+                "<Subject 1> (appears in [Shot 1]): fully_preserved - identity and appearance from <Picture 1>.\n"
+                "<Video 2> (body pose and motion): reference - pose only; not its identity, wardrobe or background.\n"
+                + _OUTSIDE),
+            "detailed_description": _shot_block(
+                f"Continuous take on the framing of <Video 1>. <Subject 1> performs the movement of <Video 2>. "
+                f"{notes}".strip()),
+            "overall_soundscape": sound, "non_diegetic_music": "none.",
+        }
+    if family == "replace_keep_pose_change_look":
+        return {
+            "subject_definitions": (
+                f"<Subject 1> is {subject} whose look - face, hair, wardrobe and appearance - comes from <Picture 1>.\n"
+                "<Subject 2> is the original performer in <Video 1>, whose exact pose and motion are kept.\n" + _PLATE),
+            "summary": (
+                f"[{prefix}] The target video is an edited version of <Video 1>. Inside the masked region the "
+                f"appearance becomes that of <Subject 1> while the body pose and motion stay exactly those of "
+                f"<Subject 2>. {head}."),
+            "retention_analysis": (
+                "<Subject 2> (body pose and motion): fully_preserved - every limb and head angle kept frame by frame.\n"
+                "<Subject 1> (appears in [Shot 1]): attribute_transfer - appearance only.\n" + _OUTSIDE),
+            "detailed_description": _shot_block(
+                f"Continuous take from <Video 1>. The performer keeps the original pose; only the look changes to "
+                f"<Subject 1>. {notes}".strip()),
+            "overall_soundscape": sound, "non_diegetic_music": "none.",
+        }
+    if family == "expression_transfer":
+        return {
+            "subject_definitions": (
+                f"<Subject 1> is {subject} as shown in <Video 1>; identity and appearance stay unchanged.\n"
+                "<Video 2> is the driving face performance: <Subject 1> adopts its facial expression, eye and lip "
+                "movement.\n" + _PLATE),
+            "summary": (
+                f"[{prefix}] The target video is an edited version of <Video 1>. Only the face region of <Subject 1> "
+                "is regenerated so its expression, eye and lip movement follow <Video 2>; identity, head size and "
+                "head position stay those of <Video 1>."),
+            "retention_analysis": (
+                "<Subject 1> (identity, head size, head position): fully_preserved.\n"
+                "<Video 2> (facial expression, eye and lip movement): reference - expression only, not identity.\n"
+                + _OUTSIDE),
+            "detailed_description": _shot_block(
+                f"Continuous take from <Video 1>. <Subject 1>'s face acts out the expressions of <Video 2>. "
+                f"{notes}".strip()),
+            "overall_soundscape": sound, "non_diegetic_music": "none.",
+        }
+    if family == "replace_masked_subject":
+        return {
+            "subject_definitions": (
+                f"<Subject 1> is {subject} from <Picture 1>, the replacement for whatever the mask covers.\n" + _PLATE),
+            "summary": (
+                f"[{prefix}] The target video is an edited version of <Video 1>. Only the masked region is "
+                f"regenerated, showing <Subject 1> in the place, scale and motion of the masked subject. {head}."),
+            "retention_analysis": (
+                "<Subject 1> (inside the mask, appears in [Shot 1]): attribute_transfer - appearance from <Picture 1>.\n"
+                + _OUTSIDE),
+            "detailed_description": _shot_block(
+                f"Continuous take from <Video 1>. <Subject 1> occupies the masked region, matched to the plate's "
+                f"perspective and light. {notes}".strip()),
+            "overall_soundscape": sound, "non_diegetic_music": "none.",
+        }
+    if family == "replace_across_video":
+        return {
+            "subject_definitions": (
+                f"<Subject 1> is {subject} whose identity, face, hair and appearance come from <Picture 1>.\n"
+                "<Subject 2> is the original performer in <Video 1>; the performer is replaced for the whole take.\n"
+                + _PLATE),
+            "summary": (
+                f"[{prefix}] The target video is an edited version of <Video 1>. <Subject 2> is replaced by "
+                f"<Subject 1> in every frame of the take with the same identity throughout - no drift, no flicker. "
+                f"{head}. Pose, expression and timing follow <Subject 2>."),
+            "retention_analysis": (
+                "<Subject 1> (appears in [Shot 1], every frame): attribute_transfer - one constant identity.\n"
+                "<Subject 2> (performance): partially_preserved - pose, expression and timing kept.\n" + _OUTSIDE),
+            "detailed_description": _shot_block(
+                f"Continuous take from <Video 1>, start to end. <Subject 1> stays the same person in every frame. "
+                f"{notes}".strip()),
+            "overall_soundscape": sound, "non_diegetic_music": "none.",
+        }
+    raise ValueError(f"Unknown replacement family {family!r}")
+
+
 def _family_sections(
     family: str,
     *,
     subject_name: str,
     task_notes: str,
     style_notes: str,
+    head_size_mode: str = HEAD_SIZE_MODES[0],
 ) -> dict[str, str]:
     subject = subject_name or "primary subject"
     notes = task_notes.strip()
     style = style_notes.strip()
     prefix = TASK_TYPE_PREFIXES[family]
+    if family in REPLACEMENT_FAMILIES:
+        return _replacement_sections(family, subject, notes, prefix, head_size_mode)
 
     if family == "lipsync":
         return {
@@ -427,6 +572,7 @@ def build_family_package(
     references_manifest: str = "",
     frame_count: int = 22,
     guidance_scale: float = 1.0,
+    head_size_mode: str = HEAD_SIZE_MODES[0],
 ) -> tuple[str, dict[str, Any]]:
     fam = (family or "lipsync").lower()
     if fam not in FAMILY_IDS:
@@ -437,8 +583,9 @@ def build_family_package(
         subject_name=subject_name,
         task_notes=task_notes,
         style_notes=style_notes,
+        head_size_mode=head_size_mode,
     )
-    mask_required = fam in ("environment_weather", "element_swap")
+    mask_required = fam in ("environment_weather", "element_swap") or fam in REPLACEMENT_FAMILIES
 
     pipeline_notes: dict[str, Any] = {
         "family": fam,
@@ -450,6 +597,8 @@ def build_family_package(
         "references_manifest": (references_manifest or "").strip(),
         "subjects": subject_labels_from_definitions(sections["subject_definitions"]),
     }
+    if fam in REPLACEMENT_FAMILIES:
+        pipeline_notes["head_size_mode"] = head_size_mode
 
     prompt = build_six_section_prompt(sections)
     return prompt, pipeline_notes

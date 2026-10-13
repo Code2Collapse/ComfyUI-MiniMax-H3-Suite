@@ -88,6 +88,17 @@ function setStatus(st, text, tone) {
   st.status.title = st.fullError || "";
 }
 
+/** The saved values with one trailing placeholder when core's legacy migration would otherwise drop entries at
+ *  forceInput positions (the mask below is the one frontend 1.53's migrateWidgetsValues builds); else `vals`
+ *  itself. Pure, so tests/test_kit_configure_guard.py runs it against core's function. */
+export function guardWidgetValues(defs, widgetNames, vals) {
+  if (!defs || !Array.isArray(vals)) return vals;
+  const names = new Set(widgetNames);
+  const mask = Object.values(defs).filter((d) => names.has(d.name) || d.forceInput)
+    .flatMap((d) => (d.control_after_generate ? [!!d.forceInput, false] : [!!d.forceInput]));
+  return mask.some(Boolean) && mask.length === vals.length ? [...vals, null] : vals;
+}
+
 app.registerExtension({
   name: "MiniMaxH3.HouseKit",
 
@@ -107,6 +118,10 @@ app.registerExtension({
           // a 15px slot gave the strip no room and its badge spilled past the
           // node's bottom edge. 2px margin in an 18px slot fits the 14px strip.
           const w = this.addDOMWidget("mmx_status", "div", ui.el, { serialize: false, margin: 2 });
+          // The option alone did not keep it out of widgets_values (saved as a trailing ""); the widget's own flag
+          // is what serialize() and configure() read. Which length a save ends up with also decides whether core's
+          // legacy migration fires - see the configure() guard below (C2C L8.21).
+          w.serialize = false;
           w.computeSize = (width) => [width, 18];
           chainOnRemoved(this, () => { delete this[ST]; });
           setStatus(st, "", "");
@@ -114,6 +129,25 @@ app.registerExtension({
       } catch (e) { /* a kit failure must never take the node down */ }
       return r;
     };
+
+    // C2C L8.21: frontend 1.53's node configure() runs a legacy migration (migrateWidgetsValues) that, when the saved
+    // widgets_values has exactly as many entries as "widget inputs + forceInput inputs", drops the entries at every
+    // forceInput position - meant for old saves that stored values for converted widgets. Our nodes are V3 and never
+    // wrote such values, so on any node with a force_input socket (Subject Uncrop's bboxes, Detail Match, ...) a
+    // modern save whose length happened to match lost its first values on load (feather 16 came back ""). One
+    // placeholder at the end makes the lengths differ, so the migration leaves the values alone; configure ignores
+    // the extra entry. Measured on all 108 nodes: docs/evidence/L8.21/mmx_roundtrip_*.json (C2C workspace).
+    const configure = nodeType.prototype.configure;
+    if (typeof configure === "function") {
+      nodeType.prototype.configure = function (info, ...rest) {
+        try {
+          const vals = guardWidgetValues(this.constructor?.nodeData?.inputs,
+                                         (this.widgets ?? []).map((w) => w.name), info?.widgets_values);
+          if (vals !== info?.widgets_values) info = { ...info, widgets_values: vals };
+        } catch (e) { /* never block a load */ }
+        return configure.call(this, info, ...rest);
+      };
+    }
 
     const onExecuted = nodeType.prototype.onExecuted;
     nodeType.prototype.onExecuted = function (output) {

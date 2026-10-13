@@ -63,6 +63,18 @@ plate too).
 **H3 Swap Control** renders only brows / eyes / nose / mouth so the control carries the performance, not the
 original skull. Quality effects are not yet A/B-tested on H3 weights.
 
+### Six character-replacement workflows
+
+`workflows/character_replacement/` holds one ready-to-load graph per task: replace keeping the composition, keep
+identity and change the pose, keep the pose and change the look, transfer an expression, replace a masked subject,
+and replace across a whole take. Each carries its guide as a note on the canvas, and the full step-by-step guide is
+[`docs/character_replacement.md`](docs/character_replacement.md) (inputs, mask and reference requirements, Head Size
+Mode, starting settings, and the GPU A/B to run before trusting the result). **H3 Family Presets** has six matching
+families that write a fixed, structured prompt per task. `<Video 1>` is always the cropped plate. The `head_size_mode`
+there must match the one on H3 Subject Crop. **MiniMax H3 Prompt Preview & Edit** now shows that prompt after a run;
+typing in it turns `use_edited_text` on, so your edit is what runs next. The graphs are checked in both renderers and
+by the server's validation, but **not yet run on H3 weights**; the settings are the official r2v template's, not tuned.
+
 ## H3 Hybrid HDR (Singularity colour without FL2VA damage)
 
 Method: for matched checkpoints, `D = FL−Ref`, `Δ = Sing−Ref`, `a = clamp(⟨Δ,D⟩/⟨D,D⟩,0,1)`, `H = Δ−a·D`; compress `H` per layer to rank‑r LoRA.

@@ -349,27 +349,37 @@ class MiniMaxH3_PromptEditor(io.ComfyNode):
             node_id="MiniMaxH3_PromptEditor",
             display_name="MiniMax H3 Prompt Preview & Edit",
             category=_PROMPT_CATEGORY,
-            description="Pass-through prompt editor widget (no custom JS). Prefers wired PROMPT over stored text.",
+            description="Shows the prompt that reaches H3 and lets you edit it: a wired PROMPT wins until you edit the text (use_edited_text).",
             is_output_node=True,
             inputs=[
                 io.String.Input("prompt", multiline=True, force_input=True, default="", optional=True),
                 io.String.Input("_stored_prompt", multiline=True, default="", tooltip="Edited prompt storage."),
+                # C2C L8.21 (owner 2026-10-13: the generated prompt stays editable). Appended, default off: saved
+                # workflows behave exactly as before.
+                io.Boolean.Input("use_edited_text", default=False, optional=True,
+                                 tooltip="Off: a wired prompt wins, and after each run the box shows the prompt that "
+                                         "was used. On: the text in the box wins - typing in the box turns this on. "
+                                         "Turn it off to take a regenerated prompt again."),
             ],
             outputs=[io.String.Output("prompt", display_name="PROMPT")],
         )
 
-    @classmethod
-    def fingerprint_inputs(cls, prompt: str = "", _stored_prompt: str = "", **kwargs):
+    @staticmethod
+    def _pick(prompt, _stored_prompt, use_edited_text) -> str:
         incoming = str(prompt).strip() if prompt else ""
         stored = str(_stored_prompt).strip() if _stored_prompt else ""
-        blob = incoming if incoming else stored
-        return hashlib.md5(blob.encode("utf-8")).hexdigest()
+        if use_edited_text and stored:
+            return stored
+        return incoming if incoming else stored
 
     @classmethod
-    def execute(cls, prompt: str = "", _stored_prompt: str = "", **kwargs) -> io.NodeOutput:
-        incoming = str(prompt).strip() if prompt and str(prompt).strip() else ""
-        stored = str(_stored_prompt).strip() if _stored_prompt else ""
-        value = incoming if incoming else stored
+    def fingerprint_inputs(cls, prompt: str = "", _stored_prompt: str = "", use_edited_text: bool = False, **kwargs):
+        return hashlib.md5(cls._pick(prompt, _stored_prompt, use_edited_text).encode("utf-8")).hexdigest()
+
+    @classmethod
+    def execute(cls, prompt: str = "", _stored_prompt: str = "", use_edited_text: bool = False,
+                **kwargs) -> io.NodeOutput:
+        value = cls._pick(prompt, _stored_prompt, use_edited_text)
         return io.NodeOutput(value, ui={"text": [value], "prompt": [value]})
 
 

@@ -67,3 +67,44 @@ def test_snap_duration_frames_param(duration):
     frames = snap_duration_frames(duration)
     assert frames == calculate_h3_frames(max(5, round(duration * 24)))
     assert is_h3_compatible(frames)
+
+
+# -- Prompt Preview & Edit (C2C L8.21: the generated prompt stays editable) ----
+
+def _editor():
+    from mmx_nodes.promptor import MiniMaxH3_PromptEditor
+    return MiniMaxH3_PromptEditor
+
+
+def _ran(**kw):
+    out = _editor().execute(**kw)
+    return out.args[0] if hasattr(out, "args") else out[0]
+
+
+def test_prompt_editor_wired_prompt_wins_by_default():
+    # INVARIANT: with use_edited_text off (the default, and every saved workflow) a wired prompt wins over the box,
+    # exactly as before the toggle existed.
+    assert _ran(prompt="generated", _stored_prompt="old draft") == "generated"
+    assert _ran(prompt="", _stored_prompt="typed") == "typed"
+
+
+def test_prompt_editor_edited_text_wins_when_turned_on():
+    # INVARIANT: use_edited_text on -> the box wins; an empty box never blanks the prompt (falls back to the wire).
+    assert _ran(prompt="generated", _stored_prompt="my edit", use_edited_text=True) == "my edit"
+    assert _ran(prompt="generated", _stored_prompt="  ", use_edited_text=True) == "generated"
+
+
+def test_prompt_editor_fingerprint_follows_the_text_that_runs():
+    # INVARIANT: the cache key changes exactly when the prompt that reaches H3 changes.
+    E = _editor()
+    a = E.fingerprint_inputs(prompt="generated", _stored_prompt="draft")
+    assert a == E.fingerprint_inputs(prompt="generated", _stored_prompt="other draft")      # ignored text
+    assert a != E.fingerprint_inputs(prompt="generated", _stored_prompt="draft", use_edited_text=True)
+
+
+def test_prompt_editor_toggle_is_appended_and_optional():
+    # INVARIANT: the toggle comes after the existing inputs and is optional, so saved widgets_values keep their order.
+    schema = _editor().define_schema()
+    ids = [i.id for i in schema.inputs]
+    assert ids[-1] == "use_edited_text" and ids.index("_stored_prompt") < ids.index("use_edited_text")
+    assert schema.inputs[-1].optional
