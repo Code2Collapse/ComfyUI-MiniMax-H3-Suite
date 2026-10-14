@@ -99,6 +99,27 @@ Checked on a real face clip with a known head roll: an identical output scores r
 4 frames late drops mouth r to 0.31 and event F1 to 0.38. No H3 output has been scored yet; that is the owner's GPU
 run.
 
+## H3 Identity Fusion Controller (experimental)
+
+RefMod and the reference size decide **what** reference goes in. This node decides **where**, **when** and **how
+strongly** the generated video looks at the character pictures (`<Picture N>`). The cropped plate (`<Video 1>`)
+stays the authority for the performance.
+
+- **Where.** Identity attention only inside the replacement region (`replacement_mask`, the latent mask of
+  `head_room_masks`), so none on the background or on another person. It is eased on mouth and eye rows
+  (`expression_mask`), where the plate's own performance is strengthened instead. It is off on an occluder in front
+  of the face (`occluder_mask`).
+- **When.** A block range and a step window. The expression easing starts later (`expression_from`), because
+  mouth and eye shape are fine detail.
+- **How.** A multiplier per token row on the attention that goes to the identity pictures. It is applied as an
+  exact bias on padded attention channels: no dense mask, no extra model pass, no reserved DiT block. NegPiP, Block
+  Cache and Spectrum keep working. An optional asymmetric mode keeps the references from reading the noisy video.
+
+Wire it after the model loader (after H3 Mask-Aware ControlNet if you use one) and before the sampling guards. Its
+`positive` comes from Reference to Video. **Not A/B-tested on H3 weights**: it is run T5 of the benchmark in
+`docs/character_replacement.md`. Measure it with `tools/h3_replace_bench.py` before you rely on it. Tested on CPU:
+the bias equals a dense-mask attention to 1e-5, and through core's own H3 attention module to 1e-4.
+
 ## MiniMax H3 Prompt Writer v2
 
 Writes the structured H3 prompt for any H3 Family Presets task from a plain-language brief. It plans 8 fields (scene

@@ -127,6 +127,7 @@ identity match. Use a fixed seed (123) and the settings above unless a row says 
 | C | B + the cropped plate as `<Video 1>` and the template prompt | same + mouth / eye openness against the plate |
 | D | C + pose control through H3 Mask-Aware ControlNet | same |
 | E | C + the aligned face crop as `<Picture 2>` (`face_closeup_reference`) | ArcFace similarity to the character, against C |
+| T5 | best of A–E + **H3 Identity Fusion Controller** (model after the loader / Mask-Aware ControlNet, `positive` from Reference to Video, `replacement_mask` = the latent head-room mask; then add a mouth + eyes `expression_mask`) | everything above; identity inside vs leakage outside the region |
 
 `tools/h3_replace_bench.py` measures every column of this table. `score` scores one output, `run` drives the whole matrix on a ComfyUI server, and `report` prints the table. See the README.
 

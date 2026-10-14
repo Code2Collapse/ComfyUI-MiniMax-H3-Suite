@@ -17,7 +17,7 @@
 // Sits UNDER the bespoke widgets; it adds a row and never replaces anything.
 // Plain ES module, no Vue, nothing touches `window` at import time.
 
-import { app, api, chainOnRemoved, findNodeByExecId, forEachNode, themeVar } from "./shared.js";
+import { app, api, chainOnRemoved, findNodeByExecId, forEachNode, themeVar, vueFitNodeHeight } from "./shared.js";
 import { humaniseH3Error } from "./h3_errors.js";
 
 const PREFIX = "MiniMaxH3_";
@@ -38,6 +38,7 @@ const STAGE_COLOR = {
   Spectrum:  ["sky",      "#5aa8c8"],
   Authoring: ["overlay2", "#8a8a8a"],
   QC:        ["red",      "#d16a6a"],
+  Conditioning: ["lavender", "#9a8fd1"],
 };
 
 function stageColor(stage) {
@@ -105,6 +106,10 @@ app.registerExtension({
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (!String(nodeData?.name || "").startsWith(PREFIX)) return;
     const stage = stageOf(nodeData);
+    // Nodes 2.0 folds `advanced` inputs behind "Show advanced inputs" but keeps the node at the classic height that
+    // counts them: fit it to what is shown (no-op on the classic canvas) - measured ~200 px of dead space (L8.26).
+    const hasAdvanced = Object.values(nodeData?.input?.optional || {}).concat(Object.values(nodeData?.input?.required || {}))
+      .some((spec) => Array.isArray(spec) && spec[1] && spec[1].advanced === true);
 
     const onCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
@@ -126,6 +131,7 @@ app.registerExtension({
           chainOnRemoved(this, () => { delete this[ST]; });
           setStatus(st, "", "");
         }
+        if (hasAdvanced) requestAnimationFrame(() => vueFitNodeHeight(this));
       } catch (e) { /* a kit failure must never take the node down */ }
       return r;
     };
