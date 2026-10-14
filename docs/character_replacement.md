@@ -128,6 +128,8 @@ identity match. Use a fixed seed (123) and the settings above unless a row says 
 | D | C + pose control through H3 Mask-Aware ControlNet | same |
 | E | C + the aligned face crop as `<Picture 2>` (`face_closeup_reference`) | ArcFace similarity to the character, against C |
 
+`tools/h3_replace_bench.py` measures every column of this table. `score` scores one output, `run` drives the whole matrix on a ComfyUI server, and `report` prints the table. See the README.
+
 What is already pinned by tests on CPU: the crop window holds the target head on every frame. The head-room mask
 covers that head plus its padding. Outside the mask the result equals the plate exactly. Crop then uncrop maps a
 point back within 1 px.

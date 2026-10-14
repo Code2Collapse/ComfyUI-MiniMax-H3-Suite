@@ -75,6 +75,28 @@ there must match the one on H3 Subject Crop. **MiniMax H3 Prompt Preview & Edit*
 typing in it turns `use_edited_text` on, so your edit is what runs next. Optional and experimental: `face_closeup_reference` names a tight face crop of the character, wired as `ref_image_1`, as `<Picture 2>`, the authority for facial identity. The graphs are checked in both renderers and
 by the server's validation, but **not yet run on H3 weights**; the settings are the official r2v template's, not tuned.
 
+### Measuring a replacement: `tools/h3_replace_bench.py`
+
+Answers the question for character replacement: does the result keep the source performance while the identity
+changes? Run it with ComfyUI's Python. Nothing is downloaded.
+
+- `score --plate P --output O --mask M [--performance D] [--reference R]` measures:
+  - face performance against the source (or the driving clip for expression transfer): mouth, eyes, gaze and head
+    pose, each as Pearson r and MAE, plus mouth open/close event F1 and a frozen-expression flag;
+  - background preservation outside the mask (PSNR), leakage at the mask edge, excess flicker inside the mask, and
+    colour drift;
+  - identity, as ArcFace cosine, only where insightface and its `buffalo_l` model are already installed.
+- Face landmarks come from mediapipe FaceMesh, whose models ship inside the mediapipe package. A frame without a
+  face is excluded and counted, never guessed.
+- `run --manifest bench.json --server …` queues each workflow of a matrix (e.g. the A12 T0–T7 set) one at a time. It
+  times each run from ComfyUI's own timestamps, records peak GPU memory with `nvidia-smi` (whole GPU, over idle) and
+  scores the newest output.
+- `report results/*.json` prints one table.
+
+Checked on a real face clip with a known head roll: an identical output scores r = 1 on every signal; the same clip
+4 frames late drops mouth r to 0.31 and event F1 to 0.38. No H3 output has been scored yet; that is the owner's GPU
+run.
+
 ## MiniMax H3 Prompt Writer v2
 
 Writes the structured H3 prompt for any H3 Family Presets task from a plain-language brief. It plans 8 fields (scene
