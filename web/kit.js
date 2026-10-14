@@ -17,7 +17,7 @@
 // Sits UNDER the bespoke widgets; it adds a row and never replaces anything.
 // Plain ES module, no Vue, nothing touches `window` at import time.
 
-import { app, api, chainOnRemoved, themeVar } from "./shared.js";
+import { app, api, chainOnRemoved, findNodeByExecId, forEachNode, themeVar } from "./shared.js";
 import { humaniseH3Error } from "./h3_errors.js";
 
 const PREFIX = "MiniMaxH3_";
@@ -165,13 +165,13 @@ app.registerExtension({
   async setup() {
     api.addEventListener("executing", ({ detail }) => {
       if (detail == null) return;
-      const n = app.graph?.getNodeById?.(Number(detail));
+      const n = findNodeByExecId(detail);          // "12:5" inside a subgraph (L2.47)
       const st = n && n[ST];
       if (st) { st.t0 = Date.now(); st.fullError = ""; setStatus(st, "running…", ""); }
     });
 
     api.addEventListener("execution_error", ({ detail }) => {
-      const n = app.graph?.getNodeById?.(Number(detail?.node_id));
+      const n = findNodeByExecId(detail?.node_id);
       const st = n && n[ST];
       if (!st) return;
       const raw = [detail?.exception_message, ...(detail?.traceback || [])]
@@ -182,10 +182,10 @@ app.registerExtension({
     });
 
     api.addEventListener("execution_interrupted", () => {
-      for (const n of app.graph?._nodes || []) {
+      forEachNode((n) => {
         const st = n[ST];
         if (st && st.t0) setStatus(st, "cancelled", "");
-      }
+      });
     });
   },
 });

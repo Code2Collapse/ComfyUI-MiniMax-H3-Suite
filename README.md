@@ -4,6 +4,8 @@ GPL-3.0 node pack (see `LICENSE`) for MiniMax H3 production workflows (V3 `io.Co
 
 ## Nodes
 
+Every node shows its stage, its run status and H3 errors in plain English. That status follows the node inside (nested) subgraphs too: the server names such a node `outer:inner`, and the root graph alone never finds it.
+
 | Node | Role |
 |------|------|
 | **H3 Frame Handles** (N7) | Editorial head/tail handles + H3/WAN/LTX2 grid padding; audio resync |

@@ -394,4 +394,42 @@ export function vueFitNodeHeight(node) {
   requestAnimationFrame(step);
 }
 
+// ── nodes inside subgraphs (C2C L2.47) ──────────────────────────────────────
+// `app.graph` is the ROOT graph only. A node inside a subgraph is named by the server with a composite id
+// ("12:5", "12:5:7" when nested) - Number() of that is NaN - and is not in app.graph._nodes.
+
+/** The node a server event names: a plain id, or "outer:inner[:deeper]" through (nested) subgraphs. */
+export function findNodeByExecId(idLike) {
+  const root = app.graph;
+  if (!root || idLike == null || idLike === "") return null;
+  const byId = (g, id) => (g?._nodes || []).find((n) => String(n.id) === String(id)) || null;
+  const parts = String(idLike).split(":");
+  let g = root;
+  let node = null;
+  for (let i = 0; i < parts.length; i++) {
+    node = byId(g, parts[i]);
+    if (!node) return null;
+    if (i < parts.length - 1) {
+      g = node.subgraph;
+      if (!g) return null;
+    }
+  }
+  return node;
+}
+
+/** Every node of the workflow, subgraphs included (each subgraph definition visited once). */
+export function forEachNode(fn) {
+  const seen = new Set();
+  const stack = [app.graph];
+  while (stack.length) {
+    const g = stack.pop();
+    if (!g || seen.has(g)) continue;
+    seen.add(g);
+    for (const n of g._nodes || []) {
+      fn(n, g);
+      if (n.subgraph) stack.push(n.subgraph);
+    }
+  }
+}
+
 export { app, api };
