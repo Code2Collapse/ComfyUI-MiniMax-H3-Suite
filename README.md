@@ -141,6 +141,9 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
   everywhere.
 - The server settings appear only when an LLM backend is selected. The Promptor LLM director still covers free-form
   prompts.
+- The Promptor's Gemini provider also sends its key only in the `x-goog-api-key` header (until 2026-10-15 it put
+  the key in the request URL, where a connection error could carry it into the error text and the log). Any
+  error text it returns is cleaned of the key.
 
 ## H3 Hybrid HDR (Singularity colour without FL2VA damage)
 
