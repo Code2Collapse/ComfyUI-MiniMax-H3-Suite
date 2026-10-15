@@ -19,6 +19,21 @@ class GeminiProvider(LLMProvider):
         super().__init__(api_base=api_base, api_key=api_key, model=model)
         self.disable_thinking = disable_thinking
 
+    # L8.31: the key travels in the x-goog-api-key header, never in the URL. With ?key= in the URL, a requests
+    # exception (ConnectionError, SSLError ...) carried the URL, and so the key, into LLMResponse.error and the logs.
+    def _headers(self) -> dict[str, str]:
+        h = {"Content-Type": "application/json"}
+        if self.api_key:
+            h["x-goog-api-key"] = self.api_key
+        return h
+
+    def _scrub(self, text: object) -> str:
+        """Error text with the key removed, whatever produced it."""
+        out = str(text)
+        if self.api_key:
+            out = out.replace(self.api_key, "***")
+        return out
+
     def chat(
         self,
         system_prompt: str,
@@ -29,7 +44,7 @@ class GeminiProvider(LLMProvider):
         model: str | None = None,
     ) -> LLMResponse:
         model_name = self.get_model(model)
-        url = f"{self.api_base}/models/{model_name}:generateContent?key={self.api_key}"
+        url = f"{self.api_base}/models/{model_name}:generateContent"
         parts = []
         if base64_images and len(base64_images) > 0:
             if isinstance(base64_images[0], dict):
@@ -57,11 +72,11 @@ class GeminiProvider(LLMProvider):
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                response = requests.post(url, headers={"Content-Type": "application/json"}, json=payload, timeout=REQUEST_TIMEOUT)
+                response = requests.post(url, headers=self._headers(), json=payload, timeout=REQUEST_TIMEOUT)
                 if response.status_code in (401, 403):
                     return LLMResponse(error="Gemini authentication failed.", model=model_name)
                 if not response.ok:
-                    return LLMResponse(error=f"HTTP {response.status_code}: {response.text[:200]}", model=model_name)
+                    return LLMResponse(error=self._scrub(f"HTTP {response.status_code}: {response.text[:200]}"), model=model_name)
                 data = response.json()
                 candidates = data.get("candidates", [])
                 if not candidates:
@@ -75,11 +90,11 @@ class GeminiProvider(LLMProvider):
                     continue
                 return LLMResponse(error="Gemini request timed out.", model=model_name)
             except Exception as e:
-                return LLMResponse(error=f"Unexpected Gemini error: {e}", model=model_name)
+                return LLMResponse(error=self._scrub(f"Unexpected Gemini error: {e}"), model=model_name)
         return LLMResponse(error="Max retries exceeded.", model=model_name)
 
     def is_available(self) -> bool:
         try:
-            return requests.get(f"{self.api_base}/models?key={self.api_key}", timeout=10).ok
+            return requests.get(f"{self.api_base}/models", headers=self._headers(), timeout=10).ok
         except Exception:
             return False
