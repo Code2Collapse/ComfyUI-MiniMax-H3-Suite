@@ -49,6 +49,106 @@ COMPOSER_MODES = [
     "Custom / Blank",
 ]
 
+# Mode scaffolds PORTED FROM: 1038lab/Comfyui-Minimax-H3-Promptor web/js/prompt_composer.js TEMPLATES
+# (GPL-3.0, rev bdbde80). Upstream inserts them from its JS editor; this port has no composer JS, so the
+# node itself returns the selected mode's scaffold when the text is empty (A15: no control without effect).
+COMPOSER_TEMPLATES = {
+    'T2VA (Text to Video & Audio)': (
+        'integrated_multimodal_description:\n'
+        '[Shot 1] Cinematic, live-action medium shot. A gentle morning breeze moves across the scene with soft, natural lighting.\n'
+        '\n'
+        '[Shot 2] Slow tracking movement reveals detailed subject interactions with the surrounding environment.\n'
+        '\n'
+        'overall_soundscape:\n'
+        'The ambient sounds of tranquil nature and quiet introspection, with subtle environmental rustles.\n'
+        '\n'
+        'non_diegetic_music:\n'
+        'A gentle, cinematic acoustic score that complements the peaceful theme.'
+    ),
+    'I2VA (Image to Video & Audio)': (
+        'For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n'
+        '\n'
+        'integrated_multimodal_description:\n'
+        '[Shot 1] The scene begins exactly matching the composition, lighting, and subject of <Picture 1>. Subtle character movement begins with natural breathing and gentle eye motion.\n'
+        '\n'
+        '[Shot 2] The camera slowly pulls back, revealing broader environmental context while maintaining character continuity.\n'
+        '\n'
+        'overall_soundscape:\n'
+        'Ambient environmental audio matching the scene setting with soft diegetic action details.\n'
+        '\n'
+        'non_diegetic_music:\n'
+        'Subtle, atmospheric cinematic underscore.'
+    ),
+    'FL2VA (First & Last Frame)': (
+        'How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with the 0.00-second mark of the target video; <Picture 2> (from [Shot 2]) aligns with the 5.00-second mark of the target video.\n'
+        '\n'
+        'integrated_multimodal_description:\n'
+        '[Shot 1] Begins from the exact composition of <Picture 1>, transitioning smoothly through continuous organic motion.\n'
+        '\n'
+        '[Shot 2] Concludes by settling seamlessly into the precise framing and lighting of <Picture 2>.\n'
+        '\n'
+        'overall_soundscape:\n'
+        'Continuous ambient sound design that bridges the motion progression smoothly.\n'
+        '\n'
+        'non_diegetic_music:\n'
+        'Elevating cinematic background score.'
+    ),
+    'Ref2VA (Omni / Reference)': (
+        'How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with the 0.00-second mark of the target video.\n'
+        '\n'
+        'integrated_multimodal_description:\n'
+        '[Shot 1] The character featuring the identity and clothing of <Picture 1> engages naturally with the environment under cinematic lighting.\n'
+        '\n'
+        '[Shot 2] Dynamic camera motion frames the action, emphasizing emotional resonance.\n'
+        '\n'
+        'overall_soundscape:\n'
+        'Rich environmental acoustics with realistic foley footsteps and wind.\n'
+        '\n'
+        'non_diegetic_music:\n'
+        'Emotional, narrative-driven instrumental music.'
+    ),
+    'V2VA (Video to Video)': (
+        'integrated_multimodal_description:\n'
+        '[Shot 1] Following the reference video timing, cinematic live-action motion is maintained with refined visual fidelity and expressive details.\n'
+        '\n'
+        'overall_soundscape:\n'
+        'Synchronized diegetic sound effects matching the on-screen physical motions.\n'
+        '\n'
+        'non_diegetic_music:\n'
+        'Rhythmic background score.'
+    ),
+    'L2VA (Live Action / Extended)': (
+        'integrated_multimodal_description:\n'
+        '[Shot 1] Extended continuous long take establishing deep spatial atmosphere and slow, purposeful character interaction.\n'
+        '\n'
+        'overall_soundscape:\n'
+        'Deep, immersive ambient nature soundscape.\n'
+        '\n'
+        'non_diegetic_music:\n'
+        'Minimalist ambient soundtrack.'
+    ),
+    'A2V (Audio to Video)': (
+        'integrated_multimodal_description:\n'
+        '[Shot 1] Visual choreography precisely synchronized to the rhythmic beats and vocal delivery of <Audio 1>.\n'
+        '\n'
+        'overall_soundscape:\n'
+        'Preserves the master timing and vocal track of <Audio 1> with complementary environmental sound design.\n'
+        '\n'
+        'non_diegetic_music:\n'
+        'Driven by <Audio 1>.'
+    ),
+    'Custom / Blank': (
+        'integrated_multimodal_description:\n'
+        '[Shot 1] Write shot description here...\n'
+        '\n'
+        'overall_soundscape:\n'
+        '[Ambience and sound effects]\n'
+        '\n'
+        'non_diegetic_music:\n'
+        '[Background music description]'
+    ),
+}
+
 
 def _provider_choices(default_key: str) -> tuple[list[str], str]:
     try:
@@ -390,11 +490,15 @@ class MiniMaxH3_PromptComposer(io.ComfyNode):
             node_id="MiniMaxH3_PromptComposer",
             display_name="MiniMax H3 Prompt Composer",
             category=_PROMPT_CATEGORY,
-            description="Manual prompt composer scaffold (no custom JS). Output is stored composer text.",
+            description=("Write an H3 prompt by hand. Leave the text empty and the node returns the scaffold for "
+                         "the selected mode (shot list, soundscape, music sections, the reference tags that mode "
+                         "needs) - fill it in and run again."),
             is_output_node=True,
             inputs=[
-                io.Combo.Input("mode", options=COMPOSER_MODES, default=COMPOSER_MODES[0]),
-                io.String.Input("_composer_prompt", multiline=True, default=""),
+                io.Combo.Input("mode", options=COMPOSER_MODES, default=COMPOSER_MODES[0],
+                               tooltip="H3 task. With the text empty, the output is this mode's scaffold."),
+                io.String.Input("_composer_prompt", multiline=True, default="",
+                                tooltip="Your prompt. Empty = the selected mode's scaffold is output."),
             ],
             outputs=[io.String.Output("prompt", display_name="PROMPT")],
         )
@@ -405,6 +509,7 @@ class MiniMaxH3_PromptComposer(io.ComfyNode):
 
     @classmethod
     def execute(cls, mode: str = COMPOSER_MODES[0], _composer_prompt: str = "", **kwargs) -> io.NodeOutput:
-        del mode
         val = str(_composer_prompt).strip() if _composer_prompt else ""
+        if not val:
+            val = COMPOSER_TEMPLATES.get(mode) or COMPOSER_TEMPLATES["Custom / Blank"]
         return io.NodeOutput(val, ui={"text": [val], "prompt": [val]})

@@ -647,7 +647,7 @@ def strip_thinking(text):
 
 async def vlm_generate(images_b64, prompt, provider, base_url, model,
                        system_prompt=None, timeout=120, keep_alive=0, max_tokens=None,
-                       api_key=None):
+                       api_key=None, seed=None):
     """One vision-model round-trip, shared by the Analyze endpoint and the Enhance node.
 
     Kept provider-shaped rather than generic on purpose: Ollama takes raw base64 in an
@@ -656,6 +656,10 @@ async def vlm_generate(images_b64, prompt, provider, base_url, model,
 
     `keep_alive=0` makes Ollama drop the model right after answering, so it is not still
     holding VRAM when H3 starts sampling.
+
+    `seed` (an int) makes the answer repeatable for the same inputs: Ollama's options.seed,
+    the OpenAI-style `seed` field elsewhere (servers that ignore it just ignore it). None
+    sends nothing, which is the server's own random seed.
 
     `api_key` goes out as a bearer token on both paths — hosted Ollama and reverse proxies
     in front of a local server want one too, and an absent key sends no header at all.
@@ -680,10 +684,15 @@ async def vlm_generate(images_b64, prompt, provider, base_url, model,
                            "think": False}
                 if system_prompt:
                     payload["system"] = system_prompt
+                options = {}
                 if max_tokens:
                     # the only thing that actually stops a small model from rambling;
                     # asking for a word count in the prompt does not
-                    payload["options"] = {"num_predict": int(max_tokens)}
+                    options["num_predict"] = int(max_tokens)
+                if seed is not None:
+                    options["seed"] = int(seed) & 0x7FFFFFFF
+                if options:
+                    payload["options"] = options
                 async with session.post("%s/api/generate" % base_url, json=payload,
                                         timeout=timeout) as response:
                     if response.status != 200:
@@ -703,6 +712,8 @@ async def vlm_generate(images_b64, prompt, provider, base_url, model,
                 payload = {"model": model, "messages": messages,
                            "max_tokens": int(max_tokens) if max_tokens else 2048,
                            "stream": False}
+                if seed is not None:
+                    payload["seed"] = int(seed) & 0x7FFFFFFF
                 async with session.post("%s/v1/chat/completions" % base_url, json=payload,
                                         timeout=timeout) as response:
                     if response.status in (401, 403):

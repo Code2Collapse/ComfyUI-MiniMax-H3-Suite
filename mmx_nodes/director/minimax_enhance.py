@@ -416,9 +416,9 @@ class MiniMaxH3EnhancePrompt(io.ComfyNode):
                                         "back to the provider default."),
                 io.Int.Input("seed", default=0, min=0, max=0xFFFFFFFFFFFFFFFF,
                              control_after_generate=True, optional=True,
-                             tooltip="ComfyUI caches node outputs, so an unchanged input means "
-                                     "the model is never asked again. Change this to force a "
-                                     "fresh answer."),
+                             tooltip="Sent to the model, so the same seed and inputs give the "
+                                     "same answer (servers that ignore seeds just ignore it). "
+                                     "ComfyUI caches node outputs: change it to get a fresh answer."),
                 io.Int.Input("max_image_size", default=768, min=128, max=2048, step=64,
                              optional=True,
                              tooltip="Long edge the images are downscaled to before they are "
@@ -527,7 +527,7 @@ class MiniMaxH3EnhancePrompt(io.ComfyNode):
             raw = await media.vlm_generate(b64, user, provider, url, model_name,
                                            system_prompt=system, timeout=300,
                                            max_tokens=cap, keep_alive=keep_alive,
-                                           api_key=api_key)
+                                           api_key=api_key, seed=int(seed))
             prompt = clean_prompt(raw, preset, max_words=int(max_words))
             if not prompt:
                 raise media.VLMError("The model returned nothing usable.")
@@ -546,7 +546,7 @@ class MiniMaxH3EnhancePrompt(io.ComfyNode):
                     tail = await media.vlm_generate(
                         [], prompt, provider, url, model_name,
                         system_prompt=SYSTEM_AUDIO_ONLY, timeout=120, max_tokens=300,
-                        keep_alive=keep_alive, api_key=api_key)
+                        keep_alive=keep_alive, api_key=api_key, seed=int(seed))
                     merged = clean_prompt("%s\n%s" % (prompt, tail), preset)
                     if re.search(r"^\s*(?:audio|sound|sfx)\s*:", merged, re.I | re.M):
                         prompt = merged

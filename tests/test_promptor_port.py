@@ -108,3 +108,25 @@ def test_prompt_editor_toggle_is_appended_and_optional():
     ids = [i.id for i in schema.inputs]
     assert ids[-1] == "use_edited_text" and ids.index("_stored_prompt") < ids.index("use_edited_text")
     assert schema.inputs[-1].optional
+
+
+# -- Prompt Composer (A15 Phase 1.1: `mode` used to do nothing - the port has no composer JS) ----------------------
+
+def _composed(**kw):
+    from mmx_nodes.promptor import MiniMaxH3_PromptComposer
+    out = MiniMaxH3_PromptComposer.execute(**kw)
+    return out.args[0] if hasattr(out, "args") else out[0]
+
+
+def test_composer_mode_selects_the_scaffold_when_the_text_is_empty():
+    from mmx_nodes.promptor import COMPOSER_MODES, COMPOSER_TEMPLATES
+    assert set(COMPOSER_TEMPLATES) == set(COMPOSER_MODES)
+    outs = {m: _composed(mode=m, _composer_prompt="") for m in COMPOSER_MODES}
+    assert len(set(outs.values())) == len(COMPOSER_MODES), "every mode must give its own scaffold"
+    assert "<Picture 2>" in outs["FL2VA (First & Last Frame)"] and "<Audio 1>" in outs["A2V (Audio to Video)"]
+    for text in outs.values():
+        assert "integrated_multimodal_description:" in text
+
+
+def test_composer_typed_text_wins_over_the_scaffold():
+    assert _composed(mode="A2V (Audio to Video)", _composer_prompt="  my prompt  ") == "my prompt"

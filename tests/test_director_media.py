@@ -91,3 +91,61 @@ def test_v1_adapter_forwards_is_changed_to_fingerprint_inputs(input_dir):
     tl = json.dumps({"characters": [{"file": "ref.png"}]})
     assert adapted.fingerprint_inputs(timeline_data=tl) == media.media_fingerprint(tl, resolve=_resolve_path)
     assert adapted.fingerprint_inputs(timeline_data=tl)[0][1] == 5
+
+
+# -- seed reaches the model (A15 Phase 1.1: Enhance Prompt's seed only busted the cache) ---------------------------
+
+class _FakeResp:
+    status = 200
+
+    def __init__(self, body):
+        self._body = body
+
+    async def json(self):
+        return self._body
+
+    async def text(self):
+        return ""
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+
+def _fake_session(sent):
+    class _Session:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def post(self, url, json=None, timeout=None):
+            sent.append((url, json))
+            if url.endswith("/api/generate"):
+                return _FakeResp({"response": "ok"})
+            return _FakeResp({"choices": [{"message": {"content": "ok"}}]})
+    return _Session
+
+
+@pytest.mark.parametrize("provider,url", [("ollama", "http://127.0.0.1:11434"), ("lmstudio", "http://127.0.0.1:1234")])
+def test_vlm_generate_sends_the_seed(monkeypatch, provider, url):
+    import asyncio
+
+    import aiohttp
+    sent = []
+    monkeypatch.setattr(aiohttp, "ClientSession", _fake_session(sent))
+    out = asyncio.run(media.vlm_generate([], "hi", provider, url, "m", max_tokens=10, seed=1234))
+    assert out == "ok"
+    body = sent[-1][1]
+    got = body["options"]["seed"] if provider == "ollama" else body["seed"]
+    assert got == 1234
+    sent.clear()
+    asyncio.run(media.vlm_generate([], "hi", provider, url, "m", max_tokens=10))          # no seed: nothing sent
+    body = sent[-1][1]
+    assert "seed" not in body and "seed" not in (body.get("options") or {})
