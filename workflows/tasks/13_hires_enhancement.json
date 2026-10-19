@@ -1,0 +1,2114 @@
+{
+ "id": "81fbf1a8-1176-481e-b897-6662f6ed0928",
+ "revision": 0,
+ "last_node_id": 22,
+ "last_link_id": 31,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "UNETLoader",
+   "pos": [
+    -450,
+    0
+   ],
+   "size": [
+    270,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "unet_name",
+     "name": "unet_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "unet_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "weight_dtype",
+     "name": "weight_dtype",
+     "type": "COMBO",
+     "widget": {
+      "name": "weight_dtype"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "MODEL",
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      15,
+      17,
+      18
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "UNETLoader",
+    "models": [
+     {
+      "name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "directory": "diffusion_models"
+     }
+    ]
+   },
+   "widgets_values": [
+    "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    "default"
+   ],
+   "widgets_values_named": {
+    "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    "weight_dtype": "default"
+   }
+  },
+  {
+   "id": 2,
+   "type": "CLIPLoader",
+   "pos": [
+    -450,
+    152
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip_name",
+     "name": "clip_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "clip_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "type",
+     "name": "type",
+     "type": "COMBO",
+     "widget": {
+      "name": "type"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "device",
+     "name": "device",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "device"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CLIP",
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      4
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPLoader",
+    "models": [
+     {
+      "name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "directory": "text_encoders"
+     }
+    ]
+   },
+   "widgets_values": [
+    "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "minimax",
+    "default"
+   ],
+   "widgets_values_named": {
+    "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "type": "minimax",
+    "device": "default"
+   }
+  },
+  {
+   "id": 3,
+   "type": "VAELoader",
+   "pos": [
+    -450,
+    328
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "vae_name",
+     "name": "vae_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "vae_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "VAE",
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      5,
+      14,
+      27
+     ]
+    }
+   ],
+   "title": "video VAE",
+   "properties": {
+    "Node name for S&R": "VAELoader",
+    "models": [
+     {
+      "name": "minimax_h3_video_vae_int8_convrot.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_int8_convrot.safetensors",
+      "directory": "vae"
+     }
+    ]
+   },
+   "widgets_values": [
+    "minimax_h3_video_vae_int8_convrot.safetensors"
+   ],
+   "widgets_values_named": {
+    "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+   }
+  },
+  {
+   "id": 4,
+   "type": "VAELoader",
+   "pos": [
+    -450,
+    456
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "vae_name",
+     "name": "vae_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "vae_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "VAE",
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      6
+     ]
+    }
+   ],
+   "title": "audio VAE",
+   "properties": {
+    "Node name for S&R": "VAELoader",
+    "models": [
+     {
+      "name": "minimax_h3_audio_vae_fp32.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
+      "directory": "vae"
+     }
+    ]
+   },
+   "widgets_values": [
+    "minimax_h3_audio_vae_fp32.safetensors"
+   ],
+   "widgets_values_named": {
+    "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+   }
+  },
+  {
+   "id": 5,
+   "type": "LoadVideo",
+   "pos": [
+    -70,
+    0
+   ],
+   "size": [
+    282.798828125,
+    223.13219451904297
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "file",
+     "name": "file",
+     "type": "COMBO",
+     "widget": {
+      "name": "file"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "choose file to upload",
+     "name": "upload",
+     "type": "IMAGEUPLOAD",
+     "widget": {
+      "name": "upload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "VIDEO",
+     "name": "VIDEO",
+     "type": "VIDEO",
+     "links": [
+      1
+     ]
+    }
+   ],
+   "title": "video to enhance",
+   "properties": {
+    "Node name for S&R": "LoadVideo"
+   },
+   "widgets_values": [
+    "low_res.mp4",
+    "image"
+   ],
+   "widgets_values_named": {
+    "file": "low_res.mp4",
+    "upload": "image"
+   }
+  },
+  {
+   "id": 6,
+   "type": "GetVideoComponents",
+   "pos": [
+    -70,
+    293.13219451904297
+   ],
+   "size": [
+    193.530859375,
+    106
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "video",
+     "name": "video",
+     "type": "VIDEO",
+     "link": 1
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": [
+      2,
+      11
+     ]
+    },
+    {
+     "localized_name": "audio",
+     "name": "audio",
+     "type": "AUDIO",
+     "links": [
+      29
+     ]
+    },
+    {
+     "localized_name": "fps",
+     "name": "fps",
+     "type": "FLOAT",
+     "links": [
+      30
+     ]
+    },
+    {
+     "localized_name": "bit_depth",
+     "name": "bit_depth",
+     "type": "COMBO",
+     "links": null
+    },
+    {
+     "localized_name": "color_space",
+     "name": "color_space",
+     "type": "COMBO",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "GetVideoComponents"
+   }
+  },
+  {
+   "id": 7,
+   "type": "ImageScale",
+   "pos": [
+    322.798828125,
+    0
+   ],
+   "size": [
+    270,
+    130
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 2
+    },
+    {
+     "localized_name": "upscale_method",
+     "name": "upscale_method",
+     "type": "COMBO",
+     "widget": {
+      "name": "upscale_method"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "crop",
+     "name": "crop",
+     "type": "COMBO",
+     "widget": {
+      "name": "crop"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      3,
+      13
+     ]
+    }
+   ],
+   "title": "upscale to the target size",
+   "properties": {
+    "Node name for S&R": "ImageScale"
+   },
+   "widgets_values": [
+    "lanczos",
+    1920,
+    1088,
+    "center"
+   ],
+   "widgets_values_named": {
+    "upscale_method": "lanczos",
+    "width": 1920,
+    "height": 1088,
+    "crop": "center"
+   }
+  },
+  {
+   "id": 8,
+   "type": "GetImageSize",
+   "pos": [
+    322.798828125,
+    200
+   ],
+   "size": [
+    140,
+    66
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 3
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "links": [
+      8
+     ]
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "links": [
+      9
+     ]
+    },
+    {
+     "localized_name": "batch_size",
+     "name": "batch_size",
+     "type": "INT",
+     "links": [
+      10
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "GetImageSize"
+   }
+  },
+  {
+   "id": 9,
+   "type": "MiniMaxH3_PromptWriter",
+   "pos": [
+    322.798828125,
+    336
+   ],
+   "size": [
+    400,
+    270
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "family",
+     "name": "family",
+     "type": "COMBO",
+     "widget": {
+      "name": "family"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "brief",
+     "name": "brief",
+     "type": "STRING",
+     "widget": {
+      "name": "brief"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "subject_name",
+     "name": "subject_name",
+     "type": "STRING",
+     "widget": {
+      "name": "subject_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "head_size_mode",
+     "name": "head_size_mode",
+     "type": "COMBO",
+     "widget": {
+      "name": "head_size_mode"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "face_closeup_reference",
+     "name": "face_closeup_reference",
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "face_closeup_reference"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "backend",
+     "name": "backend",
+     "type": "COMBO",
+     "widget": {
+      "name": "backend"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "base_url",
+     "name": "base_url",
+     "type": "STRING",
+     "widget": {
+      "name": "base_url"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "STRING",
+     "widget": {
+      "name": "model"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "api_key_env",
+     "name": "api_key_env",
+     "type": "STRING",
+     "widget": {
+      "name": "api_key_env"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "timeout_s",
+     "name": "timeout_s",
+     "type": "INT",
+     "widget": {
+      "name": "timeout_s"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "retries",
+     "name": "retries",
+     "type": "INT",
+     "widget": {
+      "name": "retries"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "temperature",
+     "name": "temperature",
+     "type": "FLOAT",
+     "widget": {
+      "name": "temperature"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "max_tokens",
+     "name": "max_tokens",
+     "type": "INT",
+     "widget": {
+      "name": "max_tokens"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "on_failure",
+     "name": "on_failure",
+     "type": "COMBO",
+     "widget": {
+      "name": "on_failure"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "PROMPT",
+     "name": "PROMPT",
+     "type": "STRING",
+     "links": [
+      7
+     ]
+    },
+    {
+     "localized_name": "PLAN",
+     "name": "PLAN",
+     "type": "STRING",
+     "links": null
+    },
+    {
+     "localized_name": "REPORT",
+     "name": "REPORT",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_PromptWriter"
+   },
+   "widgets_values": [
+    "upscale_incontext",
+    "sharpen and restore detail",
+    "the character",
+    "match character proportions",
+    false,
+    "template (no LLM)",
+    "",
+    "",
+    "",
+    90,
+    1,
+    0.4,
+    1200,
+    "use the template"
+   ],
+   "widgets_values_named": {
+    "family": "upscale_incontext",
+    "brief": "sharpen and restore detail",
+    "subject_name": "the character",
+    "head_size_mode": "match character proportions",
+    "face_closeup_reference": false,
+    "backend": "template (no LLM)",
+    "base_url": "",
+    "model": "",
+    "api_key_env": "",
+    "timeout_s": 90,
+    "retries": 1,
+    "temperature": 0.4,
+    "max_tokens": 1200,
+    "on_failure": "use the template"
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 10,
+   "type": "MiniMaxH3ReferenceToVideo",
+   "pos": [
+    832.798828125,
+    0
+   ],
+   "size": [
+    400,
+    324
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 4
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": 5
+    },
+    {
+     "localized_name": "audio_vae",
+     "name": "audio_vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": 6
+    },
+    {
+     "localized_name": "ref_image_0",
+     "name": "ref_images.ref_image_0",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "localized_name": "ref_video_0",
+     "name": "ref_videos.ref_video_0",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": 11
+    },
+    {
+     "localized_name": "ref_video_1",
+     "name": "ref_videos.ref_video_1",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "localized_name": "ref_video_audio_0",
+     "name": "ref_video_audios.ref_video_audio_0",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "localized_name": "ref_audio_0",
+     "name": "ref_audios.ref_audio_0",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "localized_name": "prompt",
+     "name": "prompt",
+     "type": "STRING",
+     "widget": {
+      "name": "prompt"
+     },
+     "link": 7
+    },
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": 8
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": 9
+    },
+    {
+     "localized_name": "length",
+     "name": "length",
+     "type": "INT",
+     "widget": {
+      "name": "length"
+     },
+     "link": 10
+    },
+    {
+     "localized_name": "ref_image_size",
+     "name": "ref_image_size",
+     "type": "COMBO",
+     "widget": {
+      "name": "ref_image_size"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "positive",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "links": [
+      19
+     ]
+    },
+    {
+     "localized_name": "LATENT",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      12
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+   },
+   "widgets_values": [
+    "",
+    1344,
+    768,
+    124,
+    "max"
+   ],
+   "widgets_values_named": {
+    "prompt": "",
+    "width": 1344,
+    "height": 768,
+    "length": 124,
+    "ref_image_size": "max"
+   }
+  },
+  {
+   "id": 11,
+   "type": "MiniMaxH3_InjectVideoLatent",
+   "pos": [
+    1342.798828125,
+    0
+   ],
+   "size": [
+    261.9927734375,
+    96
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "av_latent",
+     "name": "av_latent",
+     "type": "LATENT",
+     "link": 12
+    },
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 13
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 14
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "av_latent",
+     "name": "av_latent",
+     "type": "LATENT",
+     "links": [
+      20
+     ]
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_InjectVideoLatent"
+   },
+   "widgets_values": [],
+   "widgets_values_named": {},
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 12,
+   "type": "MiniMaxH3_SpatialSplitParams",
+   "pos": [
+    1342.798828125,
+    166
+   ],
+   "size": [
+    270,
+    220
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "tile_width",
+     "name": "tile_width",
+     "type": "INT",
+     "widget": {
+      "name": "tile_width"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "tile_height",
+     "name": "tile_height",
+     "type": "INT",
+     "widget": {
+      "name": "tile_height"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "overlap_ratio",
+     "name": "overlap_ratio",
+     "type": "FLOAT",
+     "widget": {
+      "name": "overlap_ratio"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "fade_ratio",
+     "name": "fade_ratio",
+     "type": "FLOAT",
+     "widget": {
+      "name": "fade_ratio"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "min_tile_size",
+     "name": "min_tile_size",
+     "type": "INT",
+     "widget": {
+      "name": "min_tile_size"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "seam_denoise",
+     "name": "seam_denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "seam_denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "spatial_split_param",
+     "name": "spatial_split_param",
+     "type": "H3_SPATIAL_SPLIT_PARAM",
+     "links": [
+      24
+     ]
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_SpatialSplitParams"
+   },
+   "widgets_values": [
+    768,
+    768,
+    0.25,
+    0.5,
+    256,
+    1
+   ],
+   "widgets_values_named": {
+    "tile_width": 768,
+    "tile_height": 768,
+    "overlap_ratio": 0.25,
+    "fade_ratio": 0.5,
+    "min_tile_size": 256,
+    "seam_denoise": 1
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 13,
+   "type": "MiniMaxH3_TemporalSplitParams",
+   "pos": [
+    1342.798828125,
+    456
+   ],
+   "size": [
+    306.669921875,
+    196
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "chunk_frames",
+     "name": "chunk_frames",
+     "type": "INT",
+     "widget": {
+      "name": "chunk_frames"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "temporal_overlap_frames",
+     "name": "temporal_overlap_frames",
+     "type": "INT",
+     "widget": {
+      "name": "temporal_overlap_frames"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "anchor_strength",
+     "name": "anchor_strength",
+     "type": "FLOAT",
+     "widget": {
+      "name": "anchor_strength"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "motion_anchor_frames",
+     "name": "motion_anchor_frames",
+     "type": "COMBO",
+     "widget": {
+      "name": "motion_anchor_frames"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "identity_anchor_frames",
+     "name": "identity_anchor_frames",
+     "type": "INT",
+     "widget": {
+      "name": "identity_anchor_frames"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "temporal_split_param",
+     "name": "temporal_split_param",
+     "type": "H3_TEMPORAL_SPLIT_PARAM",
+     "links": [
+      25
+     ]
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_TemporalSplitParams"
+   },
+   "widgets_values": [
+    73,
+    22,
+    0.999,
+    "22",
+    24
+   ],
+   "widgets_values_named": {
+    "chunk_frames": 73,
+    "temporal_overlap_frames": 22,
+    "anchor_strength": 0.999,
+    "motion_anchor_frames": "22",
+    "identity_anchor_frames": 24
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 14,
+   "type": "BasicScheduler",
+   "pos": [
+    1759.46875,
+    0
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "MODEL",
+     "link": 15
+    },
+    {
+     "localized_name": "scheduler",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "steps",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "denoise",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "SIGMAS",
+     "name": "SIGMAS",
+     "type": "SIGMAS",
+     "links": [
+      16
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicScheduler"
+   },
+   "widgets_values": [
+    "simple",
+    20,
+    0.35
+   ],
+   "widgets_values_named": {
+    "scheduler": "simple",
+    "steps": 20,
+    "denoise": 0.35
+   }
+  },
+  {
+   "id": 15,
+   "type": "MiniMaxH3_LegalScheduler",
+   "pos": [
+    1759.46875,
+    176
+   ],
+   "size": [
+    270,
+    124
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "sigmas",
+     "name": "sigmas",
+     "type": "SIGMAS",
+     "link": 16
+    },
+    {
+     "localized_name": "model",
+     "name": "model",
+     "shape": 7,
+     "type": "MODEL",
+     "link": 17
+    },
+    {
+     "localized_name": "scheduler",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "denoise",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "sigmas",
+     "name": "sigmas",
+     "type": "SIGMAS",
+     "links": [
+      23
+     ]
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_LegalScheduler"
+   },
+   "widgets_values": [
+    "simple",
+    0.35
+   ],
+   "widgets_values_named": {
+    "scheduler": "simple",
+    "denoise": 0.35
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 16,
+   "type": "RandomNoise",
+   "pos": [
+    1759.46875,
+    370
+   ],
+   "size": [
+    270,
+    82
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "noise_seed",
+     "name": "noise_seed",
+     "type": "INT",
+     "widget": {
+      "name": "noise_seed"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "NOISE",
+     "name": "NOISE",
+     "type": "NOISE",
+     "links": [
+      21
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "RandomNoise"
+   },
+   "widgets_values": [
+    123,
+    "fixed"
+   ],
+   "widgets_values_named": {
+    "noise_seed": 123,
+    "control_after_generate": "fixed"
+   }
+  },
+  {
+   "id": 17,
+   "type": "KSamplerSelect",
+   "pos": [
+    1759.46875,
+    522
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 16,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "sampler_name",
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "SAMPLER",
+     "name": "SAMPLER",
+     "type": "SAMPLER",
+     "links": [
+      22
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSamplerSelect"
+   },
+   "widgets_values": [
+    "res_multistep"
+   ],
+   "widgets_values_named": {
+    "sampler_name": "res_multistep"
+   }
+  },
+  {
+   "id": 18,
+   "type": "MiniMaxH3_SplitUpscale",
+   "pos": [
+    2069.46875,
+    0
+   ],
+   "size": [
+    270,
+    288
+   ],
+   "flags": {},
+   "order": 17,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "MODEL",
+     "link": 18
+    },
+    {
+     "localized_name": "conditioning",
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 19
+    },
+    {
+     "localized_name": "latent",
+     "name": "latent",
+     "type": "LATENT",
+     "link": 20
+    },
+    {
+     "localized_name": "noise",
+     "name": "noise",
+     "type": "NOISE",
+     "link": 21
+    },
+    {
+     "localized_name": "sampler",
+     "name": "sampler",
+     "type": "SAMPLER",
+     "link": 22
+    },
+    {
+     "localized_name": "sigmas",
+     "name": "sigmas",
+     "type": "SIGMAS",
+     "link": 23
+    },
+    {
+     "localized_name": "negative",
+     "name": "negative",
+     "shape": 7,
+     "type": "CONDITIONING",
+     "link": null
+    },
+    {
+     "localized_name": "temporal_split_param",
+     "name": "temporal_split_param",
+     "shape": 7,
+     "type": "H3_TEMPORAL_SPLIT_PARAM",
+     "link": 25
+    },
+    {
+     "localized_name": "spatial_split_param",
+     "name": "spatial_split_param",
+     "shape": 7,
+     "type": "H3_SPATIAL_SPLIT_PARAM",
+     "link": 24
+    },
+    {
+     "localized_name": "cfg",
+     "name": "cfg",
+     "type": "FLOAT",
+     "widget": {
+      "name": "cfg"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "seam_polish",
+     "name": "seam_polish",
+     "type": "COMBO",
+     "widget": {
+      "name": "seam_polish"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "color_match",
+     "name": "color_match",
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "color_match"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "latent",
+     "name": "latent",
+     "type": "LATENT",
+     "links": [
+      26
+     ]
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_SplitUpscale"
+   },
+   "widgets_values": [
+    1,
+    "auto",
+    true
+   ],
+   "widgets_values_named": {
+    "cfg": 1,
+    "seam_polish": "auto",
+    "color_match": true
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 19,
+   "type": "VAEDecode",
+   "pos": [
+    2449.46875,
+    0
+   ],
+   "size": [
+    140,
+    46
+   ],
+   "flags": {},
+   "order": 18,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "samples",
+     "name": "samples",
+     "type": "LATENT",
+     "link": 26
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 27
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      28
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   }
+  },
+  {
+   "id": 20,
+   "type": "CreateVideo",
+   "pos": [
+    2760,
+    0
+   ],
+   "size": [
+    270,
+    150
+   ],
+   "flags": {},
+   "order": 19,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 28
+    },
+    {
+     "localized_name": "audio",
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": 29
+    },
+    {
+     "localized_name": "fps",
+     "name": "fps",
+     "type": "FLOAT",
+     "widget": {
+      "name": "fps"
+     },
+     "link": 30
+    },
+    {
+     "localized_name": "bit_depth",
+     "name": "bit_depth",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "bit_depth"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "color_space",
+     "name": "color_space",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "color_space"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "codec",
+     "name": "codec",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "codec"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "VIDEO",
+     "name": "VIDEO",
+     "type": "VIDEO",
+     "links": [
+      31
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CreateVideo"
+   },
+   "widgets_values": [
+    24,
+    "auto",
+    "sRGB",
+    "none"
+   ],
+   "widgets_values_named": {
+    "fps": 24,
+    "bit_depth": "auto",
+    "color_space": "sRGB",
+    "codec": "none"
+   }
+  },
+  {
+   "id": 21,
+   "type": "SaveVideo",
+   "pos": [
+    3180,
+    0
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 20,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "video",
+     "name": "video",
+     "type": "VIDEO",
+     "link": 31
+    },
+    {
+     "localized_name": "filename_prefix",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "codec",
+     "name": "format.codec",
+     "type": "COMFY_DYNAMICCOMBO_V3",
+     "widget": {
+      "name": "format.codec"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "format",
+     "name": "format",
+     "type": "COMFY_DYNAMICCOMBO_V3",
+     "widget": {
+      "name": "format"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "codec",
+     "name": "codec",
+     "shape": 7,
+     "type": "COMFY_DYNAMICCOMBO_V3",
+     "widget": {
+      "name": "codec"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "video",
+     "name": "video",
+     "type": "VIDEO",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SaveVideo"
+   },
+   "widgets_values": [
+    "h3_tasks/13_enhance",
+    "auto",
+    "auto",
+    "auto"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "h3_tasks/13_enhance",
+    "format": "auto",
+    "format.codec": "auto",
+    "codec": "auto"
+   }
+  },
+  {
+   "id": 22,
+   "type": "MarkdownNote",
+   "pos": [
+    -1020,
+    0
+   ],
+   "size": [
+    460,
+    560
+   ],
+   "flags": {},
+   "order": 21,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "# 13 - High-resolution image / video enhancement (tiled)\n\n**Models** (official Comfy-Org files; the loaders carry their download links): ref2va, Qwen3-VL, video + audio VAE.\n\n**Checkpoint variants**: the bf16 checkpoints work in the same loaders (pick them in the list); the Turbo LoRA (4-step ref2v / 8-step fl2v) cuts the steps - set the scheduler steps to match.\n\n**Inputs**: a video (a still: one-frame batch through the same path); the target size on Upscale Image.\n\n**Controls**: the source is upscaled, encoded (Inject Video Latent) and re-sampled at denoise 0.35 in tiles (H3 Split Upscale: spatial tiles 768 px with 25% overlap, temporal chunks of 73 frames with 22 overlap, seam polish, colour match); the low-resolution source rides along as <Video 1> so content stays put; Prompt Writer's upscale_incontext template (no LLM).\n\n**Output**: the enhanced video at the target size with the source sound, MP4.\n\n**Limits**: denoise above ~0.5 invents detail; the target size should be on the 32 px grid (1920x1088, not 1080); tiling numbers are starting values - quality on H3 weights not measured here.\n\n**Status**: built in ComfyUI's own front end and validated by the server (only missing model / media files reported). NOT run on H3 weights on the build machine - starting values follow core's H3 templates (res_multistep, simple, 20 steps, guider cfg 1). Guide: workflows/tasks/README.md."
+   ],
+   "widgets_values_named": {
+    "text": "# 13 - High-resolution image / video enhancement (tiled)\n\n**Models** (official Comfy-Org files; the loaders carry their download links): ref2va, Qwen3-VL, video + audio VAE.\n\n**Checkpoint variants**: the bf16 checkpoints work in the same loaders (pick them in the list); the Turbo LoRA (4-step ref2v / 8-step fl2v) cuts the steps - set the scheduler steps to match.\n\n**Inputs**: a video (a still: one-frame batch through the same path); the target size on Upscale Image.\n\n**Controls**: the source is upscaled, encoded (Inject Video Latent) and re-sampled at denoise 0.35 in tiles (H3 Split Upscale: spatial tiles 768 px with 25% overlap, temporal chunks of 73 frames with 22 overlap, seam polish, colour match); the low-resolution source rides along as <Video 1> so content stays put; Prompt Writer's upscale_incontext template (no LLM).\n\n**Output**: the enhanced video at the target size with the source sound, MP4.\n\n**Limits**: denoise above ~0.5 invents detail; the target size should be on the 32 px grid (1920x1088, not 1080); tiling numbers are starting values - quality on H3 weights not measured here.\n\n**Status**: built in ComfyUI's own front end and validated by the server (only missing model / media files reported). NOT run on H3 weights on the build machine - starting values follow core's H3 templates (res_multistep, simple, 20 steps, guider cfg 1). Guide: workflows/tasks/README.md."
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  }
+ ],
+ "links": [
+  [
+   1,
+   5,
+   0,
+   6,
+   0,
+   "VIDEO"
+  ],
+  [
+   2,
+   6,
+   0,
+   7,
+   0,
+   "IMAGE"
+  ],
+  [
+   3,
+   7,
+   0,
+   8,
+   0,
+   "IMAGE"
+  ],
+  [
+   4,
+   2,
+   0,
+   10,
+   0,
+   "CLIP"
+  ],
+  [
+   5,
+   3,
+   0,
+   10,
+   1,
+   "VAE"
+  ],
+  [
+   6,
+   4,
+   0,
+   10,
+   2,
+   "VAE"
+  ],
+  [
+   11,
+   6,
+   0,
+   10,
+   4,
+   "IMAGE"
+  ],
+  [
+   7,
+   9,
+   0,
+   10,
+   8,
+   "STRING"
+  ],
+  [
+   8,
+   8,
+   0,
+   10,
+   9,
+   "INT"
+  ],
+  [
+   9,
+   8,
+   1,
+   10,
+   10,
+   "INT"
+  ],
+  [
+   10,
+   8,
+   2,
+   10,
+   11,
+   "INT"
+  ],
+  [
+   12,
+   10,
+   1,
+   11,
+   0,
+   "LATENT"
+  ],
+  [
+   13,
+   7,
+   0,
+   11,
+   1,
+   "IMAGE"
+  ],
+  [
+   14,
+   3,
+   0,
+   11,
+   2,
+   "VAE"
+  ],
+  [
+   15,
+   1,
+   0,
+   14,
+   0,
+   "MODEL"
+  ],
+  [
+   16,
+   14,
+   0,
+   15,
+   0,
+   "SIGMAS"
+  ],
+  [
+   17,
+   1,
+   0,
+   15,
+   1,
+   "MODEL"
+  ],
+  [
+   18,
+   1,
+   0,
+   18,
+   0,
+   "MODEL"
+  ],
+  [
+   19,
+   10,
+   0,
+   18,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   20,
+   11,
+   0,
+   18,
+   2,
+   "LATENT"
+  ],
+  [
+   21,
+   16,
+   0,
+   18,
+   3,
+   "NOISE"
+  ],
+  [
+   22,
+   17,
+   0,
+   18,
+   4,
+   "SAMPLER"
+  ],
+  [
+   23,
+   15,
+   0,
+   18,
+   5,
+   "SIGMAS"
+  ],
+  [
+   24,
+   12,
+   0,
+   18,
+   8,
+   "H3_SPATIAL_SPLIT_PARAM"
+  ],
+  [
+   25,
+   13,
+   0,
+   18,
+   7,
+   "H3_TEMPORAL_SPLIT_PARAM"
+  ],
+  [
+   26,
+   18,
+   0,
+   19,
+   0,
+   "LATENT"
+  ],
+  [
+   27,
+   3,
+   0,
+   19,
+   1,
+   "VAE"
+  ],
+  [
+   28,
+   19,
+   0,
+   20,
+   0,
+   "IMAGE"
+  ],
+  [
+   29,
+   6,
+   1,
+   20,
+   1,
+   "AUDIO"
+  ],
+  [
+   30,
+   6,
+   2,
+   20,
+   2,
+   "FLOAT"
+  ],
+  [
+   31,
+   20,
+   0,
+   21,
+   0,
+   "VIDEO"
+  ]
+ ],
+ "groups": [
+  {
+   "id": 1,
+   "title": "Models",
+   "bounding": [
+    -470,
+    -76,
+    310,
+    610
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 2,
+   "title": "Input",
+   "bounding": [
+    -90,
+    -76,
+    322.798828125,
+    495.13219451904297
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 3,
+   "title": "Upscale + prompt",
+   "bounding": [
+    302.798828125,
+    -76,
+    440,
+    702
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 4,
+   "title": "Conditioning",
+   "bounding": [
+    812.798828125,
+    -76,
+    440,
+    420
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 5,
+   "title": "Encode + tile plan",
+   "bounding": [
+    1322.798828125,
+    -76,
+    346.669921875,
+    748
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 6,
+   "title": "Tiled sampling (denoise 0.35)",
+   "bounding": [
+    1739.46875,
+    -76,
+    620,
+    676
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 7,
+   "title": "Decode",
+   "bounding": [
+    2429.46875,
+    -76,
+    180,
+    142
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 8,
+   "title": "Output",
+   "bounding": [
+    2740,
+    -76,
+    730,
+    246
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "c2c": {
+   "bookmarks": {}
+  },
+  "ds": {
+   "scale": 1,
+   "offset": [
+    0,
+    0
+   ]
+  }
+ },
+ "version": 0.4
+}

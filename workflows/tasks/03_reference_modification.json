@@ -1,0 +1,1519 @@
+{
+ "id": "40c68fcc-fd5d-4238-9fa6-3933ee9f6ddf",
+ "revision": 0,
+ "last_node_id": 16,
+ "last_link_id": 20,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "UNETLoader",
+   "pos": [
+    -450,
+    0
+   ],
+   "size": [
+    270,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "unet_name",
+     "name": "unet_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "unet_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "weight_dtype",
+     "name": "weight_dtype",
+     "type": "COMBO",
+     "widget": {
+      "name": "weight_dtype"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "MODEL",
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      5,
+      7,
+      8
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "UNETLoader",
+    "models": [
+     {
+      "name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "directory": "diffusion_models"
+     }
+    ]
+   },
+   "widgets_values": [
+    "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    "default"
+   ],
+   "widgets_values_named": {
+    "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    "weight_dtype": "default"
+   }
+  },
+  {
+   "id": 2,
+   "type": "CLIPLoader",
+   "pos": [
+    -450,
+    152
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip_name",
+     "name": "clip_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "clip_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "type",
+     "name": "type",
+     "type": "COMBO",
+     "widget": {
+      "name": "type"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "device",
+     "name": "device",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "device"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CLIP",
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      1
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPLoader",
+    "models": [
+     {
+      "name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "directory": "text_encoders"
+     }
+    ]
+   },
+   "widgets_values": [
+    "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "minimax",
+    "default"
+   ],
+   "widgets_values_named": {
+    "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "type": "minimax",
+    "device": "default"
+   }
+  },
+  {
+   "id": 3,
+   "type": "VAELoader",
+   "pos": [
+    -450,
+    328
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "vae_name",
+     "name": "vae_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "vae_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "VAE",
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      2,
+      16
+     ]
+    }
+   ],
+   "title": "video VAE",
+   "properties": {
+    "Node name for S&R": "VAELoader",
+    "models": [
+     {
+      "name": "minimax_h3_video_vae_int8_convrot.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_int8_convrot.safetensors",
+      "directory": "vae"
+     }
+    ]
+   },
+   "widgets_values": [
+    "minimax_h3_video_vae_int8_convrot.safetensors"
+   ],
+   "widgets_values_named": {
+    "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+   }
+  },
+  {
+   "id": 4,
+   "type": "LoadImage",
+   "pos": [
+    -70,
+    0
+   ],
+   "size": [
+    282.798828125,
+    314
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "COMBO",
+     "widget": {
+      "name": "image"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "choose file to upload",
+     "name": "upload",
+     "type": "IMAGEUPLOAD",
+     "widget": {
+      "name": "upload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      3,
+      19
+     ]
+    },
+    {
+     "localized_name": "MASK",
+     "name": "MASK",
+     "type": "MASK",
+     "links": null
+    }
+   ],
+   "title": "source image",
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "source.png",
+    "image"
+   ],
+   "widgets_values_named": {
+    "image": "source.png",
+    "upload": "image"
+   }
+  },
+  {
+   "id": 5,
+   "type": "LoadImage",
+   "pos": [
+    -70,
+    384
+   ],
+   "size": [
+    282.798828125,
+    314
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "COMBO",
+     "widget": {
+      "name": "image"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "choose file to upload",
+     "name": "upload",
+     "type": "IMAGEUPLOAD",
+     "widget": {
+      "name": "upload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      4
+     ]
+    },
+    {
+     "localized_name": "MASK",
+     "name": "MASK",
+     "type": "MASK",
+     "links": null
+    }
+   ],
+   "title": "reference 2 (optional)",
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "reference_2.png",
+    "image"
+   ],
+   "widgets_values_named": {
+    "image": "reference_2.png",
+    "upload": "image"
+   }
+  },
+  {
+   "id": 6,
+   "type": "MiniMaxH3_ReferenceEditPrepare",
+   "pos": [
+    322.798828125,
+    0
+   ],
+   "size": [
+    400,
+    502
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 1
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 2
+    },
+    {
+     "localized_name": "source_image",
+     "name": "source_image",
+     "type": "IMAGE",
+     "link": 3
+    },
+    {
+     "localized_name": "reference_image_2",
+     "name": "reference_image_2",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": 4
+    },
+    {
+     "localized_name": "reference_image_3",
+     "name": "reference_image_3",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "localized_name": "reference_image_4",
+     "name": "reference_image_4",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "localized_name": "reference_image_5",
+     "name": "reference_image_5",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "localized_name": "reference_image_6",
+     "name": "reference_image_6",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "localized_name": "reference_image_7",
+     "name": "reference_image_7",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "localized_name": "reference_image_8",
+     "name": "reference_image_8",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "localized_name": "reference_image_9",
+     "name": "reference_image_9",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "localized_name": "edit_instruction",
+     "name": "edit_instruction",
+     "type": "STRING",
+     "widget": {
+      "name": "edit_instruction"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "width",
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "height",
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "quality_profile",
+     "name": "quality_profile",
+     "type": "COMBO",
+     "widget": {
+      "name": "quality_profile"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "source_fidelity",
+     "name": "source_fidelity",
+     "type": "FLOAT",
+     "widget": {
+      "name": "source_fidelity"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "source_fit",
+     "name": "source_fit",
+     "type": "COMBO",
+     "widget": {
+      "name": "source_fit"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "reference_detail",
+     "name": "reference_detail",
+     "type": "COMBO",
+     "widget": {
+      "name": "reference_detail"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "optimize_for_still",
+     "name": "optimize_for_still",
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "optimize_for_still"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "reference_transport",
+     "name": "reference_transport",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "reference_transport"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "positive",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "links": [
+      9
+     ]
+    },
+    {
+     "localized_name": "h3_latent",
+     "name": "h3_latent",
+     "type": "LATENT",
+     "links": [
+      14
+     ]
+    },
+    {
+     "localized_name": "fitted_source",
+     "name": "fitted_source",
+     "type": "IMAGE",
+     "links": null
+    },
+    {
+     "localized_name": "requested_frames",
+     "name": "requested_frames",
+     "type": "INT",
+     "links": null
+    },
+    {
+     "localized_name": "image_prompt",
+     "name": "image_prompt",
+     "type": "STRING",
+     "links": null
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_ReferenceEditPrepare"
+   },
+   "widgets_values": [
+    "Change the jacket to red leather; keep everything else.",
+    1344,
+    768,
+    "recommended | 5 frames",
+    0.6,
+    "crop_center",
+    "match_generation_area",
+    true,
+    "native"
+   ],
+   "widgets_values_named": {
+    "edit_instruction": "Change the jacket to red leather; keep everything else.",
+    "width": 1344,
+    "height": 768,
+    "quality_profile": "recommended | 5 frames",
+    "source_fidelity": 0.6,
+    "source_fit": "crop_center",
+    "reference_detail": "match_generation_area",
+    "optimize_for_still": true,
+    "reference_transport": "native"
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 7,
+   "type": "BasicScheduler",
+   "pos": [
+    832.798828125,
+    0
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "MODEL",
+     "link": 5
+    },
+    {
+     "localized_name": "scheduler",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "steps",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "denoise",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "SIGMAS",
+     "name": "SIGMAS",
+     "type": "SIGMAS",
+     "links": [
+      6
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicScheduler"
+   },
+   "widgets_values": [
+    "simple",
+    20,
+    1
+   ],
+   "widgets_values_named": {
+    "scheduler": "simple",
+    "steps": 20,
+    "denoise": 1
+   }
+  },
+  {
+   "id": 8,
+   "type": "MiniMaxH3_LegalScheduler",
+   "pos": [
+    832.798828125,
+    176
+   ],
+   "size": [
+    270,
+    124
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "sigmas",
+     "name": "sigmas",
+     "type": "SIGMAS",
+     "link": 6
+    },
+    {
+     "localized_name": "model",
+     "name": "model",
+     "shape": 7,
+     "type": "MODEL",
+     "link": 7
+    },
+    {
+     "localized_name": "scheduler",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "denoise",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "sigmas",
+     "name": "sigmas",
+     "type": "SIGMAS",
+     "links": [
+      13
+     ]
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_LegalScheduler"
+   },
+   "widgets_values": [
+    "simple",
+    1
+   ],
+   "widgets_values_named": {
+    "scheduler": "simple",
+    "denoise": 1
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 9,
+   "type": "RandomNoise",
+   "pos": [
+    832.798828125,
+    370
+   ],
+   "size": [
+    270,
+    82
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "noise_seed",
+     "name": "noise_seed",
+     "type": "INT",
+     "widget": {
+      "name": "noise_seed"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "NOISE",
+     "name": "NOISE",
+     "type": "NOISE",
+     "links": [
+      10
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "RandomNoise"
+   },
+   "widgets_values": [
+    123,
+    "fixed"
+   ],
+   "widgets_values_named": {
+    "noise_seed": 123,
+    "control_after_generate": "fixed"
+   }
+  },
+  {
+   "id": 10,
+   "type": "KSamplerSelect",
+   "pos": [
+    832.798828125,
+    522
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "sampler_name",
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "SAMPLER",
+     "name": "SAMPLER",
+     "type": "SAMPLER",
+     "links": [
+      12
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSamplerSelect"
+   },
+   "widgets_values": [
+    "res_multistep"
+   ],
+   "widgets_values_named": {
+    "sampler_name": "res_multistep"
+   }
+  },
+  {
+   "id": 11,
+   "type": "BasicGuider",
+   "pos": [
+    1142.798828125,
+    0
+   ],
+   "size": [
+    159.568359375,
+    46
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "MODEL",
+     "link": 8
+    },
+    {
+     "localized_name": "conditioning",
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 9
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "GUIDER",
+     "name": "GUIDER",
+     "type": "GUIDER",
+     "links": [
+      11
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicGuider"
+   }
+  },
+  {
+   "id": 12,
+   "type": "SamplerCustomAdvanced",
+   "pos": [
+    1142.798828125,
+    116
+   ],
+   "size": [
+    212.3638671875,
+    106
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "noise",
+     "name": "noise",
+     "type": "NOISE",
+     "link": 10
+    },
+    {
+     "localized_name": "guider",
+     "name": "guider",
+     "type": "GUIDER",
+     "link": 11
+    },
+    {
+     "localized_name": "sampler",
+     "name": "sampler",
+     "type": "SAMPLER",
+     "link": 12
+    },
+    {
+     "localized_name": "sigmas",
+     "name": "sigmas",
+     "type": "SIGMAS",
+     "link": 13
+    },
+    {
+     "localized_name": "latent_image",
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 14
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "output",
+     "name": "output",
+     "type": "LATENT",
+     "links": [
+      15
+     ]
+    },
+    {
+     "localized_name": "denoised_output",
+     "name": "denoised_output",
+     "type": "LATENT",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SamplerCustomAdvanced"
+   }
+  },
+  {
+   "id": 13,
+   "type": "MiniMaxH3_ImageDecode",
+   "pos": [
+    1500,
+    0
+   ],
+   "size": [
+    306.81508483886716,
+    188
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "samples",
+     "name": "samples",
+     "type": "LATENT",
+     "link": 15
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 16
+    },
+    {
+     "localized_name": "decode_mode",
+     "name": "decode_mode",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "decode_mode"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "latent_index",
+     "name": "latent_index",
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "latent_index"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "spatial_decode",
+     "name": "spatial_decode",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "spatial_decode"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "frames",
+     "name": "frames",
+     "type": "IMAGE",
+     "links": [
+      17
+     ]
+    },
+    {
+     "localized_name": "decoded_frames",
+     "name": "decoded_frames",
+     "type": "INT",
+     "links": null
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
+    },
+    {
+     "localized_name": "recommended_index",
+     "name": "recommended_index",
+     "type": "INT",
+     "links": [
+      18
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_ImageDecode"
+   },
+   "widgets_values": [
+    "temporal",
+    0,
+    "native"
+   ],
+   "widgets_values_named": {
+    "decode_mode": "temporal",
+    "latent_index": 0,
+    "spatial_decode": "native"
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 14,
+   "type": "MiniMaxH3_ImageFrameSelector",
+   "pos": [
+    1920,
+    0
+   ],
+   "size": [
+    359.068359375,
+    328
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "frames",
+     "name": "frames",
+     "type": "IMAGE",
+     "link": 17
+    },
+    {
+     "localized_name": "source_image",
+     "name": "source_image",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": 19
+    },
+    {
+     "localized_name": "recommended_index",
+     "name": "recommended_index",
+     "shape": 7,
+     "type": "INT",
+     "link": 18
+    },
+    {
+     "localized_name": "strategy",
+     "name": "strategy",
+     "type": "COMBO",
+     "widget": {
+      "name": "strategy"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "manual_index",
+     "name": "manual_index",
+     "type": "INT",
+     "widget": {
+      "name": "manual_index"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "skip_first_frames",
+     "name": "skip_first_frames",
+     "type": "INT",
+     "widget": {
+      "name": "skip_first_frames"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "candidate_start",
+     "name": "candidate_start",
+     "type": "FLOAT",
+     "widget": {
+      "name": "candidate_start"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "candidate_end",
+     "name": "candidate_end",
+     "type": "FLOAT",
+     "widget": {
+      "name": "candidate_end"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "similarity_weight",
+     "name": "similarity_weight",
+     "type": "FLOAT",
+     "widget": {
+      "name": "similarity_weight"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "top_k",
+     "name": "top_k",
+     "type": "INT",
+     "widget": {
+      "name": "top_k"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "emit_candidate_batch",
+     "name": "emit_candidate_batch",
+     "shape": 7,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "emit_candidate_batch"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "selected_image",
+     "name": "selected_image",
+     "type": "IMAGE",
+     "links": [
+      20
+     ]
+    },
+    {
+     "localized_name": "candidate_batch_debug",
+     "name": "candidate_batch_debug",
+     "type": "IMAGE",
+     "links": null
+    },
+    {
+     "localized_name": "selected_index",
+     "name": "selected_index",
+     "type": "INT",
+     "links": null
+    },
+    {
+     "localized_name": "selected_score",
+     "name": "selected_score",
+     "type": "FLOAT",
+     "links": null
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_ImageFrameSelector"
+   },
+   "widgets_values": [
+    "decode_recommended",
+    0,
+    0,
+    0,
+    1,
+    0.6,
+    4,
+    false
+   ],
+   "widgets_values_named": {
+    "strategy": "decode_recommended",
+    "manual_index": 0,
+    "skip_first_frames": 0,
+    "candidate_start": 0,
+    "candidate_end": 1,
+    "similarity_weight": 0.6,
+    "top_k": 4,
+    "emit_candidate_batch": false
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 15,
+   "type": "SaveImage",
+   "pos": [
+    2389.068359375,
+    0
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 20
+    },
+    {
+     "localized_name": "filename_prefix",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "h3_tasks/03_reference_edit"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "h3_tasks/03_reference_edit"
+   }
+  },
+  {
+   "id": 16,
+   "type": "MarkdownNote",
+   "pos": [
+    -1020,
+    0
+   ],
+   "size": [
+    460,
+    560
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "# 3 - Reference modification (edit an image with references)\n\n**Models** (official Comfy-Org files; the loaders carry their download links): ref2va diffusion model, Qwen3-VL text encoder, video VAE (no audio).\n\n**Checkpoint variants**: the bf16 checkpoints work in the same loaders (pick them in the list); the Turbo LoRA (4-step ref2v / 8-step fl2v) cuts the steps - set the scheduler steps to match.\n\n**Inputs**: the image to edit, an edit instruction, up to 8 more reference images.\n\n**Controls**: quality_profile = how many frames H3 renders for one still (more = slower, steadier); source_fidelity = how strongly the source is held; the frame selector picks the best frame.\n\n**Output**: one PNG in output/h3_tasks/.\n\n**Limits**: an image model run as a short video: one frame is kept; very large edits drift from the source.\n\n**Status**: built in ComfyUI's own front end and validated by the server (only missing model / media files reported). NOT run on H3 weights on the build machine - starting values follow core's H3 templates (res_multistep, simple, 20 steps, guider cfg 1). Guide: workflows/tasks/README.md."
+   ],
+   "widgets_values_named": {
+    "text": "# 3 - Reference modification (edit an image with references)\n\n**Models** (official Comfy-Org files; the loaders carry their download links): ref2va diffusion model, Qwen3-VL text encoder, video VAE (no audio).\n\n**Checkpoint variants**: the bf16 checkpoints work in the same loaders (pick them in the list); the Turbo LoRA (4-step ref2v / 8-step fl2v) cuts the steps - set the scheduler steps to match.\n\n**Inputs**: the image to edit, an edit instruction, up to 8 more reference images.\n\n**Controls**: quality_profile = how many frames H3 renders for one still (more = slower, steadier); source_fidelity = how strongly the source is held; the frame selector picks the best frame.\n\n**Output**: one PNG in output/h3_tasks/.\n\n**Limits**: an image model run as a short video: one frame is kept; very large edits drift from the source.\n\n**Status**: built in ComfyUI's own front end and validated by the server (only missing model / media files reported). NOT run on H3 weights on the build machine - starting values follow core's H3 templates (res_multistep, simple, 20 steps, guider cfg 1). Guide: workflows/tasks/README.md."
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  }
+ ],
+ "links": [
+  [
+   1,
+   2,
+   0,
+   6,
+   0,
+   "CLIP"
+  ],
+  [
+   2,
+   3,
+   0,
+   6,
+   1,
+   "VAE"
+  ],
+  [
+   3,
+   4,
+   0,
+   6,
+   2,
+   "IMAGE"
+  ],
+  [
+   4,
+   5,
+   0,
+   6,
+   3,
+   "IMAGE"
+  ],
+  [
+   5,
+   1,
+   0,
+   7,
+   0,
+   "MODEL"
+  ],
+  [
+   6,
+   7,
+   0,
+   8,
+   0,
+   "SIGMAS"
+  ],
+  [
+   7,
+   1,
+   0,
+   8,
+   1,
+   "MODEL"
+  ],
+  [
+   8,
+   1,
+   0,
+   11,
+   0,
+   "MODEL"
+  ],
+  [
+   9,
+   6,
+   0,
+   11,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   10,
+   9,
+   0,
+   12,
+   0,
+   "NOISE"
+  ],
+  [
+   11,
+   11,
+   0,
+   12,
+   1,
+   "GUIDER"
+  ],
+  [
+   12,
+   10,
+   0,
+   12,
+   2,
+   "SAMPLER"
+  ],
+  [
+   13,
+   8,
+   0,
+   12,
+   3,
+   "SIGMAS"
+  ],
+  [
+   14,
+   6,
+   1,
+   12,
+   4,
+   "LATENT"
+  ],
+  [
+   15,
+   12,
+   0,
+   13,
+   0,
+   "LATENT"
+  ],
+  [
+   16,
+   3,
+   0,
+   13,
+   1,
+   "VAE"
+  ],
+  [
+   17,
+   13,
+   0,
+   14,
+   0,
+   "IMAGE"
+  ],
+  [
+   18,
+   13,
+   3,
+   14,
+   2,
+   "INT"
+  ],
+  [
+   19,
+   4,
+   0,
+   14,
+   1,
+   "IMAGE"
+  ],
+  [
+   20,
+   14,
+   0,
+   15,
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [
+  {
+   "id": 1,
+   "title": "Models",
+   "bounding": [
+    -470,
+    -76,
+    310,
+    482
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 2,
+   "title": "Inputs",
+   "bounding": [
+    -90,
+    -76,
+    322.798828125,
+    794
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 3,
+   "title": "Edit prepare",
+   "bounding": [
+    302.798828125,
+    -76,
+    440,
+    598
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 4,
+   "title": "Sampling",
+   "bounding": [
+    812.798828125,
+    -76,
+    562.3638671875001,
+    676
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 5,
+   "title": "Decode + pick the frame",
+   "bounding": [
+    1480,
+    -76,
+    819.068359375,
+    424
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 6,
+   "title": "Output",
+   "bounding": [
+    2369.068359375,
+    -76,
+    310,
+    154
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "c2c": {
+   "bookmarks": {}
+  },
+  "ds": {
+   "scale": 1,
+   "offset": [
+    0,
+    0
+   ]
+  }
+ },
+ "version": 0.4
+}

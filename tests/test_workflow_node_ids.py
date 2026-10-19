@@ -140,7 +140,7 @@ def test_workflow_links_are_consistent(workflow_file):
             problems.append(
                 f"link {lid}: type {ltype} != origin slot type {souts[src_slot].get('type')}"
             )
-        if dins[dst_slot].get("type") != ltype:
+        if dins[dst_slot].get("type") not in (ltype, "*"):  # '*' = wildcard socket (e.g. Preview Any)
             problems.append(
                 f"link {lid}: type {ltype} != target slot type {dins[dst_slot].get('type')}"
             )

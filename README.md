@@ -257,7 +257,20 @@ On ComfyUI core `180060c` and later, `ModelSamplingAV` is native (`comfy/model_s
 
 ## Workflow
 
-See `workflows/h3_masked_face_pipeline.json` and `workflows/README.md` (runtime untested without H3 weights).
+**Task workflows** (A16): 14 ready-to-load graphs in `workflows/tasks/`, one per task:
+- text / image to video, reference to video with guides, reference image editing;
+- masked character replacement (zero offset, bit-exact outside the mask), masked ControlNet, exact protected edits;
+- stable high-resolution crops;
+- long-form continuation (from text, editing a long plate, following a long soundtrack);
+- face / head replacement, whole-frame object / background edits, tiled enhancement;
+- latent persistence.
+
+Each graph carries a guide note (models, variants, inputs, controls, output, limits) and titled stage groups.
+They are built in ComfyUI's own front end and validated by the server, but not run on H3 weights:
+`workflows/tasks/README.md`.
+
+Older pipelines: `workflows/h3_masked_face_pipeline.json` and `workflows/README.md` (runtime untested without H3
+weights).
 
 Recommended sampling chain after N4:
 
