@@ -469,3 +469,100 @@ def restore_frames(
         "summary": " ".join(summary_parts),
     }
     return out, full_restore_mask, report
+
+
+# ── A16 s9 / s16: protected-source composite with a per-frame transform ledger ─────────────────────────────────────
+
+PROTECT_MODES = ("feathered box", "exact outside mask", "soft mask edge", "whole crop")
+
+
+def inward_feather(mask: torch.Tensor, feather: int) -> torch.Tensor:
+    """Binary mask -> alpha that ramps INSIDE the mask edge and is exactly 0 outside it.
+
+    Mean of the mask eroded by 0..feather-1 px: the boundary pixel gets 1/feather, pixels `feather` deep get 1, and
+    nothing outside the mask is ever touched - the point of 'exact outside mask'.
+    """
+    binary = (mask > 0.5).to(torch.float32)
+    if feather <= 1:
+        return binary
+    acc = torch.zeros_like(binary)
+    for k in range(int(feather)):
+        acc = acc + _erode_mask(binary, k)
+    return acc / float(feather)
+
+
+def protect_alpha(mode: str, h: int, w: int, x: int, y: int, img_h: int, img_w: int, feather: int,
+                  mask: torch.Tensor | None, device, dtype) -> torch.Tensor:
+    if mode == "whole crop":
+        return torch.ones(h, w, device=device, dtype=dtype)
+    if mode == "feathered box":
+        a = border_ramp_alpha(h, w, x, y, img_h, img_w, feather, device=device, dtype=dtype)
+        return a if mask is None else a * mask.clamp(0.0, 1.0).to(device=device, dtype=dtype)
+    if mask is None:
+        raise ValueError(f"protect = '{mode}' needs cropped_masks: it is the mask that says what may change.")
+    if mode == "soft mask edge":
+        return mask.clamp(0.0, 1.0).to(device=device, dtype=dtype)
+    if mode == "exact outside mask":
+        return inward_feather(mask.to(device=device, dtype=torch.float32), feather).to(dtype)
+    raise ValueError(f"Unknown protect mode {mode!r}; use one of {PROTECT_MODES}.")
+
+
+def protected_paste_frames(cropped_images: torch.Tensor, original_images: torch.Tensor,
+                           boxes: list[dict[str, float | int]], feather: int, cropped_masks: torch.Tensor | None,
+                           mode: str, *, resize_image, resize_mask) -> tuple[torch.Tensor, list[dict]]:
+    """Paste every crop back with the chosen protection and MEASURE what happened per frame.
+
+    Ledger per frame: the box, the crop size it came from and the scale back into the box, pixels left exactly as
+    the original (alpha 0), blended (0 < alpha < 1) and replaced (alpha 1), and the largest change found where
+    alpha is 0 - which must be 0.0; anything else is reported, not assumed.
+    """
+    img_h, img_w = original_images.shape[1], original_images.shape[2]
+    out = original_images.clone()
+    ledger = []
+    for i, b in enumerate(boxes):
+        x, y, w, h = (int(round(b[k])) for k in ("x", "y", "width", "height"))
+        src_h, src_w = int(cropped_images[i].shape[0]), int(cropped_images[i].shape[1])
+        crop = resize_image(cropped_images[i], w, h)
+        m = resize_mask(cropped_masks[i], w, h) if cropped_masks is not None else None
+        alpha = protect_alpha(mode, h, w, x, y, img_h, img_w, feather, m, out.device, out.dtype)
+        region = out[i, y:y + h, x:x + w, :]
+        a3 = alpha[..., None]
+        new = crop.to(region) * a3 + region * (1.0 - a3)
+        out[i, y:y + h, x:x + w, :] = new
+        zero = alpha <= 0.0
+        changed = (new - original_images[i, y:y + h, x:x + w, :].to(new)).abs().amax(dim=-1)
+        outside_change = float(changed[zero].max()) if bool(zero.any()) else 0.0
+        box_px = h * w
+        ledger.append({
+            "frame": i, "box": [x, y, w, h], "crop_px": [src_w, src_h],
+            "scale_to_box": [round(w / max(1, src_w), 6), round(h / max(1, src_h), 6)],
+            "preserved_px": int(zero.sum()) + img_h * img_w - box_px,
+            "blended_px": int(((alpha > 0) & (alpha < 1)).sum()),
+            "replaced_px": int((alpha >= 1).sum()),
+            "max_change_where_preserved": outside_change,
+        })
+    return out, ledger
+
+
+def ledger_report(ledger: list[dict], mode: str) -> str:
+    if not ledger:
+        return "No frames."
+    n = len(ledger)
+    total = sum(e["preserved_px"] + e["blended_px"] + e["replaced_px"] for e in ledger) or 1
+    pres = sum(e["preserved_px"] for e in ledger)
+    blend = sum(e["blended_px"] for e in ledger)
+    repl = sum(e["replaced_px"] for e in ledger)
+    worst = max(e["max_change_where_preserved"] for e in ledger)
+    boxes = {tuple(e["box"]) for e in ledger}
+    scales = {tuple(e["scale_to_box"]) for e in ledger}
+    lines = [f"{n} frames, protect = {mode}",
+             f"  exactly the original: {100.0 * pres / total:.2f}% of pixels; blended: {100.0 * blend / total:.2f}%; "
+             f"replaced: {100.0 * repl / total:.2f}%",
+             f"  largest change where the original was kept: {worst:.3g} "
+             + ("(bit-exact)" if worst == 0.0 else "- NOT exact, report this"),
+             f"  boxes: {len(boxes)} distinct; crop -> box scale: "
+             + ", ".join(f"{s[0]:.4f} x {s[1]:.4f}" for s in sorted(scales)[:3]) + (" ..." if len(scales) > 3 else "")]
+    if mode == "feathered box":
+        lines.append("  Note: the whole box is pasted (feathered at its border) - background inside the box comes "
+                     "from the model. 'exact outside mask' keeps every pixel outside the mask.")
+    return "\n".join(lines)

@@ -22,7 +22,7 @@ if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
 from mmx_utils.head_room import MODES as HEAD_SIZE_MODES, head_room
-from mmx_utils.plate_restore import uncrop_paste_frames
+from mmx_utils.plate_restore import PROTECT_MODES, ledger_report, protected_paste_frames
 from mmx_utils.pose_interop import pose_keypoint_to_wholebody
 from mmx_utils.subject_crop_planner import plan
 
@@ -468,12 +468,25 @@ class MiniMaxH3_SubjectUncrop(io.ComfyNode):
                               tooltip="Confines the paste to the mask, one per crop at any resolution. A single mask is applied to every frame. Used exactly as given; pre-blur the mask for a soft edge."),
                 io.Int.Input("feather", default=16, min=0,
                              tooltip="Blend width in pixels, feathered inward from the crop border. Sides touching the image edge are not feathered."),
+                # A16 s9/s16, appended: what may change in the plate, and a measured ledger of what did
+                io.Combo.Input("protect", options=list(PROTECT_MODES), default=PROTECT_MODES[0], optional=True,
+                               tooltip="feathered box: the whole crop goes back, feathered at the box border (as "
+                                       "before; the background inside the box is the model's). exact outside mask: "
+                                       "every pixel outside cropped_masks stays bit-exact the original; the feather "
+                                       "runs INSIDE the mask edge. soft mask edge: the mask's own soft values are the "
+                                       "blend. whole crop: the crop replaces the box, no feather."),
             ],
-            outputs=[io.Image.Output(display_name="images", tooltip="Original frames with the crops blended back in.")],
+            outputs=[
+                io.Image.Output(display_name="images", tooltip="Original frames with the crops blended back in."),
+                io.String.Output(display_name="report", tooltip="What was kept exactly, blended and replaced, measured."),
+                io.String.Output(display_name="ledger_json", tooltip="Per frame: box, crop size, scale, pixel counts, "
+                                                                     "largest change where the original was kept."),
+            ],
         )
 
     @classmethod
-    def execute(cls, cropped_images, original_images, bboxes, feather, cropped_masks=None) -> io.NodeOutput:
+    def execute(cls, cropped_images, original_images, bboxes, feather, cropped_masks=None,
+                protect=PROTECT_MODES[0]) -> io.NodeOutput:
         if isinstance(bboxes, dict):
             frames = None
         elif isinstance(bboxes, list) and bboxes and all(isinstance(f, list) and f for f in bboxes):
@@ -503,13 +516,15 @@ class MiniMaxH3_SubjectUncrop(io.ComfyNode):
         else:
             boxes = [f[0] for f in (frames * n if len(frames) == 1 else frames[:n])]
 
-        out = uncrop_paste_frames(
+        out, ledger = protected_paste_frames(
             cropped_images,
             original_images,
             boxes,
             feather,
             cropped_masks,
+            protect,
             resize_image=_resize_image,
             resize_mask=_resize_mask,
         )
-        return io.NodeOutput(out)
+        report = ledger_report(ledger, protect)
+        return io.NodeOutput(out, report, json.dumps(ledger, separators=(",", ":")), ui={"text": [report]})

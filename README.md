@@ -61,6 +61,14 @@ ComfyUI's own layout code; the effect on real outputs still needs a GPU run).
   on H3's own (1,4,4,4,4) frame grouping (a pixel mask given to the sampler is resampled linearly in time: measured one
   latent row early at half strength) and the sound kept / regenerated / following the mask per 1/40 s.
 
+- **H3 Subject Uncrop** `protect` (appended; default unchanged): `exact outside mask` keeps every pixel outside the
+  crop mask bit-exact (the feather runs inside the mask edge), `soft mask edge` blends by the mask's own values,
+  `whole crop` replaces the box. A `report` / `ledger_json` say per frame what was kept exactly, blended and replaced
+  and the largest change measured where the original was kept (0 = bit-exact).
+- **H3 Drift QC** placement (appended inputs `source_subject_mask`, `output_subject_mask`, `bboxes`; output
+  `placement_json`): where the new subject sits against the old one - centre and box-edge shift per frame, in plate
+  pixels with the crop boxes.
+
 Caching fixed for 36 nodes: their `fingerprint_inputs` read linked tensors (or used their id()), which ComfyUI never passes (they arrive as
 None), so ComfyUI stored NaN and the node - and everything after it, the sampler included - ran again on every queue.
 Measured live with classic caching: H3 Motion Context Trim re-ran every time before, is cached after.

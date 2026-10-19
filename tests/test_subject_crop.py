@@ -90,3 +90,73 @@ def test_tight_crop_leaves_no_room_for_a_larger_head():
         shares[r] = float(tgt[b["y"]:b["y"] + b["height"], b["x"]:b["x"] + b["width"]].sum()) / float(tgt.sum())
     assert math.isclose(shares[1.0], 1.0)
     assert shares[1.5] < 0.95
+
+
+# -- A16 s9/s16: protected-source composite + measured transform ledger ----------------------------------------------
+
+def _uncrop(cropped, original, boxes, feather=16, masks=None, protect=None):
+    kw = {} if protect is None else {"protect": protect}
+    return _vals(MiniMaxH3_SubjectUncrop.execute(cropped, original, boxes, feather, masks, **kw))
+
+
+def _setup(seed=0):
+    torch.manual_seed(seed)
+    original = torch.rand(T, H, W, 3)
+    box = {"x": 100, "y": 60, "width": 120, "height": 90}
+    cropped = torch.rand(T, 180, 240, 3)                       # a 2x upscaled crop came back from the model
+    masks = torch.zeros(T, 180, 240)
+    masks[:, 40:140, 60:180] = 1.0
+    return original, [[box]], cropped, masks
+
+
+def test_default_protect_is_the_old_paste_bit_for_bit():
+    from mmx_nodes.subject_crop import _resize_image, _resize_mask
+    from mmx_utils.plate_restore import uncrop_paste_frames
+    original, boxes, cropped, masks = _setup()
+    for m in (None, masks):
+        old = uncrop_paste_frames(cropped, original, [boxes[0][0]] * T, 16, m,
+                                  resize_image=_resize_image, resize_mask=_resize_mask)
+        new = _uncrop(cropped, original, boxes, 16, m)[0]
+        assert torch.equal(old, new)
+
+
+def test_exact_outside_mask_keeps_every_outside_pixel():
+    original, boxes, cropped, masks = _setup(1)
+    out, report, ledger = _uncrop(cropped, original, boxes, 8, masks, protect="exact outside mask")
+    from mmx_nodes.subject_crop import _resize_mask
+    inside = torch.zeros(T, H, W, dtype=torch.bool)
+    for i in range(T):
+        inside[i, 60:150, 100:220] = _resize_mask(masks[i], 120, 90) > 0.5
+    assert torch.equal(out[~inside], original[~inside])                       # bit-exact outside the mask
+    assert not torch.equal(out[inside], original[inside])                     # the edit is there
+    import json
+    led = json.loads(ledger)
+    assert all(e["max_change_where_preserved"] == 0.0 for e in led) and "bit-exact" in report
+    assert all(e["scale_to_box"] == [0.5, 0.5] for e in led)
+    assert all(e["preserved_px"] + e["blended_px"] + e["replaced_px"] == H * W for e in led)
+
+
+def test_inward_feather_ramps_inside_only():
+    from mmx_utils.plate_restore import inward_feather
+    m = torch.zeros(40, 40)
+    m[10:30, 10:30] = 1.0
+    a = inward_feather(m, 4)
+    assert float(a[m == 0].abs().max()) == 0.0
+    assert float(a[10, 20]) == 0.25 and float(a[20, 20]) == 1.0
+
+
+def test_whole_crop_replaces_the_box_and_nothing_else():
+    original, boxes, cropped, masks = _setup(2)
+    out, report, _ = _uncrop(cropped, original, boxes, 16, None, protect="whole crop")
+    outside = torch.ones(T, H, W, dtype=torch.bool)
+    outside[:, 60:150, 100:220] = False
+    assert torch.equal(out[outside], original[outside])
+    assert "replaced: " in report
+
+
+def test_mask_modes_need_a_mask():
+    original, boxes, cropped, _ = _setup(3)
+    import pytest
+    for mode in ("exact outside mask", "soft mask edge"):
+        with pytest.raises(ValueError, match="needs cropped_masks"):
+            _uncrop(cropped, original, boxes, 16, None, protect=mode)
