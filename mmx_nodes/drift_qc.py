@@ -27,7 +27,12 @@ if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
 from mmx_utils.device import run_with_cpu_fallback
-from mmx_utils.drift_qc import drift_per_frame_json, measure_exterior_drift
+from mmx_utils.drift_qc import (
+    drift_per_frame_json,
+    measure_exterior_drift,
+    placement_report,
+    subject_placement,
+)
 
 try:
     import comfy.model_management as mm
@@ -74,17 +79,31 @@ class MiniMaxH3_DriftQC(io.ComfyNode):
                 io.Image.Input("edited"),
                 io.Mask.Input("edit_mask"),
                 io.Float.Input("threshold_px", default=2.0, min=0.0, max=64.0, step=0.1),
+                # A16, appended: where the SUBJECT ended up, not only whether the background moved
+                io.Mask.Input("source_subject_mask", optional=True,
+                              tooltip="Mask of the subject in the SOURCE frames (optional). With the output's "
+                                      "subject mask it measures where the new subject sits against the old one."),
+                io.Mask.Input("output_subject_mask", optional=True,
+                              tooltip="Mask of the subject in the EDITED frames, from any segmenter run on them "
+                                      "(e.g. the same points / prompt as the source mask)."),
+                io.BoundingBox.Input("bboxes", optional=True, force_input=True,
+                                     tooltip="Optional crop boxes (Subject Crop) when the masks are crop-sized: the "
+                                             "placement is then also given in original-plate pixels."),
             ],
             outputs=[
                 io.String.Output("drift_per_frame"),
                 io.Image.Output("drift_heatmap"),
                 io.Boolean.Output("passed"),
                 io.String.Output("report"),
+                io.String.Output("placement_json",
+                                 tooltip="Subject placement per frame and summary (empty when the subject masks "
+                                         "are not wired)."),
             ],
         )
 
     @classmethod
-    def execute(cls, original, edited, edit_mask, threshold_px=2.0) -> io.NodeOutput:
+    def execute(cls, original, edited, edit_mask, threshold_px=2.0, source_subject_mask=None,
+                output_subject_mask=None, bboxes=None) -> io.NodeOutput:
         dev = original.device
         if mm is not None:
             try:
@@ -124,10 +143,33 @@ class MiniMaxH3_DriftQC(io.ComfyNode):
         # First frame only — PreviewImage writes one PNG per batch frame. The curve the
         # widget plots comes from mmx_drift, not the heatmap. The IMAGE socket is unchanged.
         heatmap_ui = ui.PreviewImage(heatmap[:1], cls=cls).as_dict()
+        placement_json = ""
+        if source_subject_mask is not None and output_subject_mask is not None:
+            scale = _plate_scale(bboxes, source_subject_mask)
+            placement = subject_placement(source_subject_mask.cpu(), output_subject_mask.cpu(), plate_scale=scale)
+            report = report + "\n" + placement_report(placement)
+            placement_json = json.dumps(placement, separators=(",", ":"))
         return io.NodeOutput(
             drift_per_frame_json(result.drift_per_frame),
             heatmap,
             bool(result.passed),
             report,
+            placement_json,
             ui={**heatmap_ui, "mmx_drift": [drift_ui_json]},
         )
+
+
+def _plate_scale(bboxes, mask):
+    """(sx, sy) crop-mask px -> plate px from the first Subject Crop box; None without one."""
+    box = None
+    if isinstance(bboxes, dict):
+        box = bboxes
+    elif isinstance(bboxes, list) and bboxes:
+        first = bboxes[0]
+        box = first[0] if isinstance(first, list) and first else (first if isinstance(first, dict) else None)
+    if not box:
+        return None
+    try:
+        return float(box["width"]) / float(mask.shape[-1]), float(box["height"]) / float(mask.shape[-2])
+    except (KeyError, TypeError, ZeroDivisionError):
+        return None

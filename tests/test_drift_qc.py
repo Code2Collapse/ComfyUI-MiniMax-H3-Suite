@@ -45,7 +45,9 @@ def test_drift_qc_node_reports_pass_on_zero_shift():
     edited = inject_pixel_shift(original, 0.0, 0.0)
     mask = torch.zeros(48, 48)
     mask[12:36, 12:36] = 1.0
-    drift_json, heat, passed, report = MiniMaxH3_DriftQC.execute(original, edited, mask, 2.0)
+    # placement_json appended last (A16): empty when the subject masks are not wired
+    drift_json, heat, passed, report, placement_json = MiniMaxH3_DriftQC.execute(original, edited, mask, 2.0)
+    assert placement_json == ""
     assert isinstance(drift_json, str)
     assert heat.shape[0] == 1
     assert isinstance(passed, bool)
@@ -103,3 +105,53 @@ def test_drift_calibration_below_supersample_reach(size):
             original, inject_pixel_shift(original, shift, 0.0), mask, threshold_px=10.0
         ).drift_per_frame[0]
         assert abs(measured - shift) <= 0.25, f"{size}px / {shift}px -> {measured:.4f}"
+
+
+# -- A16: subject placement (where the new subject sits against the old one) -----------------------------------------
+
+def _box_mask(n, h, w, x0, y0, bw, bh):
+    m = torch.zeros(n, h, w)
+    m[:, y0:y0 + bh, x0:x0 + bw] = 1.0
+    return m
+
+
+def test_placement_measures_a_known_shift():
+    from mmx_utils.drift_qc import subject_placement
+    src = _box_mask(5, 120, 160, 60, 40, 30, 50)
+    out = _box_mask(5, 120, 160, 46, 26, 30, 50)        # moved 14 left, 14 up - the A16 reference-video signature
+    p = subject_placement(src, out)
+    assert p["frames_measured"] == 5
+    assert p["centroid_dx"]["mean"] == -14.0 and p["centroid_dy"]["mean"] == -14.0
+    assert p["top_edge"]["mean"] == -14.0 and p["area_ratio"]["mean"] == 1.0
+
+
+def test_placement_in_plate_pixels_and_skips_empty_frames():
+    from mmx_utils.drift_qc import placement_report, subject_placement
+    src = _box_mask(3, 100, 100, 40, 40, 20, 20)
+    out = _box_mask(3, 100, 100, 50, 40, 20, 20)
+    out[1] = 0.0
+    p = subject_placement(src, out, plate_scale=(0.5, 0.5))
+    assert p["frames_measured"] == 2 and p["frames_skipped"] == 1
+    assert p["centroid_dx"]["mean"] == 5.0 and p["units"] == "plate px"
+    assert "skipped" in placement_report(p)
+
+
+def test_placement_refuses_masks_of_different_sizes():
+    from mmx_utils.drift_qc import subject_placement
+    with pytest.raises(ValueError, match="differ in size"):
+        subject_placement(torch.zeros(1, 10, 10), torch.zeros(1, 12, 10))
+
+
+def test_drift_qc_node_reports_placement_with_crop_boxes():
+    from mmx_nodes.drift_qc import MiniMaxH3_DriftQC
+    original = torch.rand(1, 48, 48, 3)
+    mask = torch.zeros(48, 48)
+    mask[12:36, 12:36] = 1.0
+    src = _box_mask(1, 48, 48, 20, 20, 8, 8)
+    out = _box_mask(1, 48, 48, 18, 20, 8, 8)
+    res = MiniMaxH3_DriftQC.execute(original, original, mask, 2.0, src, out,
+                                    [[{"x": 0, "y": 0, "width": 96, "height": 96}]])
+    report, placement_json = res[3], res[4]
+    import json
+    assert json.loads(placement_json)["centroid_dx"]["mean"] == -4.0      # -2 mask px x 2 (96 / 48)
+    assert "Placement" in report

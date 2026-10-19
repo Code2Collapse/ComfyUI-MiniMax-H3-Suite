@@ -146,3 +146,75 @@ def measure_exterior_drift(
 
 def drift_per_frame_json(values: list[float]) -> str:
     return json.dumps({"drift_px": values}, separators=(",", ":"))
+
+
+def subject_placement(source_mask: torch.Tensor, output_mask: torch.Tensor, threshold: float = 0.5,
+                      plate_scale: tuple[float, float] | None = None) -> dict:
+    """Where the subject is in the output vs the source, per frame (A16 offset measurement).
+
+    `source_mask` / `output_mask`: [frames, H, W] (or [H, W]) masks of the SUBJECT in the source and in the output
+    (from any segmenter run on each). Per frame: centroid shift and the shift of each bounding-box edge, in pixels of
+    these masks; negative x = left, negative y = up (the sign of the reference-video mechanism measured in A16).
+    `plate_scale` (sx, sy) converts to original-plate pixels for a crop that was resized. Frames where either mask is
+    empty are skipped and counted.
+    """
+    src = source_mask if source_mask.ndim == 3 else source_mask[None]
+    out = output_mask if output_mask.ndim == 3 else output_mask[None]
+    n = min(src.shape[0], out.shape[0])
+    if src.shape[-2:] != out.shape[-2:]:
+        raise ValueError(f"source mask {tuple(src.shape[-2:])} and output mask {tuple(out.shape[-2:])} differ in size: "
+                         "measure both at the same resolution (both in the crop, or both in the plate).")
+    h, w = src.shape[-2:]
+    ys = torch.arange(h, dtype=torch.float32, device=src.device)[:, None]
+    xs = torch.arange(w, dtype=torch.float32, device=src.device)[None, :]
+    rows, skipped = [], 0
+    for i in range(n):
+        a = (src[i].float() > threshold).float()
+        b = (out[i].float() > threshold).float()
+        if a.sum() < 1 or b.sum() < 1:
+            skipped += 1
+            continue
+
+        def stats(m):
+            cy = float((m * ys).sum() / m.sum())
+            cx = float((m * xs).sum() / m.sum())
+            yy = torch.nonzero(m.amax(dim=1)).flatten()
+            xx = torch.nonzero(m.amax(dim=0)).flatten()
+            return cx, cy, int(xx.min()), int(yy.min()), int(xx.max()), int(yy.max()), float(m.sum())
+
+        ax, ay, al, at, ar, ab, aa = stats(a)
+        bx, by, bl, bt, br, bb, ba = stats(b)
+        rows.append({"frame": i, "dx": bx - ax, "dy": by - ay, "left": bl - al, "top": bt - at,
+                     "right": br - ar, "bottom": bb - ab, "area_ratio": ba / aa})
+    sx, sy = plate_scale or (1.0, 1.0)
+
+    def summary(key, scale):
+        v = [r[key] * scale for r in rows]
+        if not v:
+            return None
+        v_sorted = sorted(v)
+        return {"mean": round(sum(v) / len(v), 2), "median": round(v_sorted[len(v) // 2], 2),
+                "min": round(v_sorted[0], 2), "max": round(v_sorted[-1], 2)}
+
+    return {"frames_measured": len(rows), "frames_skipped": skipped,
+            "units": "plate px" if plate_scale else "mask px",
+            "centroid_dx": summary("dx", sx), "centroid_dy": summary("dy", sy),
+            "top_edge": summary("top", sy), "left_edge": summary("left", sx),
+            "bottom_edge": summary("bottom", sy), "right_edge": summary("right", sx),
+            "area_ratio": summary("area_ratio", 1.0), "per_frame": rows}
+
+
+def placement_report(p: dict) -> str:
+    if not p["frames_measured"]:
+        return f"Placement: no frame had both subject masks ({p['frames_skipped']} skipped)."
+    u = p["units"]
+    dx, dy = p["centroid_dx"], p["centroid_dy"]
+    lines = [f"Placement ({p['frames_measured']} frames, {u}): subject centre moved {dx['mean']:+.1f} x, "
+             f"{dy['mean']:+.1f} y on average (median {dx['median']:+.1f} / {dy['median']:+.1f}; "
+             "negative = left / up)",
+             f"  box edges: top {p['top_edge']['mean']:+.1f}, left {p['left_edge']['mean']:+.1f}, "
+             f"bottom {p['bottom_edge']['mean']:+.1f}, right {p['right_edge']['mean']:+.1f}; "
+             f"area x{p['area_ratio']['mean']:.3f}"]
+    if p["frames_skipped"]:
+        lines.append(f"  {p['frames_skipped']} frame(s) skipped: a mask was empty.")
+    return "\n".join(lines)
