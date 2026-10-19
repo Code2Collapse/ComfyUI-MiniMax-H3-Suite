@@ -73,6 +73,11 @@ def row_values_from_mask(
             f"denoise mask must be [T,H,W]; got shape {tuple(mask.shape)}"
         )
     m = mask.to(torch.float32)
+    if m.shape[0] != latent_t:
+        raise ValueError(
+            f"the mask has {m.shape[0]} latent frames but the latent has {latent_t}: they describe "
+            "different videos (check the frame count the mask was made for)."
+        )
     pad_w = lat_w - m.shape[-1]
     pad_h = lat_h - m.shape[-2]
     if pad_w < 0 or pad_h < 0:
@@ -201,3 +206,71 @@ def describe_gate(gate: torch.Tensor, img_update: torch.Tensor) -> str:
         "ones the mask asked to preserve; without this the control would be "
         "pushing them while the sampler holds them still."
     )
+
+
+# ── A16 Part III: where a control applies, and how its strength runs over the steps ────────────────────────────────
+
+SCHEDULES = ("constant", "fade out", "fade in", "smooth fade out")
+
+
+def schedule_scale(mode: str, sigma: float, sigma_start: float, sigma_end: float) -> float:
+    """Multiplier on the control strength at this step, inside the active sigma window.
+
+    `fade out` = full strength at the first (noisiest) step of the window, nothing at its last: the control sets the
+    layout early and lets go of the detail. `fade in` is the reverse. `smooth fade out` eases both ends (cosine).
+    Outside the window the patch is not active at all (core's own window), so this is only read inside it.
+    """
+    if mode == "constant":
+        return 1.0
+    span = float(sigma_start) - float(sigma_end)
+    t = 1.0 if span <= 1e-9 else min(1.0, max(0.0, (float(sigma) - float(sigma_end)) / span))
+    if mode == "fade out":
+        return t
+    if mode == "fade in":
+        return 1.0 - t
+    if mode == "smooth fade out":
+        import math
+        return 0.5 - 0.5 * math.cos(math.pi * t)
+    raise ValueError(f"Unknown schedule {mode!r}; use one of {SCHEDULES}.")
+
+
+def apply_region(gate: torch.Tensor, img_update: torch.Tensor, region_rows: torch.Tensor | None) -> torch.Tensor:
+    """Multiply the per-row gate by a control-applicability map (1 = this control may steer the row)."""
+    if region_rows is None:
+        return gate
+    update = img_update.to(torch.bool)
+    if int(update.sum()) != int(region_rows.shape[0]):
+        raise ValueError(
+            f"control_region gave {region_rows.shape[0]} latent rows but the layout has {int(update.sum())} "
+            "generated rows - the region and the latent describe different videos.")
+    out = gate.clone()
+    out[update] = out[update] * region_rows.to(out.device, out.dtype).clamp(0.0, 1.0)
+    return out
+
+
+def crop_by_boxes(frames: torch.Tensor, boxes: list[dict], out_w: int, out_h: int, mode: str = "bilinear"):
+    """[N, C, H, W] plate frames -> each cropped to its Subject Crop box and STRETCHED to (out_w, out_h).
+
+    The same transform Subject Crop applies to the source (crop, then resize to the grid size), so a control or
+    source video of the plate lands exactly on the cropped target - instead of core's cover-crop of the whole plate.
+    """
+    import comfy.utils
+    outs = []
+    n = frames.shape[0]
+    for i in range(n):
+        b = boxes[min(i, len(boxes) - 1)]
+        x, y, w, h = (int(round(b[k])) for k in ("x", "y", "width", "height"))
+        piece = frames[i:i + 1, :, y:y + h, x:x + w]
+        outs.append(comfy.utils.common_upscale(piece, out_w, out_h, mode, "disabled"))
+    return torch.cat(outs, dim=0)
+
+
+def boxes_from_bboxes(bboxes) -> list[dict] | None:
+    """Subject Crop's BOUNDING_BOX (a box, or one list of boxes per frame) -> one box per frame."""
+    if bboxes is None:
+        return None
+    if isinstance(bboxes, dict):
+        return [bboxes]
+    if isinstance(bboxes, list) and bboxes:
+        return [f[0] if isinstance(f, list) and f else f for f in bboxes]
+    raise ValueError("crop_bboxes must be a box or a per-frame list of boxes (Subject Crop's bboxes output).")

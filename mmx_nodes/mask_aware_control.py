@@ -27,7 +27,16 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
-from mmx_utils.mask_aware_control import control_gate, describe_gate  # noqa: E402
+from mmx_utils.mask_aware_control import (  # noqa: E402
+    SCHEDULES,
+    apply_region,
+    boxes_from_bboxes,
+    control_gate,
+    crop_by_boxes,
+    describe_gate,
+    row_values_from_mask,
+    schedule_scale,
+)
 from mmx_utils.fun_control_hint import (  # noqa: E402
     assemble_hint,
     describe_hint,
@@ -68,8 +77,14 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
 
     def __init__(self, *args, preserved_strength: float = 0.0,
                  boundary_softness: float = 0.0, affect_text_rows: bool = False,
-                 inpaint: bool = False, **kwargs):
+                 inpaint: bool = False, control_region=None, schedule: str = "constant",
+                 crop_boxes=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.control_region = control_region
+        self.schedule = schedule
+        self.crop_boxes = crop_boxes
+        self._region_rows = None
+        self._sched = 1.0
         self.inpaint = bool(inpaint)
         self.hint_report = "not built yet"
         self.preserved_strength = float(preserved_strength)
@@ -99,12 +114,18 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
         width, height = lat_w * sc, lat_h * sc
         loaded = comfy.model_management.loaded_models(only_currently_used=True)
 
+        def fit(frames, mode="bilinear"):
+            # A16: with Subject Crop boxes, plate-sized frames take the source's own crop + stretch, so they land on
+            # the cropped target exactly; without them, core's cover-crop (centre) is kept.
+            if self.crop_boxes is not None and tuple(frames.shape[-2:]) != (height, width):
+                idx = torch.arange(frame_count, device=frames.device).clamp(max=frames.shape[0] - 1)
+                return crop_by_boxes(frames[idx], self.crop_boxes, width, height, mode)
+            return self._fit_frames(frames, frame_count, width, height)
+
         try:
             control_latent = None
             if self.control_video is not None:
-                control_latent = self._encode(
-                    self._fit_frames(self.control_video, frame_count, width, height),
-                    target_shape)
+                control_latent = self._encode(fit(self.control_video), target_shape)
 
             visibility_latent = masked_latent = None
             inpainting = self.inpaint and self.mask is not None
@@ -122,13 +143,16 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
                         "handful of rows across the whole clip."
                     )
                 visibility = visibility_from_mask(self.mask, frame_count, inpaint=True)
-                visibility = comfy.utils.common_upscale(
-                    visibility, width, height, "bilinear", "center")
+                if self.crop_boxes is not None and tuple(visibility.shape[-2:]) != (height, width):
+                    visibility = crop_by_boxes(visibility, self.crop_boxes, width, height)
+                else:
+                    visibility = comfy.utils.common_upscale(
+                        visibility, width, height, "bilinear", "center")
                 visibility = (visibility > 0.5).to(torch.float32)
                 source = (torch.zeros(frame_count, 3, height, width,
                                       dtype=visibility.dtype, device=visibility.device)
                           if self.source_video is None else
-                          self._fit_frames(self.source_video, frame_count, width, height))
+                          fit(self.source_video))
                 masked_latent = self._encode(
                     source * visibility.to(source.device), target_shape)
                 visibility_latent = F.interpolate(
@@ -144,12 +168,38 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
                 latent_shape=target_shape, device=device, dtype=dtype)
             self.hint_report = describe_hint(
                 control_latent is not None, inpainting, frame_count, latent_frames)
+            self._region_rows = self._build_region_rows(frame_count, width, height, latent_frames, lat_h, lat_w)
             logger.info("[MiniMaxSuite] %s", self.hint_report)
         finally:
             comfy.model_management.load_models_gpu(loaded)
 
         self.control_latent = hint
         self.control_latent_shape = target_shape
+
+    def _build_region_rows(self, frame_count, width, height, latent_frames, lat_h, lat_w):
+        """control_region (pixel, 1 = this control may steer) -> one value per generated latent row, reduced on
+        H3's own frame grouping (H3 Mask To Latent Space) and pooled per 2x2 patch like the denoise mask."""
+        if self.control_region is None:
+            return None
+        from mmx_nodes.mask_to_latent import MiniMaxH3_MaskToLatentSpace
+        region = self.control_region.to(torch.float32)
+        if region.ndim == 2:
+            region = region[None]
+        idx = torch.arange(frame_count, device=region.device).clamp(max=region.shape[0] - 1)
+        region = region[idx][:, None]
+        if self.crop_boxes is not None and tuple(region.shape[-2:]) != (height, width):
+            region = crop_by_boxes(region, self.crop_boxes, width, height)
+        elif tuple(region.shape[-2:]) != (height, width):
+            region = comfy.utils.common_upscale(region, width, height, "bilinear", "center")
+        out = MiniMaxH3_MaskToLatentSpace.execute(masks=region[:, 0], compression={"compression": "auto"},
+                                                  spatial_method="max", temporal_method="max",
+                                                  grow_spatial=0, grow_temporal=0, vae=self.vae)
+        lat = (out.args[0] if hasattr(out, "args") else out[0]).to(torch.float32)
+        if tuple(lat.shape) != (int(latent_frames), int(lat_h), int(lat_w)):
+            raise ValueError(f"control_region reduced to {tuple(lat.shape)} but the latent is "
+                             f"{(int(latent_frames), int(lat_h), int(lat_w))}: give one region per frame of the "
+                             "video being generated (or the plate with crop_bboxes).")
+        return row_values_from_mask(lat, int(latent_frames), int(lat_h), int(lat_w))
 
     # ── capture the mask ────────────────────────────────────────────────────
     def diffusion_model_wrapper(self, executor, x, timestep, context,
@@ -159,6 +209,9 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
         self._denoise_mask = kwargs.get("denoise_mask")
         self._gate = None
         self._gate_key = None
+        sigmas = transformer_options.get("sigmas")
+        sigma = float(sigmas[0]) if sigmas is not None else float(timestep.flatten()[0]) / 1000.0
+        self._sched = schedule_scale(self.schedule, sigma, self.sigma_start, self.sigma_end)
         try:
             return super().diffusion_model_wrapper(
                 executor, x, timestep, context, transformer_options, **kwargs)
@@ -182,6 +235,7 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
             preserved_strength=self.preserved_strength,
             boundary_softness=self.boundary_softness,
         )
+        gate = apply_region(gate, layout.img_update, self._region_rows)
         self._gate = gate.to(device)
         self._gate_key = key
         self.last_report = describe_gate(gate, layout.img_update)
@@ -205,17 +259,11 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
 
         # THE CHANGE. Core adds `skip` to every image row; here each row is
         # scaled by how much the sampler is actually generating it.
-        try:
-            gate = self._gate_for(layout, self.control_latent.shape, skip.device)
-            img_pos = layout.img_pos.to(skip.device)
-            skip[img_pos] = skip[img_pos] * gate.to(skip.dtype).unsqueeze(-1)
-        except Exception as exc:  # noqa: BLE001
-            # A gate that cannot be built must not take the render down. Fall
-            # back to core behaviour and say so once, loudly enough to find.
-            logger.warning(
-                "[MiniMaxSuite] mask-aware control gate unavailable, falling "
-                "back to ungated core behaviour: %s", exc)
-            self.last_report = f"gate unavailable, ran ungated: {exc}"
+        # A16: no silent fallback to ungated control. A gate that cannot be built is an error the user sees,
+        # not a quietly different operation (the old code ran core's ungated behaviour and only logged it).
+        gate = self._gate_for(layout, self.control_latent.shape, skip.device)
+        img_pos = layout.img_pos.to(skip.device)
+        skip[img_pos] = skip[img_pos] * gate.to(skip.dtype).unsqueeze(-1)
 
         if not self.affect_text_rows:
             # Core also leaks the residual onto the TEXT rows, because the
@@ -228,7 +276,7 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
                 if kind == "text":
                     skip[a:b] = 0
 
-        out["img"].add_(skip, alpha=self.strength)
+        out["img"].add_(skip, alpha=self.strength * self._sched)
         return out
 
 
@@ -317,6 +365,23 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                 io.Float.Input(
                     "sigma_end", default=0.0, min=0.0, max=1.0, step=0.01,
                     optional=True, advanced=True),
+                # A16 Part III, appended: where this control applies, how its strength runs, crop alignment
+                io.Mask.Input(
+                    "control_region", optional=True,
+                    tooltip="Where THIS control may steer (1) and where it is ignored (0), e.g. pose only on the "
+                            "person. Combined with the sampler's denoise mask: a row is steered only where both "
+                            "allow it. Pixel space, the target's size (or the plate's with crop_bboxes)."),
+                io.Combo.Input(
+                    "schedule", options=list(SCHEDULES), default=SCHEDULES[0], optional=True,
+                    tooltip="Strength over the steps inside the sigma window. constant: as before. fade out: full "
+                            "at the start, nothing at the end - the control sets the layout and leaves the detail "
+                            "to the model. fade in: the reverse. smooth fade out: eased."),
+                io.BoundingBox.Input(
+                    "crop_bboxes", optional=True, force_input=True,
+                    tooltip="Subject Crop's boxes. With them, a PLATE-sized control video / source video / mask / "
+                            "region is cropped with the same boxes and stretched like the source, so it lands "
+                            "exactly on the cropped target. Without them, ComfyUI's centre cover-crop is used - a "
+                            "plate-sized control on a cropped target is then misaligned."),
             ],
             outputs=[
                 io.Model.Output("model"),
@@ -331,7 +396,8 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
     def execute(cls, model, control_net, vae, strength, preserved_strength,
                 boundary_softness, affect_text_rows=False, inpaint=False,
                 control_video=None, mask=None, source_video=None,
-                sigma_start=1.0, sigma_end=0.0):
+                sigma_start=1.0, sigma_end=0.0, control_region=None,
+                schedule="constant", crop_bboxes=None):
         # Wiring first, environment second. A user who connected nothing gets
         # told that on any machine; the environment message is only useful to
         # someone whose wiring is already right.
@@ -372,6 +438,9 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
             boundary_softness=boundary_softness,
             affect_text_rows=affect_text_rows,
             inpaint=inpaint,
+            control_region=control_region,
+            schedule=schedule,
+            crop_boxes=boxes_from_bboxes(crop_bboxes),
         )
         patch.register(patched)
 
@@ -406,6 +475,14 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
             lines.append(
                 "affect_text_rows is on: the residual also reaches the prompt "
                 "rows, matching core.")
+        if control_region is not None:
+            lines.append("control_region: the control only steers rows that both the region and the denoise mask allow.")
+        if schedule != "constant":
+            lines.append(f"Strength schedule: {schedule} over the sigma window {sigma_start:.2f} -> {sigma_end:.2f}.")
+        lines.append("crop_bboxes: plate-sized control / source / mask are cropped with the source's own boxes."
+                     if crop_bboxes is not None else
+                     "No crop_bboxes: a control video with another aspect than the target is centre cover-cropped "
+                     "(ComfyUI's rule) - for a cropped target, wire Subject Crop's bboxes.")
         lines.append(
             "Per-row detail is logged at sample time; the counts depend on the "
             "mask you actually sample with.")

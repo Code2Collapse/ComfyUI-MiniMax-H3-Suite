@@ -407,3 +407,102 @@ def test_the_plot_module_has_no_vue_and_chains_teardown():
             raise AssertionError(
                 "a per-frame rAF loop must not drive widget repaints",
             )
+
+
+# ── A16 Part III: the real patch - region, schedule, crop alignment, no silent fallback ─────────────────────────────
+
+class _FakeControlModel:
+    """Stands in for the Fun ControlNet weights: one injection layer, a residual of ones on every row."""
+    injection_layers = (0,)
+    inpaint_post_norm = False
+
+    def __init__(self, seq_len, dim):
+        self.seq_len, self.dim = seq_len, dim
+
+    def init_stream(self, pristine, control_latent, layout, t_emb):
+        return torch.zeros(self.seq_len, self.dim)
+
+    def step(self, index, c, t_emb, mod_segments, rope_freqs, transformer_options=None):
+        return c, torch.ones(self.seq_len, self.dim)
+
+
+class _FakePatchModel:
+    def __init__(self, seq_len, dim):
+        self.model = _FakeControlModel(seq_len, dim)
+
+
+def _real_patch(layout, *, strength=2.0, schedule="constant", sigma_start=1.0, sigma_end=0.0,
+                region_rows=None, denoise_mask=None):
+    pytest.importorskip("comfy_extras.nodes_minimax_h3", reason="needs ComfyUI with MiniMax H3")
+    from mmx_nodes.mask_aware_control import MaskAwareControlPatch
+    patch = MaskAwareControlPatch(_FakePatchModel(layout.seq_len, 4), None, None, None, None, strength,
+                                  sigma_start, sigma_end, schedule=schedule)
+    patch.active = True
+    patch.control_latent = torch.zeros(1, 49, 2, 8, 8)
+    patch.control_latent_shape = tuple(patch.control_latent.shape)
+    patch._region_rows = region_rows
+    patch._denoise_mask = denoise_mask
+    return patch
+
+
+def _after_block(patch, layout):
+    out = {"img": torch.zeros(layout.seq_len, 4)}
+    args = {"layout": layout, "t_emb": None, "mod_segments": None, "rope_freqs": None, "transformer_options": {}}
+    patch.pristine_stream = torch.zeros(layout.seq_len, 4)
+    return patch.after_block(0, args, out)["img"]
+
+
+def test_control_region_switches_the_residual_off_where_it_says_ignore():
+    t, h, w = 2, 8, 8
+    layout = _FakeLayout(cond_rows=4, video_rows=t * (h // 2) * (w // 2), audio_rows=6, text_rows=5)
+    region = torch.zeros(t * (h // 2) * (w // 2))
+    region[: region.shape[0] // 2] = 1.0
+    img = _after_block(_real_patch(layout, region_rows=region), layout)
+    video = layout.img_pos[layout.img_update]
+    assert float(img[video[: region.shape[0] // 2]].min()) == pytest.approx(2.0)     # steered, at full strength
+    assert float(img[video[region.shape[0] // 2:]].abs().max()) == 0.0                # ignored: exactly nothing
+    assert float(img[layout.img_pos[~layout.img_update]].abs().max()) == 0.0          # conditioning rows untouched
+
+
+def test_schedule_changes_the_residual_actually_added():
+    from mmx_utils.mask_aware_control import schedule_scale
+    layout = _FakeLayout(cond_rows=0, video_rows=32, audio_rows=2, text_rows=3)
+    patch = _real_patch(layout, schedule="fade out", sigma_start=1.0, sigma_end=0.2)
+
+    def executor(*a, **k):
+        return None
+
+    patch.control_latent_shape = (1, 24, 2, 8, 8)       # already prepared for this latent: no VAE needed
+    patch.diffusion_model_wrapper(executor, [torch.zeros(1, 24, 2, 8, 8)], torch.tensor([600.0]), None,
+                                  {"sigmas": torch.tensor([0.6])})
+    assert patch._sched == pytest.approx(0.5)
+    patch.active = True
+    img = _after_block(patch, layout)
+    assert float(img[layout.img_pos].max()) == pytest.approx(2.0 * 0.5)
+    assert schedule_scale("constant", 0.1, 1.0, 0.0) == 1.0
+    assert schedule_scale("fade in", 1.0, 1.0, 0.0) == 0.0
+    assert schedule_scale("smooth fade out", 0.5, 1.0, 0.0) == pytest.approx(0.5)
+
+
+def test_a_gate_that_cannot_be_built_is_an_error_not_a_silent_fallback():
+    layout = _FakeLayout(cond_rows=0, video_rows=32, audio_rows=2, text_rows=3)
+    wrong = torch.ones(1, 1, 3, 8, 8)                    # 3 latent frames for a 2-frame layout
+    patch = _real_patch(layout, denoise_mask=wrong)
+    with pytest.raises(ValueError, match="different videos"):
+        _after_block(patch, layout)
+
+
+def test_crop_by_boxes_puts_a_plate_control_exactly_on_the_cropped_target():
+    pytest.importorskip("comfy.utils", reason="needs ComfyUI")
+    from mmx_utils.mask_aware_control import crop_by_boxes
+    plate = torch.zeros(1, 1, 200, 300)
+    plate[..., 80:100, 150:170] = 1.0                    # a marker centred at (160, 90) in the plate
+    box = {"x": 100, "y": 50, "width": 120, "height": 100}
+    out = crop_by_boxes(plate, [box], 240, 200)          # the target is the box at 2x
+    ys, xs = torch.nonzero(out[0, 0] > 0.5, as_tuple=True)
+    assert abs(float(xs.float().mean()) - (160 - 100) * 2) <= 1.0
+    assert abs(float(ys.float().mean()) - (90 - 50) * 2) <= 1.0
+    import comfy.utils
+    cover = comfy.utils.common_upscale(plate, 240, 200, "bilinear", "center")
+    ys2, xs2 = torch.nonzero(cover[0, 0] > 0.5, as_tuple=True)
+    assert abs(float(xs2.float().mean()) - 120.0) > 5    # core's cover crop of the plate: ~10 px off here

@@ -69,6 +69,12 @@ ComfyUI's own layout code; the effect on real outputs still needs a GPU run).
   `placement_json`): where the new subject sits against the old one - centre and box-edge shift per frame, in plate
   pixels with the crop boxes.
 
+- **H3 Mask-Aware ControlNet** (appended): `control_region` (where this control may steer, multiplied with the
+  sampler's denoise mask), `schedule` (constant / fade out / fade in / smooth fade out over the sigma window) and
+  `crop_bboxes` (a plate-sized control / source / mask gets the source's own crop instead of ComfyUI's cover-crop).
+  A gate that cannot be built is now an error instead of a silent fall back to ungated control. What can run together
+  in one pass, and what wins when constraints disagree: `docs/h3_mask_control_matrix.md`.
+
 Caching fixed for 36 nodes: their `fingerprint_inputs` read linked tensors (or used their id()), which ComfyUI never passes (they arrive as
 None), so ComfyUI stored NaN and the node - and everything after it, the sampler included - ran again on every queue.
 Measured live with classic caching: H3 Motion Context Trim re-ran every time before, is cached after.
