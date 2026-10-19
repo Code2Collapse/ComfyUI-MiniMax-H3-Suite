@@ -99,12 +99,25 @@ ended, and a crash, a restart of ComfyUI or a closed browser loses nothing. Desi
 - Drift is measured on every segment: colour against segment 0 (Lab), sharpness ratio, seam jump against the clip's
   usual frame change, frozen frames. `approval` = accept unless drift (default), accept, or always ask; a held
   segment waits in `pending/` until `decision` accepts or rejects it (rejected = the same interval again).
-- Guides inside the pinned head are dropped (those frames are fixed); guides later in the segment stay.
+- Guides inside the pinned head are dropped (those frames are fixed); guides later in the segment stay. Guides use
+  the segment's own frame numbers, so the same guide applies to every segment.
+- Long inputs are cut per segment by Next itself (only that segment's frames are decoded from Load Video):
+  `source_video` + `source_mask` = edit a long plate segment by segment (the plate is kept where the mask is black;
+  `segment_source` / `segment_mask` feed core's Image Composite Masked for an exact composite before Commit),
+  `control_video` -> `segment_control` for H3 Mask-Aware ControlNet, `soundtrack` with `sound = keep the soundtrack` =
+  the picture follows a fixed long soundtrack (music, dialogue). `sound` can also keep the plate's own sound or
+  regenerate it only where the mask covers a frame. The session ends with the plate / soundtrack and says so.
+- Frames are taken by index from the file's own first frame: core's time-based trim returns frame 84 for 85 on a file
+  whose first frame is 2 frames late; Next does not. A 23.976 fps plate is taken frame for frame (reported); other
+  rates are refused. Cropping a long plate (H3 Subject Crop) happens before, as its own stage.
 
 Checked: 30 segments without a model (every frame once and in order, every sound sample in place), and live through a
 real ComfyUI server (core 0.39, frontend 1.53.10) over 10 queues - accept, hold, refuse while held, reject, a crash
 mid-queue, an unchanged re-queue (runs the next segment, never served from the cache), accept a held segment - and
-inside a subgraph in both renderers. Picture and sound quality of long runs need the GPU and H3 weights: not measured.
+inside a subgraph in both renderers. A 300-frame plate with a mask video, edited live in 4 segments through Load
+Video and Image Composite Masked: every frame outside the mask is the plate's own pixel, generated pixels appear on
+exactly the masked frames, and the session ends at frame 300. Picture and sound quality of long runs need the GPU and
+H3 weights: not measured.
 
 The older **H3 Motion Context** nodes stay for saved workflows (manual Save / Load by clip index; their audio context
 starts before the clip by default and ends 8.3 ms after the video context). **H3 Motion Context Chain** never chained

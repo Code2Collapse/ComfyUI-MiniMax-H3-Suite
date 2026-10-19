@@ -256,6 +256,8 @@ class Session:
         self.state["accepted_frames"] = b
         if seg.get("audio_samples_end") is not None:
             self.state["audio_samples"] = seg["audio_samples_end"]
+        if seg.get("source_end") is not None and b >= int(seg["source_end"]):
+            self.state["complete"] = True                 # the plate / soundtrack is used up: nothing comes next
 
 
 # ── committing a sampled segment ───────────────────────────────────────────────────────────────────────────────────

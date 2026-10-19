@@ -69,6 +69,34 @@ tail file + SHA-256, output frame range, metrics, timestamps. `session.json` is 
 
 Bounded memory: only one segment's latent and frames are ever in memory; everything accepted is on disk.
 
+## Slice 2 (L8.45): per-segment sources - long plates, masks, control videos, soundtracks
+
+Masked long-form editing, long control videos and sound-driven long video all need each segment's OWN slice of a long
+input. That slice cannot be cut upstream of Next (Next decides the interval; a node feeding Next's latent cannot depend
+on Next's output - a cycle). So Next takes the long inputs and cuts them itself.
+
+- New optional inputs on Next (appended, saved workflows unchanged): `video_vae`, `audio_vae`, `source_video` (VIDEO),
+  `source_mask` (VIDEO, white = regenerate), `control_video` (VIDEO), `soundtrack` (AUDIO) and the `sound` choice
+  (generate / keep the source video's sound / keep the soundtrack / regenerate where masked).
+- VIDEO inputs stay lazy: only the segment's frames are decoded (core's VideoFromFile.as_trimmed + get_components,
+  float decode, the same path as core's Load Video). Core trims by absolute presentation time, so the stream's own start
+  time is added (a file whose first frame is not at t = 0 would otherwise shift every segment by that many frames) and
+  the count of every slice is checked. Frames are taken by INDEX: a 23.976 fps plate is conformed frame for frame to 24
+  fps (reported); its own sound can only be kept at exactly 24 fps.
+- With `source_video` the segment latent is the plate's frames encoded (H3 Source AV Latent's code: refuses off-grid
+  sizes, mask reduced on H3's grouping), its head replaced by the previous tail; noise mask = the source mask with the
+  head rows / ticks at 0. The template latent still sets the segment length and must have the plate's size.
+- Sound: kept sound (source or soundtrack) is cut on GLOBAL time from the segment's audio origin for the segment's tick
+  count and pinned (mask 0); "regenerate where masked" pins the ticks of unmasked frames (H3 Source AV Latent's rule).
+- Outputs appended: `segment_source` (the plate frames), `segment_mask` (pixel mask), `segment_control` (control frames)
+  - for H3 Mask-Aware ControlNet and for an exact composite before Commit (core Image Composite Masked).
+- The end: a slice shorter than the segment marks the source end. The missing frames are padded (last frame repeated,
+  mask kept) and Commit keeps only frames before the end; once everything is accepted, Next says the session is
+  complete. A soundtrack sets the end at its last sample. No reliance on container frame-count metadata.
+- Not possible in one graph: cropping the plate (H3 Subject Crop) between the slice and the encode. For high-resolution
+  crops over a long plate: crop the whole plate first (stage 1, save the crop video + boxes), run the continuation on
+  the crop video, uncrop afterwards.
+
 ## Not in this slice (stated, not hidden)
 
 - Identity memory beyond what the user's conditioning carries (references / LoRA stay in the positive conditioning of
