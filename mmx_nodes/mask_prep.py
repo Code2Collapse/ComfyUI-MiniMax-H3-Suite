@@ -64,26 +64,6 @@ class MiniMaxH3_MaskPrep(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        mask,
-        width=768,
-        height=768,
-        frame_count=22,
-        denoise_strength=1.0,
-        temporal_clean=2,
-        spatial_dilate=0,
-        quantize_soft=True,
-    ):
-        return hashlib.md5(
-            (
-                hashlib.md5(mask.cpu().numpy().tobytes()).hexdigest()
-                + f"|{width}|{height}|{frame_count}|{denoise_strength}|"
-                f"{temporal_clean}|{spatial_dilate}|{quantize_soft}"
-            ).encode()
-        ).hexdigest()
-
-    @classmethod
     def execute(
         cls,
         mask,

@@ -49,15 +49,6 @@ class MiniMaxH3_PosePuppeteer(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(cls, driving_pose, keypoints_json=None, character_ref=None, rig_type="human_to_creature"):
-        h = hashlib.md5(driving_pose.cpu().numpy().tobytes()).hexdigest()
-        if character_ref is not None:
-            h += ":" + hashlib.md5(character_ref.cpu().numpy().tobytes()).hexdigest()
-        if keypoints_json:
-            h += ":" + hashlib.md5(keypoints_json.encode()).hexdigest()
-        return f"{h}|{rig_type}"
-
-    @classmethod
     def execute(
         cls,
         driving_pose,

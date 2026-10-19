@@ -124,11 +124,6 @@ class MiniMaxH3_PrepareContinuation(io.ComfyNode):
             ],
         )
 
-    @classmethod
-    def fingerprint_inputs(cls, source_av, length, overlap_frames,
-                           video_context_denoise, audio_context_denoise):
-        return (f"{id(source_av)}|{length}|{overlap_frames}"
-                f"|{video_context_denoise}|{audio_context_denoise}")
 
     @classmethod
     def execute(cls, source_av, length, overlap_frames,
@@ -204,11 +199,6 @@ class MiniMaxH3_StitchContinuation(io.ComfyNode):
             ],
         )
 
-    @classmethod
-    def fingerprint_inputs(cls, previous_av, sampled_continuation_av, overlap_frames,
-                           blend_video_overlap=False, offload_to_cpu=False):
-        return (f"{id(previous_av)}|{id(sampled_continuation_av)}|{overlap_frames}"
-                f"|{blend_video_overlap}|{offload_to_cpu}")
 
     @classmethod
     def execute(cls, previous_av, sampled_continuation_av, overlap_frames,
@@ -274,9 +264,6 @@ class MiniMaxH3_PackAV(io.ComfyNode):
             outputs=[io.Latent.Output(display_name="av_latent")],
         )
 
-    @classmethod
-    def fingerprint_inputs(cls, video_latent, audio_latent):
-        return f"{id(video_latent)}|{id(audio_latent)}"
 
     @classmethod
     def execute(cls, video_latent, audio_latent) -> io.NodeOutput:
@@ -305,10 +292,6 @@ class MiniMaxH3_SplitAV(io.ComfyNode):
                 io.Latent.Output(display_name="audio_latent"),
             ],
         )
-
-    @classmethod
-    def fingerprint_inputs(cls, av_latent):
-        return str(id(av_latent))
 
     @classmethod
     def execute(cls, av_latent) -> io.NodeOutput:
@@ -364,11 +347,6 @@ class MiniMaxH3_MergeAV(io.ComfyNode):
             outputs=[io.Latent.Output(display_name="av_latent")],
         )
 
-    @classmethod
-    def fingerprint_inputs(cls, target_av, source_av, video_mix, audio_mix,
-                           fit_mode, alignment, video_denoise, audio_denoise):
-        return (f"{id(target_av)}|{id(source_av)}|{video_mix}|{audio_mix}"
-                f"|{fit_mode}|{alignment}|{video_denoise}|{audio_denoise}")
 
     @classmethod
     def execute(cls, target_av, source_av, video_mix, audio_mix,

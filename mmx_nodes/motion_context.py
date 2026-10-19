@@ -200,25 +200,6 @@ class MiniMaxH3_MotionContextTrim(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        images,
-        trim_frames=0,
-        audio=None,
-        fps=24.0,
-        match_tail=True,
-    ):
-        parts = [
-            hashlib.md5(images.cpu().numpy().tobytes()).hexdigest(),
-            str(trim_frames),
-            str(fps),
-            str(match_tail),
-        ]
-        if audio is not None:
-            parts.append(hashlib.md5(audio["waveform"].cpu().numpy().tobytes()).hexdigest())
-        return ":".join(parts)
-
-    @classmethod
     def execute(
         cls,
         images,
@@ -271,17 +252,6 @@ class MiniMaxH3_MotionContextSaveLatent(io.ComfyNode):
             ],
             is_output_node=True,
         )
-
-    @classmethod
-    def fingerprint_inputs(cls, latent, filename_prefix, clip_index=1):
-        samples = latent.get("samples")
-        if hasattr(samples, "tensors"):
-            shapes = tuple(t.shape for t in samples.tensors)
-        elif isinstance(samples, (list, tuple)):
-            shapes = tuple(getattr(s, "shape", ()) for s in samples)
-        else:
-            shapes = ()
-        return f"{filename_prefix}|{clip_index}|{shapes}"
 
     @classmethod
     def execute(cls, latent, filename_prefix, clip_index=1) -> io.NodeOutput:
@@ -447,27 +417,6 @@ class MiniMaxH3_MotionContextSeamProbe(io.ComfyNode):
             ],
             is_output_node=True,
         )
-
-    @classmethod
-    def fingerprint_inputs(
-        cls,
-        clip_b_untrimmed,
-        trim_frames=0,
-        clip_a_latent=None,
-        audio_vae=None,
-        fps=24.0,
-        window_ms=50.0,
-        search_ms=40.0,
-    ):
-        parts = [
-            hashlib.md5(clip_b_untrimmed["waveform"].cpu().numpy().tobytes()).hexdigest(),
-            str(trim_frames),
-            str(fps),
-            str(window_ms),
-            str(search_ms),
-            str(clip_a_latent is not None),
-        ]
-        return ":".join(parts)
 
     @classmethod
     def execute(

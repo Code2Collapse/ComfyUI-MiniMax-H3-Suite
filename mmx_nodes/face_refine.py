@@ -239,21 +239,6 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(cls, images, detector, confidence, crop_factor, canvas_width, canvas_height,
-                           canvas_mode, smooth_window, size_smooth_window, smooth_method, size_mode,
-                           identity_reference=None, identity_track=True, identity_threshold=0.28,
-                           select="largest", fallback_detector="none", fallback_head_frac=0.5):
-        h = hashlib.md5(images.cpu().numpy().tobytes()).hexdigest()
-        extra = (
-            f"{detector}|{confidence}|{crop_factor}|{canvas_width}|{canvas_height}|"
-            f"{canvas_mode}|{smooth_window}|{size_smooth_window}|{smooth_method}|{size_mode}|"
-            f"{identity_track}|{identity_threshold}|{select}|{fallback_detector}|{fallback_head_frac}"
-        )
-        if identity_reference is not None:
-            extra += "|" + hashlib.md5(identity_reference.cpu().numpy().tobytes()).hexdigest()
-        return h + ":" + hashlib.md5(extra.encode()).hexdigest()
-
-    @classmethod
     def execute(
         cls,
         images,
@@ -424,28 +409,6 @@ class MiniMaxH3_FaceStitch(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        base_images,
-        refined_crops,
-        transform,
-        paste_region="face_only",
-        mask_dilation=16,
-        feather=6,
-        colour_match=1.0,
-        blend=1.0,
-        undetected_frames="fade_out",
-        feather_scales_with_crop=False,
-        masks=None,
-    ):
-        base = hashlib.md5(base_images.cpu().numpy().tobytes()).hexdigest()
-        base += ":" + hashlib.md5(refined_crops.cpu().numpy().tobytes()).hexdigest()
-        base += ":" + transform.fingerprint()
-        if masks is not None:
-            base += ":" + hashlib.md5(masks.cpu().numpy().tobytes()).hexdigest()
-        return base
-
-    @classmethod
     def execute(
         cls,
         base_images,
@@ -516,15 +479,6 @@ class MiniMaxH3_InjectVideoLatent(io.ComfyNode):
                 io.String.Output("report"),
             ],
         )
-
-    @classmethod
-    def fingerprint_inputs(cls, av_latent, images, vae):
-        h = hashlib.md5(images.cpu().numpy().tobytes()).hexdigest()
-        samples = av_latent.get("samples") if isinstance(av_latent, dict) else None
-        if samples is not None and hasattr(samples, "unbind"):
-            for t in samples.unbind():
-                h += ":" + hashlib.md5(t.cpu().numpy().tobytes()).hexdigest()
-        return h
 
     @classmethod
     def execute(cls, av_latent, images, vae) -> io.NodeOutput:
@@ -610,21 +564,6 @@ class MiniMaxH3_FaceMaskSAM(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        crops,
-        sam_model,
-        transform,
-        threshold=0.93,
-        dilation=0,
-        temporal_smooth=5,
-    ):
-        h = hashlib.md5(crops.cpu().numpy().tobytes()).hexdigest()
-        h += ":" + transform.fingerprint()
-        h += f"|{threshold}|{dilation}|{temporal_smooth}"
-        return h
-
-    @classmethod
     def execute(
         cls,
         crops,
@@ -680,10 +619,6 @@ class MiniMaxH3_FaceTransformInfo(io.ComfyNode):
             ],
             outputs=[io.String.Output("info")],
         )
-
-    @classmethod
-    def fingerprint_inputs(cls, transform, max_rows=12):
-        return transform.fingerprint() + f"|{max_rows}"
 
     @classmethod
     def execute(cls, transform: H3Transform, max_rows=12) -> io.NodeOutput:

@@ -75,15 +75,6 @@ class MiniMaxH3_NativeAudioLock(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(cls, model, av_latent, audio_vae, audio) -> str:
-        h = hashlib.md5(audio["waveform"].cpu().numpy().tobytes()).hexdigest()
-        samples = av_latent.get("samples")
-        if samples is not None and hasattr(samples, "unbind"):
-            for t in samples.unbind():
-                h += ":" + hashlib.md5(t.cpu().numpy().tobytes()).hexdigest()
-        return h
-
-    @classmethod
     def execute(cls, model, av_latent, audio_vae, audio) -> io.NodeOutput:
         video_latent, target_audio_template = assert_h3_av_latent(av_latent)
         waveform, input_sr = prepare_mono_batch_waveform(audio)
@@ -155,10 +146,6 @@ class MiniMaxH3_ReferenceAudio(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(cls, audio, max_seconds) -> str:
-        return hashlib.md5(audio["waveform"].cpu().numpy().tobytes()).hexdigest() + f":{max_seconds}"
-
-    @classmethod
     def execute(cls, audio, max_seconds) -> io.NodeOutput:
         out, report = prepare_reference_audio(audio, max_seconds)
         return io.NodeOutput(out, report)
@@ -191,10 +178,6 @@ class MiniMaxH3_AudioTrimStart(io.ComfyNode):
                 io.String.Output("report"),
             ],
         )
-
-    @classmethod
-    def fingerprint_inputs(cls, audio, seconds) -> str:
-        return hashlib.md5(audio["waveform"].cpu().numpy().tobytes()).hexdigest() + f":{seconds}"
 
     @classmethod
     def execute(cls, audio, seconds) -> io.NodeOutput:

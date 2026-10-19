@@ -59,21 +59,6 @@ class MiniMaxH3_FrameHandles(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        images,
-        handle_frames=0,
-        padding_mode="H3 (17n+5)",
-        handle_side="head",
-        fps=float(FPS),
-        audio=None,
-    ):
-        base = hashlib.md5(images.cpu().numpy().tobytes()).hexdigest()
-        if audio is not None:
-            base += ":" + hashlib.md5(audio["waveform"].cpu().numpy().tobytes()).hexdigest()
-        return f"{base}|{handle_frames}|{padding_mode}|{handle_side}|{fps}"
-
-    @classmethod
     def execute(
         cls,
         images,

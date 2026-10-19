@@ -84,16 +84,6 @@ class MiniMaxH3_DriftQC(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(cls, original, edited, edit_mask, threshold_px=2.0):
-        parts = [
-            hashlib.md5(original.cpu().numpy().tobytes()).hexdigest(),
-            hashlib.md5(edited.cpu().numpy().tobytes()).hexdigest(),
-            hashlib.md5(edit_mask.cpu().numpy().tobytes()).hexdigest(),
-            str(threshold_px),
-        ]
-        return ":".join(parts)
-
-    @classmethod
     def execute(cls, original, edited, edit_mask, threshold_px=2.0) -> io.NodeOutput:
         dev = original.device
         if mm is not None:

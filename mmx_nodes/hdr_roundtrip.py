@@ -63,19 +63,6 @@ class MiniMaxH3_HDRRoundtrip(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        image,
-        direction="to_view",
-        colorspace="ACEScg",
-        display="sRGB - Display",
-        view="ACES 2.0 - SDR 100 nits (Rec.709)",
-        tag="HDR",
-    ):
-        raw = image.detach().cpu().numpy().tobytes()
-        return hashlib.md5(raw).hexdigest() + f"|{direction}|{colorspace}|{display}|{view}|{tag}"
-
-    @classmethod
     def execute(
         cls,
         image,

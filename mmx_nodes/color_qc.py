@@ -50,13 +50,6 @@ class MiniMaxH3_ColorQC(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(cls, images, reference=None):
-        h = hashlib.md5(images.cpu().numpy().tobytes()).hexdigest()
-        if reference is not None:
-            h += hashlib.md5(reference.cpu().numpy().tobytes()).hexdigest()
-        return h
-
-    @classmethod
     def execute(cls, images, reference=None) -> io.NodeOutput:
         dev = images.device
         if mm is not None:

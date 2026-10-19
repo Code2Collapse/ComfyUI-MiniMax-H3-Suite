@@ -75,25 +75,6 @@ class MiniMaxH3_MaskedReplace(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        av_latent,
-        crops,
-        vae,
-        video_latent_mask,
-        audio=None,
-        audio_vae=None,
-    ):
-        parts = [
-            hashlib.md5(crops.cpu().numpy().tobytes()).hexdigest(),
-            hashlib.md5(video_latent_mask.cpu().numpy().tobytes()).hexdigest(),
-            str(crops.shape),
-        ]
-        if audio is not None:
-            parts.append(hashlib.md5(audio["waveform"].cpu().numpy().tobytes()).hexdigest())
-        return ":".join(parts)
-
-    @classmethod
     def _encode_video(cls, vae, crops: torch.Tensor, dev: torch.device) -> torch.Tensor:
         imgs = crops[..., :3].to(dev).float()
         try:

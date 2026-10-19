@@ -61,25 +61,6 @@ class MiniMaxH3_PerFrameDenoise(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        av_latent,
-        transform,
-        strength_small_face=1.0,
-        strength_large_face=0.35,
-        scale_mode="absolute_px",
-        face_px_small=30.0,
-        face_px_large=120.0,
-        gamma=1.0,
-        smooth_frames=9,
-    ):
-        return (
-            transform.fingerprint()
-            + f"|{strength_small_face}|{strength_large_face}|{scale_mode}|"
-            f"{face_px_small}|{face_px_large}|{gamma}|{smooth_frames}"
-        )
-
-    @classmethod
     def execute(
         cls,
         av_latent,

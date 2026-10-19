@@ -72,23 +72,6 @@ class MiniMaxH3_StrongestPose(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        images,
-        transform,
-        mode="inhouse_vitpose",
-        passthrough_hints=None,
-        confidence=0.3,
-        temporal_smooth=True,
-        gap_fill=3,
-    ):
-        base = hashlib.md5(images.cpu().numpy().tobytes()).hexdigest()
-        base += ":" + transform.fingerprint()
-        if passthrough_hints is not None:
-            base += ":" + hashlib.md5(passthrough_hints.cpu().numpy().tobytes()).hexdigest()
-        return f"{base}|{mode}|{confidence}|{temporal_smooth}|{gap_fill}"
-
-    @classmethod
     def execute(
         cls,
         images,

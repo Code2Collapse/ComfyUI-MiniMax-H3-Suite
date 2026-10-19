@@ -66,21 +66,6 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        image,
-        scene_colorspace="ACEScg",
-        display="sRGB - Display",
-        view="ACES 2.0 - SDR 100 nits (Rec.709)",
-        tolerance=1e-4,
-    ):
-        raw = image.detach().cpu().numpy().tobytes()
-        return (
-            hashlib.md5(raw).hexdigest()
-            + f"|{scene_colorspace}|{display}|{view}|{tolerance}"
-        )
-
-    @classmethod
     def execute(
         cls,
         image,

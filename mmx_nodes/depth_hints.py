@@ -65,22 +65,6 @@ class MiniMaxH3_TemporalDepth(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        images,
-        transform,
-        backend="passthrough",
-        passthrough_hints=None,
-        window=17,
-        emit_normals=False,
-    ):
-        base = hashlib.md5(images.cpu().numpy().tobytes()).hexdigest()
-        base += ":" + transform.fingerprint()
-        if passthrough_hints is not None:
-            base += ":" + hashlib.md5(passthrough_hints.cpu().numpy().tobytes()).hexdigest()
-        return f"{base}|{backend}|{window}|{emit_normals}"
-
-    @classmethod
     def execute(
         cls,
         images,

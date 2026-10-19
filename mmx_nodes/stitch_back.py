@@ -75,27 +75,6 @@ class MiniMaxH3_StitchBack(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        plate,
-        crops,
-        transform,
-        paste_mask=None,
-        paste_region="subject",
-        mask_dilation=8,
-        feather_px=32,
-        colour_match=1.0,
-        blend=1.0,
-        undetected_frames="fade_out",
-    ):
-        base = hashlib.md5(plate.cpu().numpy().tobytes()).hexdigest()
-        base += ":" + hashlib.md5(crops.cpu().numpy().tobytes()).hexdigest()
-        base += ":" + transform.fingerprint()
-        if paste_mask is not None:
-            base += ":" + hashlib.md5(paste_mask.cpu().numpy().tobytes()).hexdigest()
-        return base
-
-    @classmethod
     def execute(
         cls,
         plate,

@@ -84,24 +84,6 @@ class MiniMaxH3_AudioQualityGate(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        reference,
-        generated,
-        mel_l1_max=0.35,
-        centroid_drift_hz_max=800.0,
-        rms_ratio_min=0.55,
-        low_mel_ratio_min=0.45,
-    ):
-        parts = [
-            hashlib.md5(reference["waveform"].cpu().numpy().tobytes()).hexdigest(),
-            hashlib.md5(generated["waveform"].cpu().numpy().tobytes()).hexdigest(),
-            str(reference.get("sample_rate", "")),
-            f"{mel_l1_max}|{centroid_drift_hz_max}|{rms_ratio_min}|{low_mel_ratio_min}",
-        ]
-        return ":".join(parts)
-
-    @classmethod
     def execute(
         cls,
         reference,

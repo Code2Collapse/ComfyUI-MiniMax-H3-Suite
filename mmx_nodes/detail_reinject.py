@@ -55,24 +55,6 @@ class MiniMaxH3_DetailReinject(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        plate,
-        generated,
-        mask=None,
-        mode="divide",
-        blur_method="Gaussian",
-        blur_radius=8,
-        strength=1.0,
-        eps=1e-4,
-    ):
-        base = hashlib.md5(plate.cpu().numpy().tobytes()).hexdigest()
-        base += ":" + hashlib.md5(generated.cpu().numpy().tobytes()).hexdigest()
-        if mask is not None:
-            base += ":" + hashlib.md5(mask.cpu().numpy().tobytes()).hexdigest()
-        return f"{base}|{mode}|{blur_method}|{blur_radius}|{strength}|{eps}"
-
-    @classmethod
     def execute(
         cls,
         plate,

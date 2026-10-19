@@ -56,9 +56,6 @@ class MiniMaxH3_DifferentialDenoise(io.ComfyNode):
             ],
         )
 
-    @classmethod
-    def fingerprint_inputs(cls, model, softness, strength=1.0):
-        return f"{id(model)}|{softness}|{strength}"
 
     @classmethod
     def execute(cls, model, softness, strength=1.0) -> io.NodeOutput:

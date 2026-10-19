@@ -60,24 +60,6 @@ class MiniMaxH3_ControlHints(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        plate,
-        transform,
-        hint_type="canny",
-        plate_hints=None,
-        low_threshold=0.1,
-        high_threshold=0.2,
-        blur_sigma=1.4,
-    ):
-        base = hashlib.md5(plate.cpu().numpy().tobytes()).hexdigest()
-        base += ":" + transform.fingerprint()
-        base += f":{hint_type}|{low_threshold}|{high_threshold}|{blur_sigma}"
-        if plate_hints is not None:
-            base += ":" + hashlib.md5(plate_hints.cpu().numpy().tobytes()).hexdigest()
-        return base
-
-    @classmethod
     def execute(
         cls,
         plate,

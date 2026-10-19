@@ -93,26 +93,6 @@ class MiniMaxH3_RegionMask(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        images,
-        transform=None,
-        depth=None,
-        mode="sky",
-        painted_mask=None,
-        horizon_bias=0.0,
-        feather_px=4,
-    ):
-        h = hashlib.md5(images.cpu().numpy().tobytes()).hexdigest()
-        if transform is not None:
-            h += ":" + transform.fingerprint()
-        if depth is not None:
-            h += ":" + hashlib.md5(depth.cpu().numpy().tobytes()).hexdigest()
-        if painted_mask is not None:
-            h += ":" + hashlib.md5(painted_mask.cpu().numpy().tobytes()).hexdigest()
-        return f"{h}|{mode}|{horizon_bias}|{feather_px}"
-
-    @classmethod
     def execute(
         cls,
         images,

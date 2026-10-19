@@ -88,34 +88,6 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
         )
 
     @classmethod
-    def fingerprint_inputs(
-        cls,
-        images,
-        subject_mask=None,
-        bboxes_json="[]",
-        crop_factor=2.5,
-        canvas_mode="manual",
-        canvas_width=512,
-        canvas_height=512,
-        planner_mode="tv_lp",
-        movement_cost=1.0,
-        lock_size=True,
-        safety_margin=1.12,
-        smooth_detection=True,
-        one_euro_min_cutoff=1.0,
-        one_euro_beta=0.05,
-    ):
-        h = hashlib.md5(images.cpu().numpy().tobytes()).hexdigest()
-        extra = (
-            f"{bboxes_json}|{crop_factor}|{canvas_mode}|{canvas_width}|{canvas_height}|"
-            f"{planner_mode}|{movement_cost}|{lock_size}|{safety_margin}|"
-            f"{smooth_detection}|{one_euro_min_cutoff}|{one_euro_beta}"
-        )
-        if subject_mask is not None:
-            extra += "|" + hashlib.md5(subject_mask.cpu().numpy().tobytes()).hexdigest()
-        return h + ":" + hashlib.md5(extra.encode()).hexdigest()
-
-    @classmethod
     def execute(
         cls,
         images,

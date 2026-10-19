@@ -84,9 +84,6 @@ class MiniMaxH3_ToneCompensate(io.ComfyNode):
             ],
         )
 
-    @classmethod
-    def fingerprint_inputs(cls, source, target, mode, overlap, lut_bins=64):
-        return f"{id(source)}|{id(target)}|{mode}|{overlap}|{lut_bins}"
 
     @classmethod
     def execute(cls, source, target, mode, overlap, lut_bins=64) -> io.NodeOutput:
