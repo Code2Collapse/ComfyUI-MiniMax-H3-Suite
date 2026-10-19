@@ -837,6 +837,11 @@
           "name": "report",
           "type": "STRING",
           "links": null
+        },
+        {
+          "name": "placement_json",
+          "type": "STRING",
+          "links": null
         }
       ],
       "properties": {
@@ -1100,7 +1105,7 @@
   "groups": [],
   "config": {},
   "extra": {
-    "note": "Full spine: FrameHandles \u2192 TrackCrop \u2192 StrongestPose/TemporalDepth \u2192 RegionMask \u2192 MaskPrep \u2192 MaskedReplace \u2192 SigmaShiftLocked/LegalScheduler/sampler \u2192 StitchBack \u2192 DetailReinject \u2192 DriftQC. Sampler noise/VAE decode intentionally unconnected \u2014 see workflows/README.md."
+    "note": "Full spine: FrameHandles → TrackCrop → StrongestPose/TemporalDepth → RegionMask → MaskPrep → MaskedReplace → SigmaShiftLocked/LegalScheduler/sampler → StitchBack → DetailReinject → DriftQC. Sampler noise/VAE decode intentionally unconnected — see workflows/README.md."
   },
   "version": 0.4
 }
