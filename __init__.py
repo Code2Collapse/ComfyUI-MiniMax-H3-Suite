@@ -54,6 +54,8 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.image_and_reference", "MiniMaxH3_ImageAndReferenceToVideo"),
     (".mmx_nodes.geometry_report", "MiniMaxH3_GeometryReport"),
     (".mmx_nodes.source_av_latent", "MiniMaxH3_SourceAVLatent"),
+    (".mmx_nodes.h3_continuation", "MiniMaxH3_ContinuationNext"),
+    (".mmx_nodes.h3_continuation", "MiniMaxH3_ContinuationCommit"),
     (".mmx_nodes.tail_from_latent", "MiniMaxH3_TailFromLatent"),
     (".mmx_nodes.encoder_unload", "MiniMaxH3_TextEncoderUnload"),
     (".mmx_nodes.audio_transcript", "MiniMaxH3_AudioTranscript"),
@@ -247,6 +249,14 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                 from .mmx_nodes.geometry_report import MiniMaxH3_GeometryReport
 
                 nodes.append(MiniMaxH3_GeometryReport)
+            elif mod_path.endswith("h3_continuation") and cls_name == "MiniMaxH3_ContinuationNext":
+                from .mmx_nodes.h3_continuation import MiniMaxH3_ContinuationNext
+
+                nodes.append(MiniMaxH3_ContinuationNext)
+            elif mod_path.endswith("h3_continuation") and cls_name == "MiniMaxH3_ContinuationCommit":
+                from .mmx_nodes.h3_continuation import MiniMaxH3_ContinuationCommit
+
+                nodes.append(MiniMaxH3_ContinuationCommit)
             elif mod_path.endswith("source_av_latent"):
                 from .mmx_nodes.source_av_latent import MiniMaxH3_SourceAVLatent
 

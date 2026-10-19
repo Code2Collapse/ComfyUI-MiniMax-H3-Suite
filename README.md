@@ -79,6 +79,37 @@ Caching fixed for 36 nodes: their `fingerprint_inputs` read linked tensors (or u
 None), so ComfyUI stored NaN and the node - and everything after it, the sampler included - ran again on every queue.
 Measured live with classic caching: H3 Motion Context Trim re-ran every time before, is cached after.
 
+## Long video: H3 Continuation (A16)
+
+**H3 Continuation Next** (before the sampler) and **H3 Continuation Commit** (after the decoders) make a film of any
+length one segment per queue. Queue the same graph again and again: each run continues where the last accepted segment
+ended, and a crash, a restart of ComfyUI or a closed browser loses nothing. Design and reasoning:
+`docs/h3_continuation_design.md`.
+
+- The context is the previous segment's last frames AS THE START OF THE NEW CLIP: their exact latent tokens (picture
+  rows and sound ticks), pinned by the denoise mask. No extra tokens, no position tricks; Commit checks the pinned head
+  came back bit-exact and refuses the segment if a node in between dropped the mask.
+- `overlap_frames` 39 (default; exactly 65 sound ticks), 22, 56 or 5.
+- Nothing lost, nothing doubled: frames are numbered on one global timeline (`frame_000001.png` ...), sound is cut on
+  global time (one WAV per segment, total exact to the sample). A segment's sound starts on H3's 25 ms tick grid,
+  within 16.7 ms of its picture for 124-frame segments, and the error never adds up from segment to segment.
+- Session on disk (`output/h3_continuation/<session>/`): `session.json` written atomically after every change, the
+  stored tails with SHA-256 (a damaged tail is refused, not used), statuses running / awaiting approval / accepted /
+  failed / rejected. A segment left running by a crash is marked failed and its interval is generated again.
+- Drift is measured on every segment: colour against segment 0 (Lab), sharpness ratio, seam jump against the clip's
+  usual frame change, frozen frames. `approval` = accept unless drift (default), accept, or always ask; a held
+  segment waits in `pending/` until `decision` accepts or rejects it (rejected = the same interval again).
+- Guides inside the pinned head are dropped (those frames are fixed); guides later in the segment stay.
+
+Checked: 30 segments without a model (every frame once and in order, every sound sample in place), and live through a
+real ComfyUI server (core 0.39, frontend 1.53.10) over 10 queues - accept, hold, refuse while held, reject, a crash
+mid-queue, an unchanged re-queue (runs the next segment, never served from the cache), accept a held segment - and
+inside a subgraph in both renderers. Picture and sound quality of long runs need the GPU and H3 weights: not measured.
+
+The older **H3 Motion Context** nodes stay for saved workflows (manual Save / Load by clip index; their audio context
+starts before the clip by default and ends 8.3 ms after the video context). **H3 Motion Context Chain** never chained
+anything and is now deprecated: hidden from the search, it says to use H3 Continuation.
+
 ## Character replacement: room for the new head
 
 H3 has no face or expression input: identity comes from `<Picture N>` references, structure and expression only

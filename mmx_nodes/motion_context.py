@@ -312,10 +312,10 @@ class MiniMaxH3_MotionContextLoadLatent(io.ComfyNode):
 
 
 class MiniMaxH3_MotionContextChain(io.ComfyNode):
-    """Approve, Run/Re-roll, auto-chain, reset indices, or clear slots.
+    """DEPRECATED (A16): replaced by H3 Continuation Next + Commit.
 
-    Execute is a no-op; the upstream pack's JavaScript buttons are not
-    shipped here. Wire Load/Save indices manually or use ComfyUI's queue.
+    It never chained anything (the upstream pack's JavaScript buttons were never shipped). Kept registered, hidden from
+    the node search, so saved workflows still load; running it says what to use instead.
     """
 
     @classmethod
@@ -325,10 +325,10 @@ class MiniMaxH3_MotionContextChain(io.ComfyNode):
             display_name="H3 Motion Context Chain",
             category=_CATEGORY,
             description=(
-                "Chain control placeholder. The upstream pack's canvas-group "
-                "buttons require JavaScript that is not shipped in MiniMaxSuite. "
-                "Set Load/Save clip_index manually. " + _ATTRIBUTION
+                "Deprecated: replaced by H3 Continuation Next + Commit (long video in segments, resumable, state "
+                "on disk). This node does nothing; it is kept so saved workflows load. " + _ATTRIBUTION
             ),
+            is_deprecated=True,
             inputs=[
                 io.Int.Input(
                     "segments",
@@ -336,7 +336,7 @@ class MiniMaxH3_MotionContextChain(io.ComfyNode):
                     min=0,
                     max=9999,
                     step=1,
-                    tooltip="Upstream Chain UI: clips before stop (0 = until Stop).",
+                    tooltip="Unused: kept so saved workflows load (this node is deprecated).",
                 ),
             ],
             outputs=[
@@ -348,9 +348,9 @@ class MiniMaxH3_MotionContextChain(io.ComfyNode):
     @classmethod
     def execute(cls, segments=0) -> io.NodeOutput:
         report = (
-            "Chain node is a no-op without the upstream JavaScript UI. "
-            "segments=%d. Advance Load/Save clip_index manually between runs."
-            % int(segments))
+            "H3 Motion Context Chain is deprecated and does nothing (segments=%d). For long video use H3 "
+            "Continuation Next (before the sampler) and H3 Continuation Commit (after the decoders): each queue "
+            "generates the next segment, keeps the session on disk and resumes after a crash." % int(segments))
         return io.NodeOutput(report)
 
 
