@@ -33,7 +33,11 @@ import math
 # H3's canvas granularity and the reference pipeline's short edge. Mirrored
 # from comfy_extras.nodes_minimax_h3 rather than imported, so this module can
 # be tested with no ComfyUI present; the node asserts they still agree.
-CANVAS_MULTIPLE = 16
+# A16 fix: this used to be 16 and doubled as the latent stride, so on a core whose
+# CANVAS_MULTIPLE is 32 (0.39) the node's own agreement check refused EVERY run.
+# The canvas rounds to 32; the latent is 1/16 of the pixels - two different numbers.
+CANVAS_MULTIPLE = 32
+LATENT_STRIDE = 16
 REF_IMAGE_SHORT_EDGE = 2048
 FPS = 24
 

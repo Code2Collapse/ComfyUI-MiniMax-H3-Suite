@@ -77,3 +77,18 @@
 - **Licence:** public domain / MIT, as published by the author.
 - **Ported into this pack:** `mmx_utils/color_space.py`, alongside the exact sRGB transfer
   function. No clamp on the linear side: values above 1.0 survive.
+
+## NKD Basic Tools — Nekodificador (behaviour reference)
+
+- **Source:** https://github.com/Nekodificador/ComfyUI-NKD-Basic-Tools (`nkd_av_latent.py`, rev 227b9c2).
+- **Licence:** MIT.
+- **Used for:** behaviour only - how a masked joint AV latent is assembled for H3 (both VAE encodes, the audio length
+  rule, keep / regenerate / follow-mask audio). `MiniMaxH3_SourceAVLatent` is an original implementation; no code
+  was copied. It differs on purpose: it refuses or records off-grid sizes instead of letting the VAE centre-crop
+  them, and reduces the mask on H3's own frame grouping.
+
+## H3 Composer scaffolds — 1038lab (Comfyui-Minimax-H3-Promptor)
+
+- **Source:** https://github.com/1038lab/Comfyui-Minimax-H3-Promptor `web/js/prompt_composer.js` TEMPLATES (rev bdbde80).
+- **Licence:** GPL-3.0 (same as this pack).
+- **Ported into this pack:** the eight mode scaffolds in `mmx_nodes/promptor.py` (`COMPOSER_TEMPLATES`).

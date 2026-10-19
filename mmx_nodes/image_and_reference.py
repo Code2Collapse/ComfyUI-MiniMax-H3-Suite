@@ -25,8 +25,10 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
+from mmx_utils import h3_geometry as geo
 from mmx_utils.reference_prep import (
     CANVAS_MULTIPLE,
+    LATENT_STRIDE,
     ReferencePrepError,
     canvas_size,
     check_reference_order,
@@ -57,6 +59,9 @@ except Exception as _e:  # noqa: BLE001 - private names; see the docstring
     _CORE_MULTIPLE = CANVAS_MULTIPLE
 
 MAX_RESOLUTION = getattr(_comfy_nodes, "MAX_RESOLUTION", 16384)
+
+
+REF_VIDEO_FITS = ("core canvas", "target grid (zero offset)")
 
 
 def _names(prefix: str, count: int) -> list[str]:
@@ -139,6 +144,17 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                         input=io.Audio.Input(
                             "ref_audio", tooltip="Standalone voice reference."),
                         names=_names("ref_audio", 4), min=0)),
+                # appended last: saved workflows keep their widget order and get the old behaviour
+                io.Combo.Input(
+                    "ref_video_fit", options=list(REF_VIDEO_FITS), default=REF_VIDEO_FITS[0],
+                    optional=True,
+                    tooltip="How reference videos are sized. 'core canvas' = what ComfyUI's own "
+                            "Reference to Video does (768 short edge, stretched): a reference video "
+                            "showing the same shot as the output (its source, pose or depth) then "
+                            "reaches the model offset by half a token - the report says by how many "
+                            "pixels. 'target grid (zero offset)' sizes it to width x height, so "
+                            "every token of it lands exactly on the output's token: use it when the "
+                            "reference video is a spatial anchor. Costs more reference tokens."),
             ],
             outputs=[
                 io.Conditioning.Output(display_name="positive"),
@@ -155,7 +171,7 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
     def execute(cls, clip, vae, audio_vae, prompt, width, height, length,
                 first_frame=None, last_frame=None, ref_image_size="match",
                 ref_images=None, ref_videos=None, ref_video_audios=None,
-                ref_audios=None) -> io.NodeOutput:
+                ref_audios=None, ref_video_fit=REF_VIDEO_FITS[0]) -> io.NodeOutput:
         if _IMPORT_ERROR is not None:
             raise RuntimeError(
                 "H3 Image + Reference to Video needs ComfyUI's built-in MiniMax "
@@ -193,6 +209,7 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
         # They must not drift - see check_reference_order.
         ref_items: list[dict] = []
         ref_blocks: list[dict] = []
+        geo_notes: list[str] = []
         n_images = n_videos = n_audios = 0
 
         for img in (ref_images or {}).values():
@@ -205,8 +222,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
             ref_items.append({"type": "image", "data": resized})
             ref_blocks.append({
                 "kind": "image",
-                "latent_h": th // CANVAS_MULTIPLE,
-                "latent_w": tw // CANVAS_MULTIPLE,
+                "latent_h": th // LATENT_STRIDE,
+                "latent_w": tw // LATENT_STRIDE,
                 "latent": vae.encode(resized),
             })
             n_images += 1
@@ -217,10 +234,29 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                 continue
             soundtrack = ref_video_audios.get(soundtrack_key(name))
             vh, vw = int(video_frames.shape[1]), int(video_frames.shape[2])
-            cw, ch = adapt_canvas(vw, vh)
-            if vw * vh < cw * ch:
-                cw, ch = canvas_size(vw, vh, 1.0)
-            frames = _resize(video_frames, cw, ch, "disabled")
+            if ref_video_fit == REF_VIDEO_FITS[1]:
+                # target grid: every token on the output's token; cover-crop keeps the aspect honest
+                cw, ch = int(width), int(height)
+                frames = _resize(video_frames, cw, ch, "center")
+                geo_notes.append(
+                    f"<Video {n_videos + 1}>: {vw}x{vh} sized to the target grid {cw}x{ch}"
+                    + ("" if abs(vw / vh - cw / ch) < 1e-3 else
+                       f" (cover-cropped: aspect {vw / vh:.3f} -> {cw / ch:.3f})")
+                    + " - offset 0 against the output")
+            else:
+                cw, ch = adapt_canvas(vw, vh)
+                if vw * vh < cw * ch:
+                    cw, ch = canvas_size(vw, vh, 1.0)
+                frames = _resize(video_frames, cw, ch, "disabled")
+                try:
+                    off = geo.stream_offset_px((int(width), int(height)), (cw, ch))
+                    geo_notes.append(f"<Video {n_videos + 1}>: encoded {cw}x{ch} on the core canvas; if it "
+                                     f"shows the same shot as the {width}x{height} output it is "
+                                     + geo.describe_offset(off)
+                                     + ("" if off["same_grid"] else
+                                        ". Set ref_video_fit to 'target grid (zero offset)' to remove it."))
+                except geo.H3GeometryError as exc:
+                    geo_notes.append(f"<Video {n_videos + 1}>: geometry not measured ({exc})")
             if frames.shape[0] > frame_count:
                 frames = frames[:frame_count]
             frames = frames[:snap_to_latent_grid(int(frames.shape[0]))]
@@ -241,8 +277,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
             ref_blocks.append({
                 "kind": "video_audio" if ref_audio_t else "video",
                 "latent_t": z.shape[2],
-                "latent_h": ch // CANVAS_MULTIPLE,
-                "latent_w": cw // CANVAS_MULTIPLE,
+                "latent_h": ch // LATENT_STRIDE,
+                "latent_w": cw // LATENT_STRIDE,
                 "ref_audio_t": ref_audio_t,
                 "latent": z,
                 "audio_latent": audio_latent,
@@ -279,6 +315,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
 
         report = describe(len(keyframes), n_images, n_videos, n_audios,
                           ref_image_size, int(length), int(frame_count))
+        if geo_notes:
+            report += "\n\nGeometry (A16):\n  " + "\n  ".join(geo_notes)
         return io.NodeOutput(cond, latent, report)
 
 

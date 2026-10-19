@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 110   # + HybridHDR, HybridExtract, ColorQC; + PromptWriter (L8.24); + IdentityFusion (L8.26)
+EXPECTED_NODE_COUNT = 112   # + GeometryReport, SourceAVLatent (A16 L8.38); + HybridHDR, HybridExtract, ColorQC; + PromptWriter (L8.24); + IdentityFusion (L8.26)
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {
@@ -99,6 +99,8 @@ MASK_NODES = {
     "MiniMaxH3_AudioMaskToLatent",
     "MiniMaxH3_AudioMaskDebug",
     "MiniMaxH3_DifferentialDenoise",
+    "MiniMaxH3_GeometryReport",
+    "MiniMaxH3_SourceAVLatent",
 }
 PROMPT_NODES = {
     "MiniMaxH3_Promptor",

@@ -39,6 +39,32 @@ Every node shows its stage, its run status and H3 errors in plain English. That 
 
 N1 is a **planner**, not a detector — wire `subject_mask` and/or `bboxes_json`.
 
+## Masked replacement without a spatial offset (A16)
+
+When the sampler starts from the SOURCE video latent (masked editing) and references are attached, every stream that
+shows the same shot as the output - the source, a pose or depth video of it, a guide frame - has to be on the output's
+own token grid. ComfyUI's Reference to Video sizes reference videos to its 768-short-edge canvas; H3 gives each token
+the coordinate of its top-left edge, so a reference with bigger tokens reaches the model half a token up and left of
+its content: **-14 px** for a 1440x1440 crop with its 768x768 reference, 7-18 px for a 1344x1536 crop (measured with
+ComfyUI's own layout code; the effect on real outputs still needs a GPU run).
+
+- **H3 Geometry Report** (new): wire the positive conditioning and the latent the sampler gets. It lists every
+  reference and guide with its size, token grid and the offset in pixels (also in plate pixels with the crop boxes),
+  flags guides that are not on the output grid, audio that does not match the frame count, and says what the noise mask
+  keeps once ComfyUI has pooled it onto tokens. Shapes only, instant.
+- **H3 Image + Reference to Video**: new `ref_video_fit` = `target grid (zero offset)` puts reference videos on the
+  output grid (cover-crop if the aspect differs; costs more reference tokens). Default `core canvas` is unchanged. Its
+  report now states the offset. Fixed: on ComfyUI 0.39 this node refused every run (its canvas constant was 16 where
+  ComfyUI's is 32).
+- **H3 Source AV Latent** (new): the source frames + sound as the masked joint latent, without the H3 VAE's silent
+  centre-crop of off-grid sizes (refused, or padded and recorded), with the frame count checked (17k+5), the mask reduced
+  on H3's own (1,4,4,4,4) frame grouping (a pixel mask given to the sampler is resampled linearly in time: measured one
+  latent row early at half strength) and the sound kept / regenerated / following the mask per 1/40 s.
+
+Caching fixed for 36 nodes: their `fingerprint_inputs` read linked tensors (or used their id()), which ComfyUI never passes (they arrive as
+None), so ComfyUI stored NaN and the node - and everything after it, the sampler included - ran again on every queue.
+Measured live with classic caching: H3 Motion Context Trim re-ran every time before, is cached after.
+
 ## Character replacement: room for the new head
 
 H3 has no face or expression input: identity comes from `<Picture N>` references, structure and expression only
