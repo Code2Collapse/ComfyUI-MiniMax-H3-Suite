@@ -38,13 +38,18 @@ class MiniMaxH3_ContextWindows(io.ComfyNode):
                 "H3 will not render an arbitrarily long shot in one go, so length "
                 "comes from tiling it with windows that overlap and are then "
                 "stitched. The tiling is not free choice: a legal window is "
-                "n %% 17 == 5 frames, every window after the first must start on a "
-                "17-frame cycle boundary, and each one must be offset in H3's "
-                "40 Hz temporal RoPE by start_frame * 40/24 or the model thinks "
-                "every pass begins at t=0 and the seams drift apart.\n\n"
-                "This node does that arithmetic, tells you what it had to change "
-                "and why, and hands the schedule to the nodes that sample and "
-                "stitch. Nothing here touches weights, so it is instant."
+                "n %% 17 == 5 frames and every window after the first must start "
+                "on a 17-frame cycle boundary.\n\n"
+                "The schedule also lists each window's start on H3's 40 Hz "
+                "temporal RoPE timeline (start_frame * 40/24), for reference only. "
+                "ComfyUI's H3 builds every pass's positions from its own origin, "
+                "and no node in this suite shifts them. Positions inside a pass "
+                "are relative, so a shift would not change how its frames relate "
+                "to each other. H3 Continuation keeps passes continuous by "
+                "pinning the previous pass's tail inside the new one instead.\n\n"
+                "This node does the tiling arithmetic and tells you what it had "
+                "to change and why. Nothing here touches weights, so it is "
+                "instant."
             ),
             inputs=[
                 io.Int.Input(
@@ -86,8 +91,8 @@ class MiniMaxH3_ContextWindows(io.ComfyNode):
                               tooltip="Frames advanced per pass (window minus overlap)."),
                 io.String.Output(display_name="schedule_json",
                                  tooltip="The full plan: per-window start, end, "
-                                         "latent rows and RoPE offset. Feed to the "
-                                         "sampling/stitching nodes."),
+                                         "latent rows and the RoPE start (reference "
+                                         "only - nothing applies it)."),
                 io.String.Output(display_name="report",
                                  tooltip="Plain-English summary, including anything "
                                          "that had to be adjusted and why."),

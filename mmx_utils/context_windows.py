@@ -196,7 +196,7 @@ def plan_report(plan: dict[str, Any]) -> str:
             f"{plan['window_frames']}; pad or trim it after sampling."
         )
     lines.append(
-        f"  rope offset   {w[0]['rope_offset']:.3f} .. {w[-1]['rope_offset']:.3f} "
-        f"({plan['rope_units_per_frame']:.4f} units/frame at 40 Hz)"
+        f"  rope start    {w[0]['rope_offset']:.3f} .. {w[-1]['rope_offset']:.3f} "
+        f"({plan['rope_units_per_frame']:.4f} units/frame at 40 Hz; reference only, not applied)"
     )
     return "\n".join(lines)

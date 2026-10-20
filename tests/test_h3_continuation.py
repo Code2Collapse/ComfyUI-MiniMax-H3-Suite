@@ -223,3 +223,44 @@ def test_drift_holds_a_segment_that_changes_colour(base):
     img[..., 2] = 1.0                                                        # the new segment turns blue
     res = hc.MiniMaxH3_ContinuationCommit.execute(seg_json, _sample(lat, 5), img, aud, "accept unless drift")
     assert "awaiting approval" in res.args[2] and "colour moved" in res.args[2]
+
+
+def test_the_overlap_decoded_again_is_compared_with_the_accepted_frames(base):
+    _segment(base)
+    info, _, _, res = _segment(base, seed=1)
+    seg = next(g for g in json.load(open(os.path.join(info["root"], "session.json")))["segments"]
+               if g["id"] == info["id"])
+    m = seg["metrics"]
+    assert m["overlap_frames"] == 39 and m["overlap_psnr_db"] >= 90.0      # same pinned rows -> same pixels
+    assert "overlap re-decoded here vs the accepted frames: 99.0 dB over 39 frames" in res.args[2]
+    assert "session so far: 2 accepted segment(s)" in res.args[2]
+
+
+def test_an_overlap_that_decodes_differently_is_measured_not_hidden(base):
+    _segment(base)
+    out = hc.MiniMaxH3_ContinuationNext.execute("film", _cond(), _template(), "39", "keep waiting", False)
+    lat, _, seg_json, _ = out.args[:4]
+    info = json.loads(seg_json)
+    sess = json.load(open(os.path.join(info["root"], "session.json")))
+    img, aud = _decode(info, sess["segments"][-1]["audio_origin_ticks"])
+    img[:39] = (img[:39] + 0.1).clamp(0, 1)                                 # the head decodes 0.1 brighter here
+    res = hc.MiniMaxH3_ContinuationCommit.execute(seg_json, _sample(lat, 5), img, aud, "accept")
+    seg = next(g for g in json.load(open(os.path.join(info["root"], "session.json")))["segments"]
+               if g["id"] == info["id"])
+    assert 19.0 < seg["metrics"]["overlap_psnr_db"] < 21.0                  # 0.1 everywhere = 20 dB
+    assert "overlap re-decode down to 20.0 dB" in res.args[2]
+
+
+def test_overlap_agreement_and_summary_units():
+    a = torch.rand(3, 8, 8, 3)
+    same = hs.overlap_agreement(a, a.clone())
+    assert same["overlap_psnr_db"] == 99.0 and same["overlap_mean_abs"] == 0.0
+    off = hs.overlap_agreement(a, a.clone().sub_(0.01))
+    assert 39.9 < off["overlap_psnr_db"] < 40.1 and off["overlap_frames"] == 3
+    segs = [{"status": "accepted", "metrics": {"seam_jump_ratio": 1.5, "colour_delta_e": 0.4}},
+            {"status": "accepted", "metrics": {"seam_jump_ratio": 2.5, "colour_delta_e": 0.2, "overlap_psnr_db": 41.0}},
+            {"status": "rejected", "metrics": {"seam_jump_ratio": 9.0}}]
+    line = hs.continuity_summary(segs)
+    assert line == ("session so far: 2 accepted segment(s), worst seam 2.50x, colour drift up to 0.40 dE, "
+                    "overlap re-decode down to 41.0 dB")
+    assert hs.continuity_summary([{"status": "accepted", "metrics": {}}]) is None

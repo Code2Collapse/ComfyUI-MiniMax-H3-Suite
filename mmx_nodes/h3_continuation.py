@@ -480,6 +480,12 @@ def _commit(s: hs.Session, seg: dict, samples, images, audio, approval, colour_m
         if os.path.isfile(p):
             prev_last = hs.read_png16(p)
     metrics = hs.drift_metrics(new.float().cpu(), s.state.get("baseline"), prev_last)
+    # the overlap (global frames start..a-1) was decoded again here: compare it with the frames already accepted
+    # (the sequence is numbered from 1: global frame i is frame_{i+1})
+    head_paths = [os.path.join(s.root, "frames", f"frame_{i + 1:06d}.png") for i in range(seg["start"], a)]
+    if head_paths and all(os.path.isfile(p) for p in head_paths):
+        accepted = torch.stack([hs.read_png16(p) for p in head_paths])
+        metrics.update(hs.overlap_agreement(images[: a - seg["start"]].float().cpu(), accepted))
     seg["metrics"] = metrics
     # 4. sound, cut on global time
     new_audio = None
@@ -531,6 +537,12 @@ def _commit(s: hs.Session, seg: dict, samples, images, audio, approval, colour_m
         notes.append(f"drift vs segment 0: colour {m['colour_delta_e']:.2f} dE, sharpness x{m['sharpness_ratio']:.2f}")
     if m.get("seam_jump_ratio") is not None:
         notes.append(f"seam: {m['seam_jump_ratio']:.2f}x the usual frame change; frozen frames {m['frozen_frames']}")
+    if m.get("overlap_psnr_db") is not None:
+        notes.append(f"overlap re-decoded here vs the accepted frames: {m['overlap_psnr_db']:.1f} dB over "
+                     f"{m['overlap_frames']} frames (worst frame {m['overlap_worst_frame_psnr_db']:.1f} dB)")
+    summary = hs.continuity_summary(s.segments)
+    if summary:
+        notes.append(summary)
     notes.append(f"accepted total: {s.state['accepted_frames']} frames ({s.state['accepted_frames'] / hs.FPS:.2f} s) "
                  f"in {s.root}")
     if new_audio is None:

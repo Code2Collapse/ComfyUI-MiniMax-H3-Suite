@@ -343,6 +343,39 @@ def drift_metrics(new_frames: torch.Tensor, baseline: dict | None, previous_last
     return out
 
 
+def overlap_agreement(head: torch.Tensor, accepted: torch.Tensor) -> dict:
+    """The overlap decoded again at the start of the new segment vs the frames already accepted for the same global
+    indices. Both come from the same pinned latent rows, so any difference is the VAE decoding them in a different
+    clip context (or a sampler that did not keep the head). RGB PSNR in dB (99 = identical within 16-bit storage)."""
+    h, acc = head[..., :3].float(), accepted[..., :3].to(head).float()
+    per = ((h - acc) ** 2).mean(dim=(1, 2, 3))
+    psnr = lambda mse: 99.0 if mse <= 1e-10 else min(99.0, 10.0 * math.log10(1.0 / mse))  # noqa: E731
+    return {"overlap_frames": int(h.shape[0]), "overlap_psnr_db": round(psnr(float(per.mean())), 2),
+            "overlap_worst_frame_psnr_db": round(min(psnr(float(x)) for x in per), 2),
+            "overlap_mean_abs": round(float((h - acc).abs().mean()), 6)}
+
+
+def continuity_summary(segments: list) -> str | None:
+    """One line over every accepted segment so far: the worst value of each continuity measure."""
+    ms = [g.get("metrics") or {} for g in segments if g.get("status") == "accepted"]
+    pick = lambda k, f: (f(m[k] for m in ms if m.get(k) is not None) if any(m.get(k) is not None for m in ms)  # noqa: E731
+                         else None)
+    seam, colour = pick("seam_jump_ratio", max), pick("colour_delta_e", max)
+    sharp, ovl = pick("sharpness_ratio", min), pick("overlap_psnr_db", min)
+    if seam is None and colour is None and ovl is None:
+        return None
+    parts = [f"{len(ms)} accepted segment(s)"]
+    if seam is not None:
+        parts.append(f"worst seam {seam:.2f}x")
+    if colour is not None:
+        parts.append(f"colour drift up to {colour:.2f} dE")
+    if sharp is not None:
+        parts.append(f"sharpness down to x{sharp:.2f}")
+    if ovl is not None:
+        parts.append(f"overlap re-decode down to {ovl:.1f} dB")
+    return "session so far: " + ", ".join(parts)
+
+
 def drift_problems(m: dict, colour_max: float, sharp_min: float, seam_max: float) -> list[str]:
     bad = []
     if m.get("colour_delta_e") is not None and m["colour_delta_e"] > colour_max:

@@ -99,6 +99,12 @@ ended, and a crash, a restart of ComfyUI or a closed browser loses nothing. Desi
 - Drift is measured on every segment: colour against segment 0 (Lab), sharpness ratio, seam jump against the clip's
   usual frame change, frozen frames. `approval` = accept unless drift (default), accept, or always ask; a held
   segment waits in `pending/` until `decision` accepts or rejects it (rejected = the same interval again).
+- The overlap is decoded again in every new segment. Commit compares it with the frames already accepted (PSNR in
+  dB, mean and worst frame) to show any seam the VAE adds when it decodes the same tokens in a new clip. The report
+  ends with the worst value of every measure so far. The overlap PSNR is reported, not used to hold a segment.
+- Positions: H3 starts every pass's timeline at its own origin, and no RoPE offset is applied. Continuity comes from
+  the pinned tail (reasoning from core's source: `docs/h3_continuation_design.md`, "Temporal positions").
+  `H3 Context Windows` prints each window's 40 Hz start for reference only.
 - Guides inside the pinned head are dropped (those frames are fixed); guides later in the segment stay. Guides use
   the segment's own frame numbers, so the same guide applies to every segment.
 - Long inputs are cut per segment by Next itself (only that segment's frames are decoded from Load Video):

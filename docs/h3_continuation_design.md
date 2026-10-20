@@ -97,6 +97,47 @@ on Next's output - a cycle). So Next takes the long inputs and cuts them itself.
   crops over a long plate: crop the whole plate first (stage 1, save the crop video + boxes), run the continuation on
   the crop video, uncrop afterwards.
 
+## Temporal positions and the offset policy (A17 s4.5)
+
+Read from the installed core (owner stack, v0.39.0-43, `comfy/ldm/minimax/model.py` `PackedLayout`):
+
+- H3 uses a 3-D RoPE (t, h, w) over one packed sequence. Text takes t = 0..text_len-1. References are packed next,
+  and the target's audio and video start at `cursor` = text_len + the references' time spans. Video rows advance by
+  `FRAME_RESCALE * (1,4,4,4,4)[k % 5]` = 5/3 per pixel frame (40 Hz against 24 fps). The cycle restarts with every
+  target.
+- There is no offset input. Every pass, including every continuation segment, builds its positions from its own
+  origin.
+- Attention under RoPE depends only on position differences. Shifting a pass's target rows would not change how its
+  frames relate to each other. It would only move the target away from the text and image references, to distances
+  that do not occur when a clip is generated in one pass. `ComfyUI-MiniMax-H3-LongMedia` does exactly this shift
+  (an `APPLY_MODEL` wrapper, `temporal_positioning.py`). Its benefit is unmeasured.
+- Core's context windows do not support H3 audio-video. `MiniMaxH3` implements neither
+  `map_context_window_to_modalities` nor `resize_cond_for_context_window` (`comfy/model_base.py:2152`), so a
+  multimodal window raises `NotImplementedError` (`comfy/context_windows.py:244-248`).
+
+Policy: **no positional offset**. Continuity comes from content. The previous segment's tail is pinned inside the new
+target, where the positions between it and the new frames are exactly the trained ones. `H3 Context Windows` still
+prints each window's start on the 40 Hz timeline, but only as a reference value; nothing applies it. A shifted-RoPE
+variant can be tried only as an opt-in A/B experiment on the owner's GPU, never as a default.
+
+## Measuring continuity (A17 s4.4)
+
+`H3 Continuation Commit` measures every segment deterministically, with no model involved. The measurements go in the
+report and in `session.json` (`metrics`):
+
+| Measure | What it catches |
+|---|---|
+| pinned head, largest latent change | a sampler or node that dropped the noise mask (refused above 1e-3) |
+| overlap re-decode PSNR (dB, mean and worst frame) | the pinned overlap decoded again in the new clip's context, compared with the frames already accepted: VAE context effects at the seam |
+| seam jump (x the clip's median frame change) | a visible jump between the last accepted frame and the first new one |
+| colour drift (CIE Lab dE of the mean vs segment 0) | slow colour drift over many segments |
+| sharpness (Laplacian variance vs segment 0) | detail loss over many segments |
+| frozen frames | duplicated or stalled frames |
+
+A summary line over all accepted segments gives the worst value of each measure so far. Seam jump, colour and
+sharpness can hold a segment for approval. The overlap PSNR is reported, not enforced, until real outputs show where
+a limit belongs.
+
 ## Not in this slice (stated, not hidden)
 
 - Identity memory beyond what the user's conditioning carries (references / LoRA stay in the positive conditioning of

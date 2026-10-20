@@ -78,6 +78,15 @@
 - **Ported into this pack:** `mmx_utils/color_space.py`, alongside the exact sRGB transfer
   function. No clamp on the linear side: values above 1.0 survive.
 
+## MaskVidExperiments (MVEx) — drozbay (ported code)
+
+- **Source:** https://github.com/drozbay/MaskVidExperiments (rev c32ed8c, 2026-09-11, the upstream HEAD on
+  2026-10-21).
+- **Licence:** GPL-3.0, the same as this suite. Copied with attribution, as the owner authorised.
+- **Ported:** `mmx_nodes/subject_crop.py` and `mmx_utils/subject_crop_planner.py` (Subject Crop / Uncrop and the crop
+  planner), `mmx_nodes/mask_cleanup.py`, `mmx_nodes/mask_to_latent.py` and `mmx_nodes/audio_mask.py`. Each carries a
+  `# PORTED FROM:` header. `mmx_utils/crop_planner_tv.py` is a textbook formulation, not derived from MVEx.
+
 ## NKD Basic Tools — Nekodificador (behaviour reference)
 
 - **Source:** https://github.com/Nekodificador/ComfyUI-NKD-Basic-Tools (`nkd_av_latent.py`, rev 227b9c2).
