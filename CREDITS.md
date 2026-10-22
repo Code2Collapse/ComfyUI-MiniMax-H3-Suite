@@ -101,3 +101,42 @@
 - **Source:** https://github.com/1038lab/Comfyui-Minimax-H3-Promptor `web/js/prompt_composer.js` TEMPLATES (rev bdbde80).
 - **Licence:** GPL-3.0 (same as this pack).
 - **Ported into this pack:** the eight mode scaffolds in `mmx_nodes/promptor.py` (`COMPOSER_TEMPLATES`).
+
+## Ports of 2026-10-22 (owner: "port all relevant nodes of MiniMax H3")
+
+The decisions for every pack in both reference folders are in the work area's
+`docs/research/minimax_port_plan.md`. The licence texts of the MIT sources are in `THIRD_PARTY_LICENSES/`.
+
+### ComfyUI-H3-Context-Noise: beijinren
+
+- **Source:** https://github.com/beijinren/ComfyUI-H3-Context-Noise (rev 7e55312).
+- **Licence:** MIT, Copyright (c) 2026 beijinren.
+- **Upstream sources:** the palette, the 36x64 grid and `alpha_for` come from MacroSony's
+  https://github.com/MacroSony/minimax-h3-chained-character-swap (MIT, Copyright (c) 2026 MacroSony).
+- **Ported:** `mmx_utils/context_taper.py` and `mmx_nodes/context_taper_noise.py`, as H3 Context Taper Noise
+  (frames, latent).
+- **Changed:** V3 nodes. Behaviour unchanged.
+
+### ComfyUI-H3-Motion-Context-MultiRef: seitanism (keyframe nodes by Reithan)
+
+- **Source:** https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef (rev 361624f).
+- **Licence:** GPL-3.0.
+- **Ported:** `mmx_nodes/av_noise_mask.py`, as H3 Set / Clear AV Noise Mask and H3 Hard Keyframes (from
+  `MiniMaxH3CustomKeyframesMasked`).
+- **Changed:**
+  - The frame mask is reduced on H3's own grid, not by trilinear resampling.
+  - Keyframes come as one image batch plus a list of positions, so no custom front end is needed.
+  - Video and audio lock switches were added.
+  - The pre-#15375 shim was dropped; the nodes need native nested AV masks.
+- **Not ported:** the soft Custom Keyframes node, because core's Add Guide does the same.
+
+### H3-LongTakeNoCuts: xyzDist
+
+- **Source:** https://github.com/xyzDist/H3-LongTakeNoCuts (rev 556085d).
+- **Licence:** MIT, Copyright (c) 2026 xyzDist.
+- **Ported:** `mmx_nodes/latent_blend_frames.py`, as H3 Blend Latents By Frames, H3 Keyframe Mask and H3 Mask Levels.
+- **Changed:**
+  - Keyframes map onto H3's real latent steps, and the frame count comes from the latent.
+  - Masks are reduced on H3's grid.
+- **Not ported:** H3 Video Lock. Set AV Noise Mask's `video_lock` does the same thing with core's nested mask
+  layout.

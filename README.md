@@ -257,6 +257,27 @@ Or use node **MiniMaxH3_HybridExtract** in ComfyUI.
 
 See `docs/PLAN_h3_hybrid_hdr.md` for limits and report interpretation.
 
+## Masks, keyframes and long-take repair (ported 2026-10-22)
+
+These nodes are ported from community H3 packs; CREDITS.md has the sources and licences.
+
+- **H3 Set AV Noise Mask / H3 Clear AV Noise Mask** set or remove the denoise masks of an H3 AV latent, one per
+  stream (video and audio).
+  - Core's Set Latent Noise Mask writes one tensor, which H3 reads as video only, so protected audio gets
+    regenerated.
+  - Here the frame mask is snapped to H3's own grid: latent steps of 1 or 4 frames and 32 px tokens.
+  - `video_lock` keeps every frame, so only the sound is re-sampled; `audio_lock` keeps the sound.
+- **H3 Hard Keyframes (protected stills)** writes still images into the latent at chosen frames and protects them,
+  where core's Add Guide only suggests them. Single-frame positions are 1, 18, 35, 52, ... Anywhere else protects the
+  4-frame latent step the frame falls in.
+- **H3 Blend Latents By Frames, H3 Keyframe Mask, H3 Mask Levels** fix the "photocopy" drift of long chained shots:
+  run a short refine pass (denoise about 0.5) on the new segment, then blend it back in by frames. For example,
+  `0:0, 22:0, 44:1` keeps the frames that join the previous segment and fades to the refined detail by frame 44.
+- **H3 Context Taper Noise (frames / latent)**, experimental: tapered noise on the carried context of a Motion
+  Context chain. H3 then keeps the motion but stops copying the old colour, which matters in character-swap chains.
+  Validated upstream, not yet on these workflows. It is not for H3 Continuation, whose pinned head must come back
+  unchanged.
+
 ## Dual-clock shim (P4 — not shipped)
 
 On ComfyUI core `180060c` and later, `ModelSamplingAV` is native (`comfy/model_sampling.py`). A dual-clock sampler shim is a no-op — use core **MiniMaxH3SigmaShift** or our **MiniMaxH3_SigmaShiftLocked** for ratio-locked shifts.

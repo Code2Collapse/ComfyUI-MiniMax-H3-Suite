@@ -150,6 +150,19 @@ _NODE_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.multishot", "MiniMaxH3_MultishotMemorySampler"),
 )
 
+# Ports added from 2026-10-22 on (owner: port every relevant H3 node, docs/research/minimax_port_plan.md in the work
+# area). One row per node, resolved by import, so a module with several nodes needs no hand-written branch below.
+_PORTED_SPECS: tuple[tuple[str, str], ...] = (
+    (".mmx_nodes.context_taper_noise", "MiniMaxH3_ContextTaperNoise"),
+    (".mmx_nodes.context_taper_noise", "MiniMaxH3_ContextLatentTaperNoise"),
+    (".mmx_nodes.av_noise_mask", "MiniMaxH3_SetAVNoiseMask"),
+    (".mmx_nodes.av_noise_mask", "MiniMaxH3_ClearAVNoiseMask"),
+    (".mmx_nodes.av_noise_mask", "MiniMaxH3_HardKeyframes"),
+    (".mmx_nodes.latent_blend_frames", "MiniMaxH3_BlendLatentsByFrames"),
+    (".mmx_nodes.latent_blend_frames", "MiniMaxH3_KeyframeMask"),
+    (".mmx_nodes.latent_blend_frames", "MiniMaxH3_MaskLevels"),
+)
+
 
 def _load_nodes() -> list[type[io.ComfyNode]]:
     nodes: list[type[io.ComfyNode]] = []
@@ -585,6 +598,15 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
                     MiniMaxH3_MultishotSampler,
                     MiniMaxH3_MultishotMemorySampler,
                 ])
+        except Exception as exc:
+            msg = f"ComfyUI-MiniMaxSuite: failed to import {cls_name}: {exc}"
+            _LOAD_ERRORS.append(msg)
+            _LOG.error(msg)
+    import importlib
+
+    for mod_path, cls_name in _PORTED_SPECS:
+        try:
+            nodes.append(getattr(importlib.import_module(mod_path, __package__), cls_name))
         except Exception as exc:
             msg = f"ComfyUI-MiniMaxSuite: failed to import {cls_name}: {exc}"
             _LOAD_ERRORS.append(msg)
