@@ -172,6 +172,7 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.tagged_refs", "MiniMaxH3_TaggedReferenceToVideo"),
     (".mmx_nodes.tst_attention", "MiniMaxH3_TSTAttention"),
     (".mmx_nodes.region_edit", "MiniMaxH3_RegionEdit"),
+    (".mmx_nodes.sigma_presets", "MiniMaxH3_SigmaPresets"),
 )
 
 

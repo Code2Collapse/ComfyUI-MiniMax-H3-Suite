@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 133   # + Region Edit (A1, L8.18); + TST Attention (L8.50); + Tagged Picture / Video / Audio / Reference to Video (L8.48); + Tiled Diffusion, Latent Upscale (Model) (L8.37); + AV Bridge, AV Bridge Assemble, Seam Correction (L8.47); + ContextTaperNoise frames / latent, Set / Clear AV Noise Mask, Hard Keyframes, Blend Latents By Frames, Keyframe Mask, Mask Levels (L8.46 ports); + ContinuationNext / Commit (A16 L8.43); + GeometryReport, SourceAVLatent (A16 L8.38); + HybridHDR, HybridExtract, ColorQC; + PromptWriter (L8.24); + IdentityFusion (L8.26)
+EXPECTED_NODE_COUNT = 134   # + Sigma Presets (A2, L8.19); + Region Edit (A1, L8.18); + TST Attention (L8.50); + Tagged Picture / Video / Audio / Reference to Video (L8.48); + Tiled Diffusion, Latent Upscale (Model) (L8.37); + AV Bridge, AV Bridge Assemble, Seam Correction (L8.47); + ContextTaperNoise frames / latent, Set / Clear AV Noise Mask, Hard Keyframes, Blend Latents By Frames, Keyframe Mask, Mask Levels (L8.46 ports); + ContinuationNext / Commit (A16 L8.43); + GeometryReport, SourceAVLatent (A16 L8.38); + HybridHDR, HybridExtract, ColorQC; + PromptWriter (L8.24); + IdentityFusion (L8.26)
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {

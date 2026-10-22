@@ -362,6 +362,20 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
     `brightness_match` (per frame), `dynamic_fade` (narrowing / widening over the steps), `overlap_blend`
     (linear / smoothstep / midpoint), `masked_area_noise`, and equal tiles with `grid_rows` / `grid_cols`.
 
+## Sigma Presets (official templates)
+
+**Sigma Presets** gives the sigma schedule, sampler, cfg and steps of a model as ComfyUI's official workflow
+templates ship them, with a graph and a how-to.
+- Models: MiniMax H3 Ref2VA / FL2VA (both with their turbo LoRAs) and FastH3; Wan 2.1, Wan 2.2 (lightx2v), Wan
+  Animate 2; Flux.1 dev / schnell, Flux.2 dev / Klein; SDXL, SDXL Turbo, SD 1.5, SD 3.5; LTX-2 / 2.3 / 2.5 (each
+  stage); HunyuanVideo 1 / 1.5; Qwen-Image; Z-Image / Turbo; Chroma; HiDream.
+- Each preset names the template it comes from (comfyui-workflow-templates-json 0.1.104), the model's trained shift
+  from core, and any speed LoRA or distilled model its step count needs.
+- The curves are computed by ComfyUI's own scheduler code; connect your model to use its own shift. For H3 the graph
+  also draws the audio clock.
+- Outputs: `sigmas`, `sampler` (for SamplerCustom / SamplerCustomAdvanced), `cfg`, `steps`, the `graph` and the
+  `how_to` text.
+
 ## Dual-clock shim (P4 — not shipped)
 
 On ComfyUI core `180060c` and later, `ModelSamplingAV` is native (`comfy/model_sampling.py`). A dual-clock sampler shim is a no-op — use core **MiniMaxH3SigmaShift** or our **MiniMaxH3_SigmaShiftLocked** for ratio-locked shifts.
