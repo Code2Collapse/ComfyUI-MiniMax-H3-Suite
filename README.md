@@ -320,6 +320,14 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
   - Not with a block cache (First Block Cache, T8) or the Mask-Aware ControlNet: the node says so and stops.
   - Kill switch: `MMX_TILED_DIFFUSION=off`.
 
+- **H3 Split Upscale** (samples each tile to completion, then stitches):
+  - Odd latent sizes (720p has 45 latent rows, 2160p 135) are now sampled on the DiT's 2x2 patch grid: the last
+    tile no longer starts on an odd row, and an odd-sized edge tile is padded by repeating its edge, with the pad
+    frozen. Before, H3 padded such tiles circularly, so a tile's top row shared a patch with its bottom row.
+  - New options on H3 Spatial Split Params (advanced, off by default, so saved workflows behave as before):
+    `brightness_match` (per frame), `dynamic_fade` (narrowing / widening over the steps), `overlap_blend`
+    (linear / smoothstep / midpoint), `masked_area_noise`, and equal tiles with `grid_rows` / `grid_cols`.
+
 ## Dual-clock shim (P4 — not shipped)
 
 On ComfyUI core `180060c` and later, `ModelSamplingAV` is native (`comfy/model_sampling.py`). A dual-clock sampler shim is a no-op — use core **MiniMaxH3SigmaShift** or our **MiniMaxH3_SigmaShiftLocked** for ratio-locked shifts.

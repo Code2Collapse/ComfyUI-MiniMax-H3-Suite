@@ -33,18 +33,23 @@ from mmx_utils.h3_grid import (  # noqa: E402
     tokens_for_frames,
 )
 from mmx_utils.split_upscale import (  # noqa: E402
+    BLEND_SHAPES,
+    FADE_SCHEDULES,
     POLISH_HALO,
+    bright_match_tile,
     build_spatial_param,
     build_temporal_param,
-    compute_spatial_grid,
     dc_correct,
+    dynamic_fade_function,
     grade_pin,
     identity_keyframes,
     merge_spatial_tile,
     motion_keyframes,
+    pad_even,
     refuse_unless_h3_av_latent,
     should_polish_seam,
     spatial_fade_mask,
+    spatial_grid,
     spatial_param_report,
     split_upscale_report,
     temporal_append,
@@ -167,6 +172,20 @@ def crop_keyframes_to_tile(cond, src_h, src_w, r0, c0, tr, tc):
                         nkf["latent"] = lt_r[:, :, :, r0:r0 + tr, c0:c0 + tc].contiguous()
                 cropped.append(nkf)
             nd["minimax_keyframes"] = cropped
+        out.append([tensor, nd])
+    return out
+
+
+def pad_keyframes(cond):
+    """Keyframe latents cropped to an odd tile, padded like the tile (pad_even) so they stay on its grid."""
+    out = []
+    for tensor, d in cond:
+        nd = dict(d)
+        kfs = nd.get("minimax_keyframes")
+        if kfs:
+            nd["minimax_keyframes"] = [
+                dict(kf, latent=pad_even(kf["latent"])) if kf.get("latent") is not None else kf for kf in kfs
+            ]
         out.append([tensor, nd])
     return out
 
@@ -351,6 +370,35 @@ class MiniMaxH3_SpatialSplitParams(io.ComfyNode):
                             "moderate strength — stops fast motion being cut in half "
                             "at the tile edge under high denoise. 1.0 = classic "
                             "behaviour (off). Try 0.5–0.8 for sports or hair."),
+                # L8.51 (MMH3 Ultimate Upscale options). Appended last and optional, so saved UI workflows keep their values
+                # and API prompts written before them still validate.
+                io.Boolean.Input(
+                    "brightness_match", default=False, advanced=True, optional=True,
+                    tooltip="Per-frame, per-channel median match of each sampled tile to the source at the same "
+                            "place and frame. Stops tile-to-tile and frame-to-frame brightness drift. Experimental."),
+                io.Combo.Input(
+                    "dynamic_fade", options=list(FADE_SCHEDULES), default="off", advanced=True, optional=True,
+                    tooltip="Fade width over a tile's sampling steps. off: fixed. narrowing: starts at the fade "
+                            "width and shrinks to dynamic_fade_min. widening: grows from dynamic_fade_min. Helps "
+                            "seams when a tile is sampled in many steps."),
+                io.Int.Input(
+                    "dynamic_fade_min", default=32, min=0, max=16_384, step=32, advanced=True, optional=True,
+                    tooltip="Narrowest fade (pixels) the dynamic fade reaches."),
+                io.Combo.Input(
+                    "overlap_blend", options=list(BLEND_SHAPES), default="linear", advanced=True, optional=True,
+                    tooltip="Shape of the cross-fade over an overlap when a tile is stitched: linear, smoothstep "
+                            "(eased) or midpoint (hard switch in the middle of the overlap)."),
+                io.Float.Input(
+                    "masked_area_noise", default=0.0, min=0.0, max=1.0, step=0.01, advanced=True, optional=True,
+                    tooltip="Noise let into the frozen overlap while sampling. 0: frozen (original behaviour). 1: "
+                            "no freeze at all. Small values (0.01-0.05) let the seam move a little with the scene."),
+                io.Int.Input(
+                    "grid_rows", default=0, min=0, max=9, advanced=True, optional=True,
+                    tooltip="Equal tiles: split the height into this many tiles of one size (overlap from "
+                            "overlap_ratio). 0: use tile_height."),
+                io.Int.Input(
+                    "grid_cols", default=0, min=0, max=9, advanced=True, optional=True,
+                    tooltip="Equal tiles: split the width into this many tiles of one size. 0: use tile_width."),
             ],
             outputs=[
                 H3_SPATIAL_SPLIT.Output(display_name="spatial_split_param"),
@@ -367,9 +415,19 @@ class MiniMaxH3_SpatialSplitParams(io.ComfyNode):
         fade_ratio,
         min_tile_size,
         seam_denoise,
+        brightness_match=False,
+        dynamic_fade="off",
+        dynamic_fade_min=32,
+        overlap_blend="linear",
+        masked_area_noise=0.0,
+        grid_rows=0,
+        grid_cols=0,
     ) -> io.NodeOutput:
         param = build_spatial_param(
             tile_width, tile_height, overlap_ratio, fade_ratio, min_tile_size, seam_denoise,
+            brightness_match=brightness_match, dynamic_fade=dynamic_fade, dynamic_fade_min=dynamic_fade_min,
+            overlap_blend=overlap_blend, masked_area_noise=masked_area_noise, grid_rows=grid_rows,
+            grid_cols=grid_cols,
         )
         # Grid preview uses a representative 64x64 latent canvas; Split Upscale
         # recomputes from the real latent H×W.
@@ -462,13 +520,17 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
 
         if spatial_split_param is not None:
             sp = spatial_split_param
-            rows, cols, trows, tcols, row_ovl, col_ovl = compute_spatial_grid(
-                h, w, sp["th"], sp["tw"], sp["ol_h"], sp["ol_w"], sp["mt"], sp["mt"],
-            )
+            rows, cols, trows, tcols, row_ovl, col_ovl = spatial_grid(sp, h, w)
             seam_cap = sp.get("cap", 1.0)
         else:
+            sp = {}
             rows, cols, trows, tcols, row_ovl, col_ovl = [0], [0], [h], [w], [0], [0]
             seam_cap = 1.0
+        bright = bool(sp.get("brightness_match", False))
+        fade_mode = sp.get("dynamic_fade", "off")
+        fade_min = int(sp.get("dynamic_fade_min", 0))
+        blend = sp.get("overlap_blend", "linear")
+        masked_noise = float(sp.get("masked_area_noise", 0.0))
         nrows, ncols = len(rows), len(cols)
 
         steps = max(int(sigmas.shape[-1]) - 1, 1)
@@ -519,17 +581,24 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                     tr, tc = trows[ri], tcols[cj]
                     ovh, ovw = row_ovl[ri], col_ovl[cj]
 
-                    tile = chunk_out[:, :, :, r0:r0 + tr, c0:c0 + tc].clone()
+                    # Odd tiles (the last row / column of an odd latent size) are sampled at even size: the
+                    # pad strip repeats the edge and stays frozen (H3 would pad circularly, L8.51).
+                    tile = pad_even(chunk_out[:, :, :, r0:r0 + tr, c0:c0 + tc].clone())
+                    tr_s, tc_s = tile.shape[-2:]
 
                     if spatial_split_param is not None:
                         fh, fw = spatial_split_param["fh"], spatial_split_param["fw"]
                     else:
                         fh = fw = 0
                     m = spatial_fade_mask(
-                        tr, tc, ovh, ovw,
+                        tr_s, tc_s, ovh, ovw,
                         done_top=(ri > 0), done_left=(cj > 0),
                         fade_h=fh, fade_w=fw, seam_cap=seam_cap,
                     )
+                    m[tr:, :] = 0.0
+                    m[:, tc:] = 0.0
+                    if masked_noise > 0:
+                        m = m + masked_noise * (1.0 - m)
                     mv = m[None, None, None].to(chunk_out.device)
                     ma = torch.zeros(
                         (1, 32, 2, chunk_a.shape[-1]),
@@ -540,17 +609,27 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                         "noise_mask": NestedTensor((mv, ma)),
                     }
                     tile_noise = NestedTensor((
-                        noise_vc[:, :, :, r0:r0 + tr, c0:c0 + tc].contiguous(),
+                        pad_even(noise_vc[:, :, :, r0:r0 + tr, c0:c0 + tc].contiguous()),
                         noise_ac.contiguous(),
                     ))
 
-                    cond_tile = crop_keyframes_to_tile(cond_i, h, w, r0, c0, tr, tc)
-                    guider = build_guider(model, cond_tile, negative, cfg)
+                    cond_tile = pad_keyframes(crop_keyframes_to_tile(cond_i, h, w, r0, c0, tr, tc))
+                    tile_model = model
+                    dyn = dynamic_fade_function(
+                        fade_mode, tr, tc, tr_s, tc_s, ovh, ovw, ri > 0, cj > 0, fh, fw, fade_min, seam_cap,
+                        masked_noise, int(tile[0].numel()),
+                    )
+                    if dyn is not None:
+                        tile_model = model.clone()
+                        tile_model.set_model_denoise_mask_function(dyn)
+                    guider = build_guider(tile_model, cond_tile, negative, cfg)
                     out = sample_piece(
                         piece, guider, tile_noise, noise.seed, sampler, sigmas,
                         for_tile(tile_idx),
                     )
-                    tile_v = (out.tensors[0] if out.is_nested else out).to(chunk_out.device)
+                    tile_v = (out.tensors[0] if out.is_nested else out).to(chunk_out.device)[:, :, :, :tr, :tc]
+                    if bright:
+                        tile_v = bright_match_tile(tile_v, chunk_v[:, :, :, r0:r0 + tr, c0:c0 + tc])
 
                     region = chunk_out[:, :, :, r0:r0 + tr, c0:c0 + tc].clone()
 
@@ -575,7 +654,7 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                             polish_queue[(i, ri, cj, "H")] = (r0, ovh, (k0, k1))
 
                     chunk_out = merge_spatial_tile(
-                        chunk_out, tile_v, r0, c0, tr, tc, ovh, ovw, ri, cj,
+                        chunk_out, tile_v, r0, c0, tr, tc, ovh, ovw, ri, cj, blend=blend,
                     )
 
                     tile_idx += 1
@@ -624,20 +703,24 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                         (1, 32, 2, chunk_a.shape[-1]),
                         device=chunk_a.device, dtype=torch.float32,
                     )
+                    wh, ww = win.shape[-2:]
+                    mv = pad_even(mv)
+                    mv[..., wh:, :] = 0.0
+                    mv[..., :, ww:] = 0.0
                     piece = {
-                        "samples": NestedTensor((win, chunk_a)),
+                        "samples": NestedTensor((pad_even(win), chunk_a)),
                         "noise_mask": NestedTensor((mv, ma)),
                     }
-                    tn = NestedTensor((noise_v[nsl].contiguous(), noise_ac.contiguous()))
+                    tn = NestedTensor((pad_even(noise_v[nsl].contiguous()), noise_ac.contiguous()))
 
-                    cond_p = crop_keyframes_to_tile(cond_i, h, w, r0c, c0c, trc, tcc)
+                    cond_p = pad_keyframes(crop_keyframes_to_tile(cond_i, h, w, r0c, c0c, trc, tcc))
                     g = build_guider(model, cond_p, negative, cfg)
 
                     def _cb(step, x0, x, ts, _pi=pi):
                         pbar2.update_absolute(_pi * steps + step + 1, steps * len(chunk_polish))
 
                     out = sample_piece(piece, g, tn, noise.seed, sampler, sigmas, callback=_cb)
-                    pv = (out.tensors[0] if out.is_nested else out).to(chunk_out.device)
+                    pv = (out.tensors[0] if out.is_nested else out).to(chunk_out.device)[:, :, :, :wh, :ww]
 
                     nlen = (w1 - w0) if ax == 4 else (h1 - h0)
                     alpha = torch.ones(nlen, dtype=torch.float32)

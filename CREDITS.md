@@ -196,5 +196,6 @@ The decisions for every pack in both reference folders are in the work area's
   Split Upscale (the LBH port above) already does the temporal + spatial split; Tiled Diffusion replaces the spatial
   split; the Fun ControlNet param nodes target a ControlNet API core did not merge (core loads the H3 Fun ControlNet
   as a model patch). The LTX 2.5 nodes belong to the LTX-Enhanced pack.
-- **Not yet ported (L8.51):** three spatial-split options Split Upscale lacks: the per-step dynamic fade of the frozen
-  overlap, the per-frame brightness match of a tile, and the equal-tile solver.
+- **Also ported (L8.51), into H3 Split Upscale / H3 Spatial Split Params:** the even-size sampling of odd edge tiles
+  (here the pad repeats the edge instead of zeros, and tile starts are kept even too), the per-step dynamic fade, the
+  per-frame brightness match, equal tiles (on the 2-cell grid), the overlap blend shape and masked-area noise.

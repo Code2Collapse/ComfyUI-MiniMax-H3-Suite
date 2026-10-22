@@ -14,6 +14,7 @@ import math
 from typing import Any, Sequence
 
 import torch
+import torch.nn.functional as F
 
 from .h3_constants import FRAME_PER_TOKEN
 from .h3_grid import (
@@ -129,7 +130,8 @@ def _grid_1d(size: int, tile: int, ol: int, min_tile: int) -> tuple[list[int], l
     if min_tile > 0 and n >= 2:
         edge = size - rows[-1]
         if edge < min_tile:
-            new_last = size - min_tile
+            # an even start keeps the tile on the DiT's 2x2 patch grid (L8.51: size - min_tile is odd for odd sizes)
+            new_last = (size - min_tile) // ALIGN * ALIGN
             if rows[-2] < new_last < rows[-2] + trows[-2]:
                 rows[-1] = new_last
                 trows[-1] = size - new_last
@@ -152,6 +154,135 @@ def compute_spatial_grid(
     rows, trows, row_ovl = _grid_1d(h, th, ol_h, min_th)
     cols, tcols, col_ovl = _grid_1d(w, tw, ol_w, min_tw)
     return rows, cols, trows, tcols, row_ovl, col_ovl
+
+
+# PORTED FROM: https://github.com/bbaudio-2025/Comfyui-MMH3-UltimateUpscale@0a8d5ee nodes/nodes.py
+# (_solve_equal_tiles, bright_match_tile, blend_weights, _dynamic_fade_closure, the even-pad of odd edge tiles in
+# spatial_process), MIT, Copyright (c) 2026 bbaudio-2025. Changed: equal tiles on the 2-cell grid (upstream allowed
+# 1-cell overlaps, i.e. odd tile starts); the pad strip repeats the edge instead of zeros; the dynamic fade reuses
+# this module's fade mask, so seam_denoise still applies.
+def grid_1d_equal(size: int, count: int, overlap: int) -> tuple[list[int], list[int], list[int]]:
+    """`count` tiles of one even size covering [0, size), even starts, overlap >= `overlap` (cells). The last tile runs
+    to the edge, one cell larger when `size` is odd."""
+    size, count, overlap = int(size), max(1, int(count)), max(0, int(overlap))
+    if count == 1 or size <= ALIGN * count:
+        return [0], [size], [0]
+    s = max(ALIGN, -(-(size + (count - 1) * overlap) // count))
+    s += s % ALIGN
+    last = (size - s) // ALIGN * ALIGN
+    while s < size:
+        starts = [ALIGN * round(i * last / (ALIGN * (count - 1))) for i in range(count)]
+        trows = [s] * (count - 1) + [size - starts[-1]]
+        ovl = [0] + [starts[i - 1] + trows[i - 1] - starts[i] for i in range(1, count)]
+        if len(set(starts)) == count and min(ovl[1:]) >= overlap:
+            return starts, trows, ovl
+        s += ALIGN
+        last = (size - s) // ALIGN * ALIGN
+    return [0], [size], [0]
+
+
+def spatial_grid(param: dict[str, Any], h: int, w: int):
+    """compute_spatial_grid for a spatial-split param, or the equal-tile grid when grid_rows / grid_cols are set."""
+    gr, gc = int(param.get("grid_rows", 0) or 0), int(param.get("grid_cols", 0) or 0)
+    if gr > 0 or gc > 0:
+        rows, trows, row_ovl = (grid_1d_equal(h, gr, param["ol_h"]) if gr > 0
+                                else _grid_1d(h, param["th"], param["ol_h"], param["mt"]))
+        cols, tcols, col_ovl = (grid_1d_equal(w, gc, param["ol_w"]) if gc > 0
+                                else _grid_1d(w, param["tw"], param["ol_w"], param["mt"]))
+        return rows, cols, trows, tcols, row_ovl, col_ovl
+    return compute_spatial_grid(h, w, param["th"], param["tw"], param["ol_h"], param["ol_w"], param["mt"], param["mt"])
+
+
+def pad_even(x: torch.Tensor) -> torch.Tensor:
+    """Replicate-pad the last two axes to even sizes. H3 pads odd sizes itself, circularly: the tile's first row would
+    then sit in the same 2x2 patch as its last one."""
+    ph, pw = x.shape[-2] % ALIGN, x.shape[-1] % ALIGN
+    if not ph and not pw:
+        return x
+    lead = x.shape[:-3]
+    flat = x.reshape((-1,) + tuple(x.shape[-3:])).float()
+    out = F.pad(flat, (0, pw, 0, ph), mode="replicate").to(x.dtype)
+    return out.reshape(tuple(lead) + tuple(out.shape[-3:]))
+
+
+def bright_match_tile(tile: torch.Tensor, ref: torch.Tensor, clamp: float = DC_MATCH_CLAMP) -> torch.Tensor:
+    """Per-frame, per-channel median offset of a sampled tile against the source region at the same place."""
+    b, c, t = tile.shape[:3]
+    d = (tile - ref).float().reshape(b, c, t, -1)
+    dc = d.median(dim=-1).values.clamp(-clamp, clamp)
+    return tile - dc.to(tile.dtype).view(b, c, t, 1, 1)
+
+
+BLEND_SHAPES = ("linear", "smoothstep", "midpoint")
+
+
+def blend_ramp(n: int, shape: str = "linear", *, device=None, dtype=torch.float32) -> torch.Tensor:
+    """Weight of the NEW tile across an overlap band, 0 at the seam side to 1 inside (linear = the old behaviour)."""
+    t = torch.linspace(0.0, 1.0, int(n), device=device, dtype=dtype)
+    if shape == "smoothstep":
+        return t * t * (3.0 - 2.0 * t)
+    if shape == "midpoint":
+        return (t >= 0.5).to(dtype)
+    if shape != "linear":
+        raise ValueError(f"overlap blend must be one of {', '.join(BLEND_SHAPES)}; got {shape!r}")
+    return t
+
+
+FADE_SCHEDULES = ("off", "narrowing", "widening")
+
+
+def fade_schedule(mode: str, fade: int, fade_min: int, steps: int) -> list[int]:
+    """Fade width per sampling step: constant ('off'), shrinking to fade_min ('narrowing') or growing from it."""
+    steps = max(1, int(steps))
+    lo = min(int(fade_min), int(fade))
+    if mode == "off" or fade <= lo or steps == 1:
+        return [int(fade)] * steps
+    out = []
+    for i in range(steps):
+        p = i / (steps - 1)
+        out.append(int(round(lo + (fade - lo) * p if mode == "widening" else fade - (fade - lo) * p)))
+    return out
+
+
+def dynamic_fade_function(mode, tr, tc, tr_s, tc_s, ovh, ovw, done_top, done_left, fade_h, fade_w, fade_min,
+                          seam_cap, masked_noise, video_numel):
+    """A core denoise_mask_function (model_options) that rebuilds the tile's freeze mask every step; None when
+    nothing varies. The packed mask holds the video first ([C, T, h, w] of this tile), then the audio."""
+    if mode == "off" or (fade_h <= fade_min and fade_w <= fade_min):
+        return None
+    if not ((done_top and ovh > 0) or (done_left and ovw > 0)):
+        return None          # nothing frozen: the fade has nothing to move
+    cache: dict = {}
+
+    def mask_for(n_steps):
+        masks = cache.get(n_steps)
+        if masks is None:
+            hs = fade_schedule(mode, fade_h, fade_min, n_steps)
+            ws = fade_schedule(mode, fade_w, fade_min, n_steps)
+            masks = []
+            for fh, fw in zip(hs, ws):
+                m = spatial_fade_mask(tr_s, tc_s, ovh, ovw, done_top, done_left, fade_h=fh, fade_w=fw,
+                                      seam_cap=seam_cap)
+                m[tr:, :] = 0.0
+                m[:, tc:] = 0.0
+                if masked_noise > 0:
+                    m = m + masked_noise * (1.0 - m)
+                masks.append(m)
+            cache[n_steps] = masks
+        return masks
+
+    def fn(sigma, denoise_mask, extra_options=None, **_kw):
+        sigmas = (extra_options or {}).get("sigmas")
+        n = int(sigmas.numel()) - 1 if sigmas is not None else 1
+        masks = mask_for(max(1, n))
+        idx = int((sigmas > float(sigma.flatten()[0]) + 1e-6).sum()) if sigmas is not None else 0
+        m = masks[min(max(idx, 0), len(masks) - 1)].to(denoise_mask.device, denoise_mask.dtype)
+        out = denoise_mask.clone()
+        flat = out.reshape(out.shape[0], -1)
+        flat[:, :video_numel] = m.reshape(1, -1).repeat(out.shape[0], video_numel // m.numel())
+        return out
+
+    return fn
 
 
 def spatial_crossfade_weights(
@@ -342,25 +473,23 @@ def merge_spatial_tile(
     ovw: int,
     ri: int,
     cj: int,
+    blend: str = "linear",
 ) -> torch.Tensor:
-    """Blend one sampled tile back into *chunk* without mutating either input."""
+    """Blend one sampled tile back into *chunk* without mutating either input. `blend` shapes the cross-fade over
+    the overlap (linear = the original behaviour)."""
     out = chunk.clone()
     region = out[:, :, :, r0:r0 + tr, c0:c0 + tc].clone()
     if cj > 0 and ovw > 0:
-        left, right = spatial_crossfade_weights(
-            ovw, device=region.device, dtype=region.dtype,
-        )
-        view = left.view(1, 1, 1, 1, ovw)
+        right = blend_ramp(ovw, blend, device=region.device, dtype=region.dtype)
         region[:, :, :, :, :ovw] = (
-            region[:, :, :, :, :ovw] * view + tile_v[:, :, :, :, :ovw] * right.view(1, 1, 1, 1, ovw)
+            region[:, :, :, :, :ovw] * (1.0 - right).view(1, 1, 1, 1, ovw)
+            + tile_v[:, :, :, :, :ovw] * right.view(1, 1, 1, 1, ovw)
         )
     if ri > 0 and ovh > 0:
-        top, bottom = spatial_crossfade_weights(
-            ovh, device=region.device, dtype=region.dtype,
-        )
-        view = top.view(1, 1, 1, ovh, 1)
+        bottom = blend_ramp(ovh, blend, device=region.device, dtype=region.dtype)
         region[:, :, :, :ovh, :] = (
-            region[:, :, :, :ovh, :] * view + tile_v[:, :, :, :ovh, :] * bottom.view(1, 1, 1, ovh, 1)
+            region[:, :, :, :ovh, :] * (1.0 - bottom).view(1, 1, 1, ovh, 1)
+            + tile_v[:, :, :, :ovh, :] * bottom.view(1, 1, 1, ovh, 1)
         )
     band = torch.zeros((1, 1, 1, tr, tc), dtype=torch.bool, device=region.device)
     if cj > 0 and ovw > 0:
@@ -458,7 +587,19 @@ def build_spatial_param(
     fade_ratio: float,
     min_tile_size: int,
     seam_denoise: float,
+    *,
+    brightness_match: bool = False,
+    dynamic_fade: str = "off",
+    dynamic_fade_min: int = 32,
+    overlap_blend: str = "linear",
+    masked_area_noise: float = 0.0,
+    grid_rows: int = 0,
+    grid_cols: int = 0,
 ) -> dict[str, Any]:
+    if dynamic_fade not in FADE_SCHEDULES:
+        raise ValueError(f"dynamic_fade must be one of {', '.join(FADE_SCHEDULES)}; got {dynamic_fade!r}")
+    if overlap_blend not in BLEND_SHAPES:
+        raise ValueError(f"overlap_blend must be one of {', '.join(BLEND_SHAPES)}; got {overlap_blend!r}")
     tw, th = px_to_lat(tile_width), px_to_lat(tile_height)
     ol_w = min(tw - ALIGN, snap_align(tw * overlap_ratio))
     ol_h = min(th - ALIGN, snap_align(th * overlap_ratio))
@@ -470,13 +611,24 @@ def build_spatial_param(
         "fw": fw, "fh": fh, "mt": mt, "cap": float(seam_denoise),
         "tile_width_px": tile_width, "tile_height_px": tile_height,
         "overlap_ratio": overlap_ratio, "fade_ratio": fade_ratio,
+        "brightness_match": bool(brightness_match), "dynamic_fade": dynamic_fade,
+        "dynamic_fade_min": snap_align(int(dynamic_fade_min) / VAE_DOWNSAMPLE), "overlap_blend": overlap_blend,
+        "masked_area_noise": max(0.0, min(1.0, float(masked_area_noise))),
+        "grid_rows": max(0, int(grid_rows)), "grid_cols": max(0, int(grid_cols)),
     }
 
 
 def spatial_param_report(param: dict[str, Any], h: int, w: int) -> str:
-    rows, cols, trows, tcols, _, _ = compute_spatial_grid(
-        h, w, param["th"], param["tw"], param["ol_h"], param["ol_w"], param["mt"], param["mt"],
-    )
+    rows, cols, trows, tcols, _, _ = spatial_grid(param, h, w)
+    extras = [k for k, on in (
+        (f"equal tiles {param.get('grid_rows') or '-'} x {param.get('grid_cols') or '-'}",
+         param.get("grid_rows") or param.get("grid_cols")),
+        (f"dynamic fade {param.get('dynamic_fade')} (min {param.get('dynamic_fade_min', 0)}lat)",
+         param.get("dynamic_fade", "off") != "off"),
+        ("per-frame brightness match", param.get("brightness_match")),
+        (f"{param.get('overlap_blend')} overlap blend", param.get("overlap_blend", "linear") != "linear"),
+        (f"masked-area noise {param.get('masked_area_noise', 0.0):.2f}", param.get("masked_area_noise", 0.0) > 0),
+    ) if on]
     return (
         f"spatial grid {len(rows)}x{len(cols)} on {h}x{w} latent\n"
         f"  tile {param['tile_width_px']}x{param['tile_height_px']}px "
@@ -485,6 +637,7 @@ def spatial_param_report(param: dict[str, Any], h: int, w: int) -> str:
         f"  fade {param['fade_ratio']:.0%} -> {param['fw']}x{param['fh']}lat\n"
         f"  seam_denoise cap {param['cap']:.2f}\n"
         f"  row tile heights {trows}, col tile widths {tcols}"
+        + (f"\n  {', '.join(extras)}" if extras else "")
     )
 
 
