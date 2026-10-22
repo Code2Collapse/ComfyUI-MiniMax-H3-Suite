@@ -164,6 +164,8 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.av_bridge", "MiniMaxH3_AVBridge"),
     (".mmx_nodes.av_bridge", "MiniMaxH3_AVBridgeAssemble"),
     (".mmx_nodes.seam_correction", "MiniMaxH3_SeamCorrection"),
+    (".mmx_nodes.tiled_diffusion", "MiniMaxH3_TiledDiffusion"),
+    (".mmx_nodes.latent_upscale_model", "MiniMaxH3_LatentUpscaleModel"),
 )
 
 

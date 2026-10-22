@@ -278,6 +278,26 @@ def _make_mm(audio_rows_per_step=2, int_index=False, audio_anchor="start",
     return mm
 
 
+_STUBBED = ("comfy", "comfy.ldm", "comfy.ldm.minimax", "comfy.ldm.minimax.model", "mmx_utils.motion_layout_contract")
+
+
+@pytest.fixture(autouse=True)
+def _restore_core_modules():
+    """_load_layout_contract swaps core's comfy.ldm.minimax.model for a numpy stand-in; put the real modules back so
+    later test files (tiled diffusion builds core's PackedLayout) do not get the stand-in (L8.37)."""
+    saved = {name: sys.modules.get(name) for name in _STUBBED}
+    pkg = saved["comfy.ldm.minimax"]
+    saved_attr = getattr(pkg, "model", None) if pkg is not None else None
+    yield
+    for name, mod in saved.items():
+        if mod is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = mod
+    if pkg is not None and saved_attr is not None:
+        pkg.model = saved_attr
+
+
 def _load_layout_contract(mm):
     for name in ("comfy", "comfy.ldm", "comfy.ldm.minimax"):
         sys.modules.setdefault(name, types.ModuleType(name))

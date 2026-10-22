@@ -4,7 +4,7 @@
 
 - **Source:** [Comfyui_Minimax_h3_latent_Upscaler](https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler) by LBH-123-AI
 - **Licence:** MIT
-- **Ported into this pack:** `mmx_utils/split_upscale.py`, `mmx_nodes/split_upscale.py` — direct port of the split/tiled upsampler only (not the learned 2D/3D latent upscalers, which require weights not shipped here).
+- **Ported into this pack:** `mmx_utils/split_upscale.py`, `mmx_nodes/split_upscale.py` — direct port of the split/tiled upsampler. The learned 3D latent upscaler came later through the MMH3 port (H3 Latent Upscale (Model), see below); its weights are not shipped.
 
 ## ComfyUI-MiniMax-H3-Image-Studio (still-image generation)
 
@@ -168,3 +168,33 @@ The decisions for every pack in both reference folders are in the work area's
   - The `cut_detection` switch is exposed (upstream reads it but never offers it).
 - **Not yet ported:** the TST attention patch (planned as experimental, L8.50), the face-fix chain, and the
   auto-context sampler.
+
+### Comfyui-MMH3-UltimateUpscale: bbaudio-2025 (L8.37)
+
+- **Source:** https://github.com/bbaudio-2025/Comfyui-MMH3-UltimateUpscale (rev 0a8d5ee).
+- **Licence:** MIT, Copyright (c) 2026 bbaudio-2025. The text is in
+  `THIRD_PARTY_LICENSES/Comfyui-MMH3-UltimateUpscale-LICENSE.txt`.
+- **Upstream sources:** MMH3 Tiled Diffusion follows shiimizu/ComfyUI-TiledDiffusion (MultiDiffusion / Mixture of
+  Diffusers). Its H3 3D latent upscaler is the inference code of LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler (MIT,
+  Copyright (c) 2026 LBH-123-AI; text in `THIRD_PARTY_LICENSES/Comfyui_Minimax_h3_latent_Upscaler-LICENSE.txt`). The
+  checkpoints are huggingface.co/LBH-123-AI/Minimax_h3_latent_Upscaler (Apache-2.0); they are not shipped.
+- **Ported:** `mmx_utils/tiled_diffusion.py` + `mmx_nodes/tiled_diffusion.py`, as H3 Tiled Diffusion (experimental);
+  `mmx_utils/h3_latent_upscaler.py` + `mmx_nodes/latent_upscale_model.py`, as H3 Latent Upscale (Model).
+- **Changed** (design: `docs/h3_tiled_sampling_design.md`):
+  - Tile starts are always even. Upstream put the last tile on an odd latent row for odd sizes (720p), off the DiT
+    patch grid.
+  - Tile predictions are summed in fp32; positive and negative keep their own tile plan.
+  - Video denoise masks are cropped per tile (upstream refused them).
+  - Core's H3 Fun ControlNet (a model patch) gets its own crop of the hint per tile. Upstream only checked the old
+    ControlNet field, so on core the whole control video was squashed into every tile.
+  - Block / step caches and the Mask-Aware ControlNet are refused with a sentence; a single tile calls the model
+    untouched; kill switch `MMX_TILED_DIFFUSION=off`; trapezoid weights (the LTX-Enhanced rule) next to gaussian and
+    uniform.
+  - The latent upscaler is one node that returns the upscaled latent, with optional cross-faded temporal chunks;
+    the normalisation values are the weights repo's `config.json`.
+- **Not ported:** MMH3 Ultimate Upscale itself and its temporal / spatial / Fun ControlNet / inpaint param nodes. H3
+  Split Upscale (the LBH port above) already does the temporal + spatial split; Tiled Diffusion replaces the spatial
+  split; the Fun ControlNet param nodes target a ControlNet API core did not merge (core loads the H3 Fun ControlNet
+  as a model patch). The LTX 2.5 nodes belong to the LTX-Enhanced pack.
+- **Not yet ported (L8.51):** three spatial-split options Split Upscale lacks: the per-step dynamic fade of the frozen
+  overlap, the per-frame brightness match of a tile, and the equal-tile solver.

@@ -298,6 +298,28 @@ These nodes are ported from community H3 packs; CREDITS.md has the sources and l
 - **Refining only the sound:** H3 Set AV Noise Mask with `video_lock` on, then a sampler at denoise 0.4-0.6. The
   picture stays as it is, and the sound is re-sampled around the original.
 
+## High resolution: tiled diffusion and the 3D latent upscaler (ported 2026-10-22)
+
+Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until measured on a GPU.
+
+- **H3 Latent Upscale (Model)** resizes the video half of an H3 latent to a new pixel size; the audio half passes
+  through untouched.
+  - `method = model` uses the trained H3 3D latent upscaler. Put `minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors`
+    (or `_bf16`) from [LBH-123-AI/Minimax_h3_latent_Upscaler](https://huggingface.co/LBH-123-AI/Minimax_h3_latent_Upscaler)
+    (Apache-2.0) into `models/latent_upscale_models`. Pickle files (`.pth`) are refused.
+  - The other methods interpolate without a model, like core's Upscale Latent.
+  - The whole clip runs in one pass. `chunk_latent_steps` trades memory for an approximate result: the network's
+    normalisation sees the whole clip.
+  - Then re-sample at low denoise to add detail, with conditioning made for the new size.
+- **H3 Tiled Diffusion** patches the model so every denoising step runs tile by tile and the predictions are blended.
+  - All tiles share the same sigmas and noise, so no overlap is frozen and no seam is repaired afterwards.
+  - Each tile keeps its global frame positions, so it predicts what the full frame would there.
+  - Masks and core's Apply MiniMax H3 Fun ControlNet are split per tile; the audio is whole in every tile.
+  - Use it with any H3 sampler, or with H3 Split Upscale with `spatial_split_param` unconnected.
+  - It costs more time than one full-frame call (the report gives the factor) and bounds memory to one tile.
+  - Not with a block cache (First Block Cache, T8) or the Mask-Aware ControlNet: the node says so and stops.
+  - Kill switch: `MMX_TILED_DIFFUSION=off`.
+
 ## Dual-clock shim (P4 — not shipped)
 
 On ComfyUI core `180060c` and later, `ModelSamplingAV` is native (`comfy/model_sampling.py`). A dual-clock sampler shim is a no-op — use core **MiniMaxH3SigmaShift** or our **MiniMaxH3_SigmaShiftLocked** for ratio-locked shifts.
