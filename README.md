@@ -298,6 +298,20 @@ These nodes are ported from community H3 packs; CREDITS.md has the sources and l
 - **Refining only the sound:** H3 Set AV Noise Mask with `video_lock` on, then a sampler at denoise 0.4-0.6. The
   picture stays as it is, and the sound is re-sampled around the original.
 
+## Tagged references: write @tags in the prompt (ported 2026-10-23)
+
+- **H3 Tagged Picture / Video / Audio** register references under @tags. Chain them in the order you want them
+  numbered. A video can carry its soundtrack, with its own tag (blank: `@<tag>_audio`).
+- **H3 Tagged Reference to Video** is core's MiniMax H3 Reference to Video driven by those tags.
+  - Only the references the prompt mentions are sent to H3.
+  - Each @tag is replaced by the label core gives it: pictures first, then each video (its soundtrack's
+    `<Audio N>` just before its `<Video N>`), then standalone audio.
+  - Example: `<Subject 1> has the face of @hero_face and moves like @performance.` becomes
+    `<Subject 1> has the face of <Picture 1> and moves like <Video 1>.`
+  - `compliance`: strict stops on an unknown @tag or more than 9 pictures / 3 videos / 3 audios; soft turns those
+    into warnings; disabled leaves the @tags as written.
+  - The `compiled_prompt` and `report` outputs show what was sent.
+
 ## High resolution: tiled diffusion and the 3D latent upscaler (ported 2026-10-22)
 
 Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until measured on a GPU.

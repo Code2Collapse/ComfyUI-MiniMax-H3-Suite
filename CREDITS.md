@@ -199,3 +199,20 @@ The decisions for every pack in both reference folders are in the work area's
 - **Also ported (L8.51), into H3 Split Upscale / H3 Spatial Split Params:** the even-size sampling of odd edge tiles
   (here the pad repeats the edge instead of zeros, and tile starts are kept even too), the per-step dynamic fade, the
   per-frame brightness match, equal tiles (on the 2-cell grid), the overlap blend shape and masked-area noise.
+
+### ComfyUI-MiniMaxH3-Context-Loop: ethanfel (NikoDemon80) (L8.48)
+
+- **Source:** https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop (rev 43afeff).
+- **Licence:** GPL-3.0, Copyright (C) 2026 NikoDemon80.
+- **Ported (backend only):** `mmx_utils/tagged_refs.py` + `mmx_nodes/tagged_refs.py`, as H3 Tagged Picture / Video /
+  Audio and H3 Tagged Reference to Video: the tag grammar, strict / soft / disabled compliance, the native numbering
+  and H3's 9 / 3 / 3 capacity.
+- **Changed:**
+  - The prompt alone activates a reference; there are no scenes or Plan (the suite's H3 Continuation runs segments).
+  - Numbering follows the order of the chain. Upstream sorts each kind by tag name, although its tooltips promise
+    chain order.
+  - Tagged Reference to Video calls core's MiniMax H3 Reference to Video; the labels are tested against core's own
+    presentation order.
+- **Not ported:** the Scene Prompt Editor @ tray, Project Asset Carousel and Plan Studio front end (their UI is never
+  ported), Qwen-only `#anchors`, the reference cache, the external RefMod backend, sequential / source-timeline modes
+  that need Context-Loop's scene state, and the fingerprint lineage.

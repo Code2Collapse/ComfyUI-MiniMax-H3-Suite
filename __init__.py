@@ -166,6 +166,10 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.seam_correction", "MiniMaxH3_SeamCorrection"),
     (".mmx_nodes.tiled_diffusion", "MiniMaxH3_TiledDiffusion"),
     (".mmx_nodes.latent_upscale_model", "MiniMaxH3_LatentUpscaleModel"),
+    (".mmx_nodes.tagged_refs", "MiniMaxH3_TaggedPicture"),
+    (".mmx_nodes.tagged_refs", "MiniMaxH3_TaggedVideo"),
+    (".mmx_nodes.tagged_refs", "MiniMaxH3_TaggedAudio"),
+    (".mmx_nodes.tagged_refs", "MiniMaxH3_TaggedReferenceToVideo"),
 )
 
 
