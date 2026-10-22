@@ -78,3 +78,28 @@ def sample(patcher, latent: dict, cond=None, steps: int = 2, seed: int = 1, samp
     samples = latent["samples"]
     return guider.sample(noise_like(samples, seed), samples, comfy.samplers.sampler_object(sampler), sigmas,
                          denoise_mask=latent.get("noise_mask"), seed=seed, disable_pbar=True)
+
+
+def write_checkpoint(patcher, path) -> str:
+    """Save the tiny model as a diffusion-model safetensors file (the layout UNETLoader reads)."""
+    from safetensors.torch import save_file
+    sd = {k: v.detach().contiguous().clone() for k, v in patcher.model.diffusion_model.state_dict().items()}
+    save_file(sd, str(path))
+    return str(path)
+
+
+def load_checkpoint(path):
+    """Load a checkpoint the way UNETLoader does (comfy.sd.load_diffusion_model: model detection from the tensors)."""
+    import comfy.sd
+    _cpu_attention()
+    patcher = comfy.sd.load_diffusion_model(str(path), model_options={"dtype": torch.float32})
+    patcher.load_device = torch.device("cpu")       # tests never use the GPU (core would pick it when one exists)
+    return patcher
+
+
+def checkpoint_shapes(path) -> dict:
+    """{tensor name: shape} read with safetensors.safe_open - the header only, no weight is loaded (usable on a real
+    30 GB H3 checkpoint to check what it contains)."""
+    from safetensors import safe_open
+    with safe_open(str(path), framework="pt", device="cpu") as f:
+        return {k: tuple(f.get_slice(k).get_shape()) for k in f.keys()}

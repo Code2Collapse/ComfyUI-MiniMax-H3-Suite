@@ -123,3 +123,27 @@ def test_split_upscale_runs_on_an_odd_latent():
                                             spatial_split_param=sp, color_match=False)
     res = (out.result if hasattr(out, "result") else out.args)[0]["samples"].unbind()[0]
     assert res.shape == lat["samples"].unbind()[0].shape and torch.isfinite(res).all()
+
+
+def test_a_synthetic_checkpoint_loads_through_cores_loader(tmp_path):
+    """Synthetic checkpoint (L8.07): saved as safetensors, loaded like UNETLoader, detected as H3 from the tensors,
+    and it samples exactly like the model it was saved from."""
+    p = H.tiny_model_patcher(seed=5)
+    path = H.write_checkpoint(p, tmp_path / "tiny_h3.safetensors")
+    loaded = H.load_checkpoint(path)
+    cfg = loaded.model.model_config.unet_config
+    for k in ("hidden_size", "num_layers", "num_attention_heads", "attention_head_dim", "ffn_hidden_size", "text_dim",
+              "rope_inv_freq_len", "time_embed_dim"):
+        assert cfg[k] == H.TINY[k], k
+    assert cfg["image_model"] == "minimax_h3"
+    lat = H.empty_latent()
+    assert torch.equal(H.sample(p, lat).unbind()[0], H.sample(loaded, lat).unbind()[0])
+
+
+def test_checkpoint_shapes_stream_the_header_only(tmp_path):
+    p = H.tiny_model_patcher()
+    path = H.write_checkpoint(p, tmp_path / "tiny_h3.safetensors")
+    shapes = H.checkpoint_shapes(path)
+    sd = p.model.diffusion_model.state_dict()
+    assert shapes == {k: tuple(v.shape) for k, v in sd.items()}
+    assert shapes["video_patch_proj.weight"] == (H.TINY["hidden_size"], 24 * 4)
