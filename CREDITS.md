@@ -166,8 +166,12 @@ The decisions for every pack in both reference folders are in the work area's
   - PySceneDetect is optional and imported lazily.
   - The report is in English.
   - The `cut_detection` switch is exposed (upstream reads it but never offers it).
-- **Not yet ported:** the TST attention patch (planned as experimental, L8.50), the face-fix chain, and the
-  auto-context sampler.
+- **Also ported (L8.50):** `mmx_utils/tst_attention.py` + `mmx_nodes/tst_attention.py`, as H3 TST Attention
+  (experimental), from `h3_tst_patch.py`. Method: Spectral Transport Homeostasis, "Temporal State Transport in Video
+  Generation: Diagnosing and Correcting Spectral Imbalance", arXiv 2609.08505 (ICML 2026). Added: a kill switch
+  (`MMX_TST=off`) and one summary line per sampling run; the query layout and video-row position are tested against
+  core 0.39's own H3 attention module.
+- **Not yet ported:** the face-fix chain and the auto-context sampler.
 
 ### Comfyui-MMH3-UltimateUpscale: bbaudio-2025 (L8.37)
 

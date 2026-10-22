@@ -333,6 +333,14 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
   - It costs more time than one full-frame call (the report gives the factor) and bounds memory to one tile.
   - Not with a block cache (First Block Cache, T8) or the Mask-Aware ControlNet: the node says so and stops.
   - Kill switch: `MMX_TILED_DIFFUSION=off`.
+- **H3 TST Attention (experimental)** is a training-free correction against temporal flicker and small faces that
+  break up (Spectral Transport Homeostasis, [arXiv 2609.08505](https://arxiv.org/abs/2609.08505)).
+  - For every video attention call it measures, per head, whether the frames over-mix or fragment, and scales the
+    video queries to pull them back; strongest in deep layers and early steps.
+  - `tau` 0 passes the model through (the A/B baseline); 0.1-0.3 is the usual range.
+  - Put it after other attention patches. One summary line per sampling run in the console shows how many calls it
+    corrected and by how much. Kill switch: `MMX_TST=off`.
+  - Upstream calls its effect limited; it is unmeasured on H3 here.
 
 - **H3 Split Upscale** (samples each tile to completion, then stitches):
   - Odd latent sizes (720p has 45 latent rows, 2160p 135) are now sampled on the DiT's 2x2 patch grid: the last
