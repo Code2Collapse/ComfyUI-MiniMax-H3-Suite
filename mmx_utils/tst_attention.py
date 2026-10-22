@@ -3,7 +3,8 @@
 # Homeostasis, "Temporal State Transport in Video Generation: Diagnosing and Correcting Spectral Imbalance",
 # arXiv 2609.08505 (ICML 2026). Kept: the tension (row entropy minus von Neumann entropy of the frame-level transport),
 # gamma = exp(tau * layer weight * step weight * tension) on the video-row queries, the length guard, the chaining with
-# an earlier attention override. Added: a kill switch (MMX_TST=off) and a per-sampling summary (how many attention calls
+# an earlier attention override. Added: a kill switch (MMX_TST=off), the layer count read from the model (upstream
+# guessed 50 until the first forward ended), and a per-sampling summary (how many attention calls
 # were corrected and by how much), so an A/B has numbers. Checked against core 0.39 (comfy/ldm/minimax/model.py): the
 # attention gets q as [1, heads, S, head_dim] (skip_reshape=True) and the target video rows are the LAST rows of the
 # packed sequence (PackedLayout: audio then video, always the last two segments).
@@ -145,6 +146,10 @@ def patch_model(model, tau: float, log=print):
     import comfy.patcher_extension as pe
 
     state = new_state(tau)
+    try:        # the real block count from the start: the 50-layer guess mis-weighted the first (strongest) step
+        state["layers"] = max(1, len(model.model.diffusion_model.blocks))
+    except Exception:  # noqa: BLE001 - not an H3 model object: keep the guess, corrected after one forward
+        pass
     patched = model.clone()
     patched.add_wrapper_with_key(pe.WrappersMP.DIFFUSION_MODEL, WRAPPER_KEY, partial(forward_wrapper, state))
     patched.add_wrapper_with_key(pe.WrappersMP.OUTER_SAMPLE, WRAPPER_KEY, partial(sample_wrapper, state, log))
