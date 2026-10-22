@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_NODE_COUNT = 122   # + ContextTaperNoise frames / latent, Set / Clear AV Noise Mask, Hard Keyframes, Blend Latents By Frames, Keyframe Mask, Mask Levels (L8.46 ports); + ContinuationNext / Commit (A16 L8.43); + GeometryReport, SourceAVLatent (A16 L8.38); + HybridHDR, HybridExtract, ColorQC; + PromptWriter (L8.24); + IdentityFusion (L8.26)
+EXPECTED_NODE_COUNT = 125   # + AV Bridge, AV Bridge Assemble, Seam Correction (L8.47); + ContextTaperNoise frames / latent, Set / Clear AV Noise Mask, Hard Keyframes, Blend Latents By Frames, Keyframe Mask, Mask Levels (L8.46 ports); + ContinuationNext / Commit (A16 L8.43); + GeometryReport, SourceAVLatent (A16 L8.38); + HybridHDR, HybridExtract, ColorQC; + PromptWriter (L8.24); + IdentityFusion (L8.26)
 
 #: long-form tiling planner (pure arithmetic, no weights)
 LONG_NODES = {

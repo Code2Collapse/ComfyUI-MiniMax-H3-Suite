@@ -161,6 +161,9 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.latent_blend_frames", "MiniMaxH3_BlendLatentsByFrames"),
     (".mmx_nodes.latent_blend_frames", "MiniMaxH3_KeyframeMask"),
     (".mmx_nodes.latent_blend_frames", "MiniMaxH3_MaskLevels"),
+    (".mmx_nodes.av_bridge", "MiniMaxH3_AVBridge"),
+    (".mmx_nodes.av_bridge", "MiniMaxH3_AVBridgeAssemble"),
+    (".mmx_nodes.seam_correction", "MiniMaxH3_SeamCorrection"),
 )
 
 

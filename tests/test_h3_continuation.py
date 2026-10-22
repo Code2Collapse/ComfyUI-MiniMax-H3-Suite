@@ -264,3 +264,63 @@ def test_overlap_agreement_and_summary_units():
     assert line == ("session so far: 2 accepted segment(s), worst seam 2.50x, colour drift up to 0.40 dE, "
                     "overlap re-decode down to 41.0 dB")
     assert hs.continuity_summary([{"status": "accepted", "metrics": {}}]) is None
+
+
+def _moving_decode(info, audio_origin_ticks, freeze_from=None):
+    """Index-coded frames (corner pixel) over a moving block; from `freeze_from` (local) on, the frame repeats."""
+    img, aud = _decode(info, audio_origin_ticks)
+    start = info["start"]
+    out = torch.zeros(L, H * 16, W * 16, 3)
+    for i in range(L):
+        src = i if freeze_from is None or i < freeze_from else freeze_from - 1
+        g = start + src
+        x = (g * 3) % (W * 16 - 16)
+        out[i, 20:44, x:x + 16, :] = 1.0
+        out[i, 0, 0, 0] = (g % 256) / 255.0
+        out[i, 0, 0, 1] = (g // 256 % 256) / 255.0
+    return out, aud
+
+
+def _commit_with(base, freeze_from, mode):
+    out = hc.MiniMaxH3_ContinuationNext.execute("film", _cond(), _template(), "39", "keep waiting", False)
+    lat, _, seg_json, _ = out.args[:4]
+    info = json.loads(seg_json)
+    sess = json.load(open(os.path.join(info["root"], "session.json")))
+    seg = next(g for g in sess["segments"] if g["id"] == info["id"])
+    img, aud = _moving_decode(info, seg["audio_origin_ticks"], freeze_from)
+    res = hc.MiniMaxH3_ContinuationCommit.execute(seg_json, _sample(lat, info["id"]), img, aud, "accept",
+                                                  freeze_tail=mode)
+    return info, res
+
+
+def _frames_corner(root):
+    import cv2
+    names = sorted(os.listdir(os.path.join(root, "frames")))
+    out = []
+    for n in names:
+        a = cv2.imread(os.path.join(root, "frames", n), cv2.IMREAD_UNCHANGED)[..., ::-1].astype(np.float64) / 65535.0
+        out.append(int(round(a[0, 0, 0] * 255)) + 256 * int(round(a[0, 0, 1] * 255)))
+    return out
+
+
+def test_a_frozen_ending_is_cut_and_the_next_segment_regenerates_it(base):
+    info0, res0 = _commit_with(base, freeze_from=80, mode="cut before it")         # 80..123 repeat frame 79
+    assert "frozen ending from frame 79 (45 frames" in res0.args[2] and "cut 124 -> 73 frames" in res0.args[2]
+    sess = json.load(open(os.path.join(info0["root"], "session.json")))
+    assert sess["accepted_frames"] == 73 and sess["segments"][0]["end"] == 73
+    info1, res1 = _commit_with(base, freeze_from=None, mode="cut before it")       # moving all the way
+    assert info1["start"] == 73 - 39 and "no frozen ending" in res1.args[2]
+    idx = _frames_corner(info0["root"])
+    assert idx == list(range(len(idx))) and len(idx) == 73 + (124 - 39)           # nothing lost, doubled or frozen
+    import soundfile as sf
+    wavs = sorted(os.listdir(os.path.join(info0["root"], "audio")))
+    total = sum(sf.read(os.path.join(info0["root"], "audio", f))[0].shape[0] for f in wavs)
+    assert total == hs.samples_at(len(idx), SR)                                    # the sound still matches exactly
+
+
+def test_freeze_report_only_measures_and_short_cuts_are_refused(base):
+    info, res = _commit_with(base, freeze_from=80, mode="report")
+    assert "frozen ending from frame 79" in res.args[2] and "cut" not in res.args[2].split("frozen ending")[1][:40]
+    assert json.load(open(os.path.join(info["root"], "session.json")))["accepted_frames"] == 124
+    info2, res2 = _commit_with(base, freeze_from=50, mode="cut before it")         # a cut would add < 17 new frames
+    assert "not cut" in res2.args[2]

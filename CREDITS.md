@@ -129,6 +129,10 @@ The decisions for every pack in both reference folders are in the work area's
   - Video and audio lock switches were added.
   - The pre-#15375 shim was dropped; the nodes need native nested AV masks.
 - **Not ported:** the soft Custom Keyframes node, because core's Add Guide does the same.
+- **Also ported (L8.47):** `mmx_utils/h3_bridge.py` and `mmx_nodes/av_bridge.py`, as H3 AV Bridge and H3 AV Bridge
+  Assemble. Their sources are `h3_masked_bridge.py`, `h3_audio_grid.py`, `MiniMaxH3AssembleBridgeAudio` and the audio
+  helpers. Here the frames and the sound are assembled in one node, and the clips are resized to the decoded canvas
+  when they differ.
 
 ### H3-LongTakeNoCuts: xyzDist
 
@@ -140,3 +144,27 @@ The decisions for every pack in both reference folders are in the work area's
   - Masks are reduced on H3's grid.
 - **Not ported:** H3 Video Lock. Set AV Noise Mask's `video_lock` does the same thing with core's nested mask
   layout.
+
+### Herrgotts-H3-Infinite-Continuation-Suite: HerrgottMargott
+
+- **Source:** https://github.com/HerrgottMargott/Herrgotts-H3-Infinite-Continuation-Suite (rev 4b1edd6).
+- **Licence:** GPL-3.0.
+- **Ported:** `mmx_utils/freeze_tail.py`. This is the stable-tail consensus freeze detector (`analyze_freeze_tail`)
+  with its calibrated defaults.
+- **Used by:** H3 Continuation Commit's `freeze_tail` option. It reports a frozen FL2VA ending, or cuts the segment
+  back to the longest legal 5 + 17k length before the freeze.
+- **Not ported:** the upstream continuation nodes and their phase snapping. The suite's H3 Continuation already does
+  that part.
+
+### ComfyUI_MinimaxH3_AutoContext: supElement
+
+- **Source:** https://github.com/supElement/ComfyUI_MinimaxH3_AutoContext (rev bfa7ac3).
+- **Licence:** Apache-2.0. The text is in `THIRD_PARTY_LICENSES/ComfyUI_MinimaxH3_AutoContext-LICENSE.txt`.
+- **Ported:** `mmx_utils/seam_correction.py` (the engine, kept as it is) and `mmx_nodes/seam_correction.py`, as H3 Seam
+  Correction.
+- **Changed:**
+  - PySceneDetect is optional and imported lazily.
+  - The report is in English.
+  - The `cut_detection` switch is exposed (upstream reads it but never offers it).
+- **Not yet ported:** the TST attention patch (planned as experimental, L8.50), the face-fix chain, and the
+  auto-context sampler.

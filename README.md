@@ -278,6 +278,26 @@ These nodes are ported from community H3 packs; CREDITS.md has the sources and l
   Validated upstream, not yet on these workflows. It is not for H3 Continuation, whose pinned head must come back
   unchanged.
 
+## Bridges, frozen endings and seams (ported 2026-10-22)
+
+- **H3 AV Bridge / H3 AV Bridge Assemble** generate the MIDDLE between two existing clips.
+  - The end of clip A and the start of clip B are encoded into the target and protected, picture and sound.
+  - Only the middle is generated, so it starts exactly where A ends and lands exactly where B begins.
+  - Kept frames are a shared video / audio boundary: 39, 90, 141 ... (39 + 51k).
+  - Assemble joins A + middle + B with the sound cut on exact sample boundaries.
+- **H3 Continuation Commit `freeze_tail`**: H3 often ends a clip by freezing on its last image (FL2VA), and a frozen
+  tail carried into the next segment carries the freeze on.
+  - `report` measures it.
+  - `cut before it` shortens the segment to the longest 17k+5 length that ends before the freeze, so the next
+    segment continues from moving frames. Frames and sound stay exact (tested).
+- **H3 Seam Correction** works on the decoded film.
+  - It finds the seams between segments and removes their exposure / colour steps (affine or MKL).
+  - Options: motion jolts (optical-flow warp + blend at the seam) and single flash frames.
+  - Real shot cuts are left alone when PySceneDetect is installed (`pip install scenedetect`). Without it, every
+    exposure step counts as a seam, and the report says so.
+- **Refining only the sound:** H3 Set AV Noise Mask with `video_lock` on, then a sampler at denoise 0.4-0.6. The
+  picture stays as it is, and the sound is re-sampled around the original.
+
 ## Dual-clock shim (P4 — not shipped)
 
 On ComfyUI core `180060c` and later, `ModelSamplingAV` is native (`comfy/model_sampling.py`). A dual-clock sampler shim is a no-op — use core **MiniMaxH3SigmaShift** or our **MiniMaxH3_SigmaShiftLocked** for ratio-locked shifts.

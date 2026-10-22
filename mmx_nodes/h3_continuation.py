@@ -29,6 +29,7 @@ from mmx_utils import h3_video_slice as vs  # noqa: E402
 
 DECISIONS = ("keep waiting", "accept the pending segment", "reject the pending segment")
 APPROVALS = ("accept unless drift", "accept", "always ask")
+FREEZE_MODES = ("keep", "report", "cut before it")
 SOUNDS = ("generate", "keep the source video's sound", "keep the soundtrack", "regenerate where masked")
 HEAD_TOLERANCE = 1e-3
 
@@ -395,6 +396,10 @@ class MiniMaxH3_ContinuationCommit(io.ComfyNode):
                                tooltip="Smallest sharpness (Laplacian variance) as a fraction of segment 0."),
                 io.Float.Input("max_seam_jump", default=3.0, min=1.0, max=50.0, step=0.5,
                                tooltip="Largest change across the seam, in multiples of the clip's usual frame change."),
+                io.Combo.Input("freeze_tail", options=list(FREEZE_MODES), default=FREEZE_MODES[0], optional=True,
+                               tooltip="H3 often ends by freezing on its last image. keep: as is. report: measure it. "
+                                       "cut before it: shorten this segment to the longest 17k+5 length that ends "
+                                       "before the freeze, so the next segment continues from moving frames."),
             ],
             outputs=[
                 io.Image.Output(display_name="new_frames", tooltip="The frames this segment added."),
@@ -407,13 +412,13 @@ class MiniMaxH3_ContinuationCommit(io.ComfyNode):
 
     @classmethod
     def fingerprint_inputs(cls, approval=APPROVALS[0], max_colour_drift=6.0, min_sharpness=0.6, max_seam_jump=3.0,
-                           **_):
+                           freeze_tail=FREEZE_MODES[0], **_):
         # 'segment' is linked (not visible here): key on the newest session file, which Next rewrites every segment
-        return f"{_sessions_mtime()}|{approval}|{max_colour_drift}|{min_sharpness}|{max_seam_jump}"
+        return f"{_sessions_mtime()}|{approval}|{max_colour_drift}|{min_sharpness}|{max_seam_jump}|{freeze_tail}"
 
     @classmethod
     def execute(cls, segment, samples, images, audio=None, approval=APPROVALS[0], max_colour_drift=6.0,
-                min_sharpness=0.6, max_seam_jump=3.0) -> io.NodeOutput:
+                min_sharpness=0.6, max_seam_jump=3.0, freeze_tail=FREEZE_MODES[0]) -> io.NodeOutput:
         try:
             info = json.loads(segment)
         except (TypeError, json.JSONDecodeError) as exc:
@@ -425,7 +430,7 @@ class MiniMaxH3_ContinuationCommit(io.ComfyNode):
                              "queue the graph again to start a new segment.")
         try:
             report, new_frames, new_audio = _commit(s, seg, samples, images, audio, approval,
-                                                    max_colour_drift, min_sharpness, max_seam_jump)
+                                                    max_colour_drift, min_sharpness, max_seam_jump, freeze_tail)
         except Exception as exc:
             seg["status"] = "failed"
             seg["note"] = f"commit failed: {exc}"
@@ -437,7 +442,44 @@ class MiniMaxH3_ContinuationCommit(io.ComfyNode):
         return io.NodeOutput(new_frames, new_audio, report, json.dumps(state), ui={"text": [report]})
 
 
-def _commit(s: hs.Session, seg: dict, samples, images, audio, approval, colour_max, sharp_min, seam_max):
+def _freeze_step(seg: dict, video, a_lat, images, mode: str, notes: list):
+    """FL2VA often ends by locking onto its last image (a freeze, sometimes a brightness landing); continuing from
+    those frames carries the freeze on. 'report' measures it; 'cut before it' shortens the segment to the longest legal
+    length (5 + 17k) that ends before the freeze, so the next segment regenerates that time (detector ported from
+    Herrgotts-H3-Infinite-Continuation-Suite, GPL-3.0)."""
+    import math
+
+    from mmx_utils.freeze_tail import analyze_freeze_tail, legal_cut
+
+    fz = analyze_freeze_tail(images)
+    seg["freeze"] = fz
+    if not fz["freeze_detected"]:
+        notes.append(f"no frozen ending ({fz['reason']})")
+        return video, a_lat, images
+    local = int(fz["freeze_start_frame"])
+    msg = (f"frozen ending from frame {seg['start'] + local} ({fz['trailing_frames']} frames, confidence "
+           f"{fz['confidence']:.2f})")
+    if mode != "cut before it":
+        notes.append(msg)
+        return video, a_lat, images
+    cut = legal_cut(local, seg["overlap"])
+    L = seg["end"] - seg["start"]
+    if cut is None or cut >= L:
+        notes.append(msg + "; not cut: a shorter legal segment would add fewer than 17 new frames")
+        return video, a_lat, images
+    rows = hs.rows_for_frames(cut)
+    need = math.ceil((seg["start"] + cut) / hs.FPS * hs.AUDIO_TICKS_PER_SECOND - int(seg.get("audio_origin_ticks", 0))
+                     - 1e-9)
+    ticks = max(1, min(int(a_lat.shape[-1]), need))
+    seg["end"] = seg["start"] + cut
+    seg["freeze_cut"] = {"from_frames": L, "to_frames": cut, "rows": rows, "ticks": ticks}
+    notes.append(msg + f"; segment cut {L} -> {cut} frames (ends at {seg['end'] - 1}), the next one regenerates the "
+                       "rest")
+    return video[:, :, :rows], a_lat[..., :ticks], images[:cut]
+
+
+def _commit(s: hs.Session, seg: dict, samples, images, audio, approval, colour_max, sharp_min, seam_max,
+            freeze_tail: str = "keep"):
     video, a_lat = _streams(samples, "samples")
     L = seg["end"] - seg["start"]
     if images.shape[0] != L:
@@ -459,6 +501,9 @@ def _commit(s: hs.Session, seg: dict, samples, images, audio, approval, colour_m
                              "sampler did not honour the noise mask. Feed H3 Continuation Next's latent straight to "
                              "the sampler (no latent node in between that drops 'noise_mask').")
         notes.append(f"pinned head unchanged (largest latent change {max(dv, da):.2g})")
+    # 1b. a frozen ending
+    if freeze_tail != "keep":
+        video, a_lat, images = _freeze_step(seg, video, a_lat, images, freeze_tail, notes)
     # 2. store the new tail (exact tokens, checksum)
     T = int(video.shape[2])
     rows = min(T, hs.TAIL_ROWS)
