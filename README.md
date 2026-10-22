@@ -79,6 +79,18 @@ Caching fixed for 36 nodes: their `fingerprint_inputs` read linked tensors (or u
 None), so ComfyUI stored NaN and the node - and everything after it, the sampler included - ran again on every queue.
 Measured live with classic caching: H3 Motion Context Trim re-ran every time before, is cached after.
 
+### One node: H3 Region Edit (plate + mask + ControlNet)
+
+**H3 Region Edit** does a masked edit steered by a ControlNet in one node. Connect the plate, the mask (1 =
+regenerate) and, optionally, the H3 Fun ControlNet and its control video. It outputs the patched `model` and the
+`latent`; feed them to the sampler.
+- Inside the mask the ControlNet steers what is regenerated. Outside it the latent keeps the plate and the ControlNet
+  adds nothing, so the two never fight. (Core's ControlNet adds to every video row, also the ones the latent holds.)
+- `hint`: the control video, inpainting from the plate, or both; *auto* picks the control video when one is
+  connected.
+- `controlnet_where = everywhere` gives core's behaviour, for comparison.
+- It is H3 Source AV Latent + H3 Mask-Aware ControlNet in one node; both remain for finer control.
+
 ## Long video: H3 Continuation (A16)
 
 **H3 Continuation Next** (before the sampler) and **H3 Continuation Commit** (after the decoders) make a film of any
