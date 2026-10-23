@@ -204,7 +204,7 @@ def _pad_to_patch(x: torch.Tensor) -> torch.Tensor:
     return torch.nn.functional.pad(x, (0, pw, 0, ph, 0, 0), mode="circular")
 
 
-def control_patches(c: dict) -> list:
+def control_patches(c: dict, who: str = "H3 Tiled Diffusion", parts: str = "tiles") -> list:
     """Core H3 Fun ControlNet patches among the DIFFUSION_MODEL wrappers of this call. Refuses the Mask-Aware
     ControlNet, whose row gate is built for the whole frame."""
     opts = c.get("transformer_options") or {}
@@ -216,9 +216,9 @@ def control_patches(c: dict) -> list:
                 continue
             if type(owner).__name__ != "MiniMaxH3FunControlPatch":
                 raise TilingUnsupported(
-                    f"H3 Tiled Diffusion cannot split '{type(owner).__name__}' into tiles: it gates the rows of the "
-                    "whole frame. Use core's 'Apply MiniMax H3 Fun ControlNet' with Tiled Diffusion, or H3 Split "
-                    "Upscale with the Mask-Aware ControlNet.")
+                    f"{who} cannot split '{type(owner).__name__}' into {parts}: it gates the rows of the whole "
+                    f"frame. Use core's 'Apply MiniMax H3 Fun ControlNet' with {who}"
+                    + (", or H3 Split Upscale with the Mask-Aware ControlNet." if parts == "tiles" else "."))
             found.append(owner)
     return found
 

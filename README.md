@@ -141,6 +141,30 @@ The older **H3 Motion Context** nodes stay for saved workflows (manual Save / Lo
 starts before the clip by default and ends 8.3 ms after the video context). **H3 Motion Context Chain** never chained
 anything and is now deprecated: hidden from the search, it says to use H3 Continuation.
 
+### Whole clip in one pass: H3 Context Window Sampling (experimental)
+
+**H3 Context Window Sampling** patches the model so every denoising step splits the clip into overlapping time
+windows, runs the model once per window and cross-fades the predictions. Unlike H3 Continuation (one segment per
+queue), the whole clip stays in one sampling pass; attention runs per window, so its cost grows with the window, not
+with the clip. Design: `docs/h3_context_window_executor_design.md`.
+
+- Windows start on 17-frame cycles and are legal H3 lengths (`window_frames` snapped to 17k + 5, `overlap_frames` to
+  17m + 5); the last window is cut at the clip's end. A clip no longer than one window runs untouched.
+- The sound is cut at the same moments, both channels. With the defaults (141 / 39: stride 102 frames) every edge
+  falls on H3's 25 ms tick grid exactly; other settings are within half a tick and the report says so.
+- `positions`: `global` (default) - each window keeps the clip's own time positions, so it predicts what the whole
+  clip would there (no offset, D0.26). `local (experimental)` lays every window out as a clip of its own and
+  re-indexes the keyframes inside it, for A/B tests.
+- Video and sound denoise masks and core's H3 Fun ControlNet hint (encoded once) are cut per window; a ControlNet in
+  the conditioning and block / step caches are refused with a sentence. Combines with H3 Tiled Diffusion (windows
+  in time, tiles in space). Kill switch: `MMX_CONTEXT_WINDOWS=off`.
+
+Checked on core's real H3 model and sampler with tiny random weights: one window is bit-identical to the plain model;
+three windows run through core's sampler with masked rows kept exactly; global and local positions reach the model
+(different outputs); with Tiled Diffusion every window runs every tile. A frame-local stand-in model comes back
+exactly (nothing lost, doubled, reordered or shifted). Picture and sound quality over long clips need the GPU and H3
+weights: not measured.
+
 ## Character replacement: room for the new head
 
 H3 has no face or expression input: identity comes from `<Picture N>` references, structure and expression only
@@ -403,12 +427,16 @@ Recommended sampling chain after N4:
 
 ## Tests
 
+The test suite stays on the developer's machine and is not in this repository (owner rule 2026-10-23). Where it
+exists locally:
+
 ```bash
 cd ComfyUI-MiniMaxSuite
 python run_tests.py
 ```
 
-One test file per `mmx_nodes/` and `mmx_utils/` module. CPU-only; no weights required.
+One test file per `mmx_nodes/` and `mmx_utils/` module. CPU-only; no weights required. CI boots ComfyUI with this
+pack and fails on an import failure, no registered node or a traceback from the pack (`.github/c2c_boot_check.py`).
 
 ## Licence
 

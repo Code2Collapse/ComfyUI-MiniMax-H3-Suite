@@ -173,6 +173,7 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.tst_attention", "MiniMaxH3_TSTAttention"),
     (".mmx_nodes.region_edit", "MiniMaxH3_RegionEdit"),
     (".mmx_nodes.sigma_presets", "MiniMaxH3_SigmaPresets"),
+    (".mmx_nodes.context_executor", "MiniMaxH3_ContextWindowSampling"),
 )
 
 
