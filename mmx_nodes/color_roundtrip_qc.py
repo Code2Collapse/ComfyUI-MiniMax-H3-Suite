@@ -15,7 +15,7 @@ if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
 from mmx_utils.color_roundtrip_qc import run_display_roundtrip_qc
-from mmx_utils.ocio_config import config_source_note, list_colorspaces, list_displays, list_views
+from mmx_utils.ocio_config import all_views, check_view, config_source_note, list_colorspaces, list_displays
 
 try:
     import comfy.model_management as mm
@@ -26,7 +26,7 @@ except Exception:  # not just ImportError: the comfy_kitchen skew raises Attribu
 def _schema_lists() -> tuple[list[str], list[str], list[str]]:
     colorspaces = list_colorspaces()
     displays = list_displays()
-    views = list_views(displays[0] if displays else "sRGB - Display")
+    views = all_views(displays)
     return colorspaces, displays, views
 
 
@@ -56,13 +56,23 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
                 io.Combo.Input("display", options=displays, default=default_display),
                 io.Combo.Input("view", options=views, default=default_view),
                 io.Float.Input("tolerance", default=1e-4, min=0.0, max=1.0, step=1e-6),
+                # C2C L9.39: appended. A gate whose bool feeds nothing never ran (not an output node) and could
+                # not stop anything; it is an output node now, and this decides what a failure does.
+                io.Combo.Input("on_fail", options=["report only", "stop the run"], default="report only",
+                               optional=True,
+                               tooltip="report only: the verdict shows on the node and in the outputs. stop the "
+                                       "run: a failure stops the queue - put this gate BEFORE your Save (wire the "
+                                       "passthrough output) and nothing failing is saved."),
             ],
             outputs=[
                 io.Boolean.Output("passed"),
                 io.Float.Output("max_error"),
                 io.String.Output("report"),
                 io.Image.Output("error_map"),
+                io.Image.Output("image_out", tooltip="The checked image, unchanged: wire it on so a failed gate "
+                                                      "(on_fail = stop the run) stops before what comes next."),
             ],
+            is_output_node=True,
         )
 
     @classmethod
@@ -73,7 +83,12 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
         display="sRGB - Display",
         view="ACES 2.0 - SDR 100 nits (Rec.709)",
         tolerance=1e-4,
+        on_fail="report only",
     ) -> io.NodeOutput:
+        try:
+            check_view(display, view)
+        except ValueError as exc:
+            raise ValueError(f"{cls.__name__.replace('MiniMaxH3_', 'H3 ')}: {exc}") from exc
         if image.ndim == 3:
             image = image.unsqueeze(0)
 
@@ -88,6 +103,8 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
         report = f"{header}\n{result.report}"
         if not result.passed:
             report = "FAILED — " + report
+            if on_fail == "stop the run":
+                raise ValueError(f"H3 Color Round-Trip QC stopped the run: {report}")
 
         h, w = int(image.shape[1]), int(image.shape[2])
         err = torch.from_numpy(result.error_map).to(image.device, image.dtype)
@@ -105,4 +122,6 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
             float(result.max_error),
             report,
             err,
+            image,
+            ui={"text": [report]},
         )

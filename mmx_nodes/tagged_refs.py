@@ -154,7 +154,21 @@ class MiniMaxH3_TaggedReferenceToVideo(io.ComfyNode):
                                      **TR.ref2va_inputs(b))
         res = getattr(out, "result", None) or getattr(out, "args", None) or out
         positive, latent = res[0], res[1]
+        report += _missing_vae_notes(b, vae, audio_vae)
         return io.NodeOutput(positive, latent, compiled, report, ui={"text": [report]})
+
+
+def _missing_vae_notes(b: dict, vae, audio_vae) -> str:
+    """C2C L9.39: without a VAE core's Reference to Video encodes no reference latents - the pictures / videos then
+    reach the text encoder only, and nothing said so."""
+    notes = []
+    if vae is None and (b.get("pictures") or b.get("videos")):
+        notes.append("NOTE: no vae connected - the reference pictures / videos reach the text encoder only, not the "
+                     "model's reference latents. Connect the H3 video VAE for them to steer the picture.")
+    has_audio = b.get("audios") or any(e.get("audio") is not None for e in (b.get("videos") or []))
+    if audio_vae is None and has_audio:
+        notes.append("NOTE: no audio_vae connected - the reference audio is not encoded. Connect the H3 audio VAE.")
+    return ("\n" + "\n".join(notes)) if notes else ""
 
 
 __all__ = ["MiniMaxH3_TaggedPicture", "MiniMaxH3_TaggedVideo", "MiniMaxH3_TaggedAudio",

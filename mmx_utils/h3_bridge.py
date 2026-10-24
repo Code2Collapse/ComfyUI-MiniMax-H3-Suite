@@ -158,6 +158,30 @@ def middle_slice(target: int, preserve: int) -> tuple[int, int]:
     return preserve, target - preserve
 
 
+def cfr_index_map(frame_count: int, source_fps: float, target_fps: float = FPS) -> torch.Tensor:
+    """Which source frame shows at each 24 fps instant: deterministic constant-frame-rate resampling.
+    PORTED FROM: seitanism/ComfyUI-H3-Motion-Context-MultiRef@361624f h3_masked_bridge.py _cfr_index_map (GPL-3.0);
+    upstream locks both rates to 24, here any constant rate converts (C2C L9.39)."""
+    source_fps = float(source_fps)
+    if source_fps <= 0.0:
+        raise BridgeError("the source frame rate must be above 0")
+    n = int(frame_count)
+    if n < 1:
+        raise BridgeError("the source clip has no frames")
+    out_n = max(1, int(round(n * float(target_fps) / source_fps)))
+    if out_n == n and abs(source_fps - target_fps) < 1e-6:
+        return torch.arange(n, dtype=torch.long)
+    t = (torch.arange(out_n, dtype=torch.float64) + 0.5) / float(target_fps)
+    return torch.round(t * source_fps - 0.5).to(torch.long).clamp_(0, n - 1)
+
+
+def to_h3_rate(frames: torch.Tensor, source_fps: float) -> torch.Tensor:
+    """A clip at `source_fps` as H3's 24 fps (frames repeated / dropped on the CFR grid; unchanged at 24)."""
+    if abs(float(source_fps) - FPS) < 1e-6:
+        return frames
+    return frames.index_select(0, cfr_index_map(int(frames.shape[0]), source_fps).to(frames.device))
+
+
 def assemble(images: torch.Tensor, audio: dict, start_frames: torch.Tensor, start_audio: dict | None,
              end_frames: torch.Tensor, end_audio: dict | None, target: int, preserve: int, crop: str = "center"):
     """Clip A (all of it) + the generated middle + clip B (all of it), frames and sound, on absolute boundaries."""

@@ -14,7 +14,7 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
-from mmx_utils.sigma_schedule import validate_h3_sigmas, validate_turbo_step_contract
+from mmx_utils.sigma_schedule import infer_schedule, validate_h3_sigmas, validate_turbo_step_contract
 from mmx_utils.turbo_lora import read_turbo_step_contract
 
 
@@ -63,7 +63,26 @@ class MiniMaxH3_LegalScheduler(io.ComfyNode):
     @classmethod
     def execute(cls, sigmas, model=None, scheduler="simple", denoise=1.0) -> io.NodeOutput:
         t = sigmas if isinstance(sigmas, torch.Tensor) else torch.tensor(sigmas, dtype=torch.float32)
+        # C2C L9.39: measure what made these sigmas when the model is wired, instead of trusting the widgets
+        measured = None
+        if model is not None:
+            try:
+                measured = infer_schedule(model.get_model_object("model_sampling"), t)
+            except Exception:  # noqa: BLE001 - a model without model_sampling: keep the widgets
+                measured = None
+        if measured is not None:
+            m_sched, m_denoise = measured
+            note = (f"measured: these sigmas are the '{m_sched}' schedule at denoise {m_denoise:.3f} "
+                    f"({len(t) - 1} steps)")
+            if m_sched != scheduler or abs(m_denoise - float(denoise)) > 1e-3:
+                note += f" - the widgets said '{scheduler}' / {float(denoise):.3f}; the measured values are checked"
+            scheduler, denoise = m_sched, m_denoise
+        elif model is not None:
+            note = "measured: these sigmas match no core scheduler on this model (a custom curve) - widgets used"
+        else:
+            note = "scheduler / denoise taken from the widgets (connect the model to measure them from the sigmas)"
         ok, report = validate_h3_sigmas(t, scheduler=scheduler, denoise=denoise)
+        report = note + "\n" + report
         extra: list[str] = []
         contract = read_turbo_step_contract(model)
         if contract is not None:

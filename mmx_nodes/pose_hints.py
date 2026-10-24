@@ -117,11 +117,18 @@ class MiniMaxH3_StrongestPose(io.ComfyNode):
                     )
                     hints_chunks.append(warped)
                 hints = torch.cat(hints_chunks, dim=0)
-                cov = 1.0
+                # C2C L9.39: coverage was a flat 1.0 here. Measured instead: the share of frames whose warped
+                # hint still has something drawn in the crop (a hint drawn outside the box is gone after the warp).
+                drawn = hints.flatten(1).amax(dim=1) > (2.0 / 255.0)
+                cov = float(drawn.float().mean()) if b else 0.0
+                # Passthrough hints carry no keypoints: confidence 0 everywhere = "none detected" for consumers.
                 kjson = keypoints_to_json(
                     np.zeros((b, 133, 3), dtype=np.float32)
                 )
-                return hints, kjson, cov, "passthrough plate hints warped to crop space"
+                return hints, kjson, cov, (
+                    f"passthrough plate hints warped to crop space ({int(drawn.sum())}/{b} frames carry a hint "
+                    "inside the crop); no keypoints in this mode - use the ViTPose mode when a node downstream "
+                    "needs them")
 
             try:
                 kps_plate, det_note = detect_keypoints_plate(

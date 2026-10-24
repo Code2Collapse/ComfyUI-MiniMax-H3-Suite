@@ -137,6 +137,8 @@ class MiniMaxH3_PrepareContinuation(io.ComfyNode):
         except ValueError as exc:
             raise ValueError(f"H3 Prepare Continuation: {exc}") from exc
 
+        out = dict(out)
+        out[OVERLAP_KEY] = int(actual_overlap)
         src_video, _src_audio = unpack_av_samples(source_av)
         src_frames = frame_count_from_video_t(src_video.shape[2])
         report = "\n".join([
@@ -154,6 +156,12 @@ class MiniMaxH3_PrepareContinuation(io.ComfyNode):
                              actual_overlap / FPS, report)
 
 
+#: C2C L9.39: Prepare Continuation writes the overlap it ACTUALLY used (after grid snapping) into the latent dict.
+#: ComfyUI's samplers copy the dict and replace only "samples", so the tag reaches Stitch Continuation, which then
+#: refuses a different overlap_frames instead of joining at the wrong place.
+OVERLAP_KEY = "mmx_continuation_overlap"
+
+
 class MiniMaxH3_StitchContinuation(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -165,10 +173,12 @@ class MiniMaxH3_StitchContinuation(io.ComfyNode):
                 "Join a sampled continuation onto the previous segment along their "
                 "shared overlap, without shifting time.\n\n"
                 "The overlap must be the value Prepare Continuation actually used "
-                "after grid snapping, not the one you typed. This node verifies the "
-                "result: if the stitched video length or the audio/video sync does "
-                "not come out exactly as predicted it raises, rather than handing on "
-                "a latent that is quietly the wrong length."
+                "after grid snapping, not the one you typed. A continuation made by "
+                "Prepare Continuation carries that value, and a different "
+                "overlap_frames stops the run. The result is verified too: if the "
+                "stitched length or the audio/video sync does not come out exactly "
+                "as predicted it raises, rather than handing on a latent that is "
+                "quietly the wrong length."
             ),
             inputs=[
                 io.Latent.Input("previous_av",
@@ -178,8 +188,10 @@ class MiniMaxH3_StitchContinuation(io.ComfyNode):
                 io.Int.Input(
                     "overlap_frames", default=22, min=5, max=3600, step=17,
                     tooltip="Use actual_overlap_frames from Prepare Continuation. A "
-                            "mismatch here does not error - it silently joins at the "
-                            "wrong place, which reads as a stutter or a jump cut."),
+                            "continuation latent made by Prepare Continuation is checked "
+                            "against it and a mismatch stops the run; one made elsewhere "
+                            "cannot be checked, and a wrong value there joins at the "
+                            "wrong place (a stutter or a jump cut)."),
                 io.Boolean.Input(
                     "blend_video_overlap", default=False, optional=True,
                     tooltip="Smoothstep the video across the seam. Off by default "
@@ -208,6 +220,13 @@ class MiniMaxH3_StitchContinuation(io.ComfyNode):
         next_video, _ = unpack_av_samples(sampled_continuation_av)
         prev_frames = frame_count_from_video_t(prev_video.shape[2])
         next_frames = frame_count_from_video_t(next_video.shape[2])
+        tagged = sampled_continuation_av.get(OVERLAP_KEY) if isinstance(sampled_continuation_av, dict) else None
+        if tagged is not None and int(tagged) != int(overlap_frames):
+            raise ValueError(
+                f"H3 Stitch Continuation: this continuation was prepared with an overlap of {int(tagged)} frames, "
+                f"but overlap_frames is {int(overlap_frames)}. Wire Prepare Continuation's actual_overlap_frames "
+                f"into overlap_frames (or type {int(tagged)}); joining on {int(overlap_frames)} would put the seam "
+                f"in the wrong place.")
 
         try:
             stitched_av, total_frames = stitch_continuation(
@@ -239,6 +258,8 @@ class MiniMaxH3_StitchContinuation(io.ComfyNode):
             f"{int(stitched_video.shape[2])} - in sync",
             f"  video seam blend {'on' if blend_video_overlap else 'off'}"
             f"{', result offloaded to CPU' if offload_to_cpu else ''}",
+            ("  overlap matches the one Prepare Continuation used" if tagged is not None else
+             "  overlap not checked: this continuation latent was not made by Prepare Continuation"),
         ])
         return io.NodeOutput(stitched_av, int(total_frames), report)
 

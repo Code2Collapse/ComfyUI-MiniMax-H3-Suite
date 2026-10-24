@@ -26,8 +26,12 @@ class MiniMaxH3_DualClockShim(io.ComfyNode):
                 "(single coupled video/audio σ schedule). When native AV is present, "
                 "passes MODEL through unchanged. When absent, documents the legacy "
                 "dual-clock path in MiniMaxH3_TurboSampler without fabricating a "
-                "stepping implementation here."
+                "stepping implementation here.\n\n"
+                "DEPRECATED (C2C L9.39): every supported core build has native ModelSamplingAV (core bdcb886), so "
+                "this only reports and passes the model through. It still loads in saved workflows; remove it, or "
+                "use H3 Sigma Presets to see the audio clock."
             ),
+            is_deprecated=True,
             inputs=[io.Model.Input("model")],
             outputs=[
                 io.Model.Output("model"),

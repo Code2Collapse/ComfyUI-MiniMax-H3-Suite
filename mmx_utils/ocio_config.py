@@ -191,6 +191,26 @@ def list_views(display: str) -> list[str]:
         return list(FALLBACK_VIEWS)
 
 
+def all_views(displays: list[str]) -> list[str]:
+    """Every view of every display, in config order, once (C2C L9.39: the nodes listed only the FIRST display's
+    views, so another display had no valid view to pick)."""
+    out: list[str] = []
+    for d in displays or []:
+        for v in list_views(d):
+            if v not in out:
+                out.append(v)
+    return out or list(FALLBACK_VIEWS)
+
+
+def check_view(display: str, view: str) -> None:
+    """Refuse a view the display does not have, naming the ones it does (no-op without a config)."""
+    if get_ocio_config() is None:
+        return
+    views = list_views(display)
+    if view not in views:
+        raise ValueError(f"the display '{display}' has no view '{view}'. Its views: {', '.join(views)}.")
+
+
 def validate_colorspace(name: str, *, config=None) -> str:
     """Return *name* if present in config; raise OCIOColorSpaceError otherwise."""
     _require_ocio()

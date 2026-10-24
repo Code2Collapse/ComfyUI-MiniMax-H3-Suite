@@ -23,6 +23,8 @@ TURBO_STEP_CONTRACT = (4, 8, 16)  # (target_steps, warn_above, refuse_above)
 
 _EGRID = None
 _EGRID_SEARCH = (
+    # shipped in this pack since C2C L9.39 (it was found only on the dev box): silu(time_embedder(t)) on a 1025-step
+    # grid, from Larryvrh/ComfyUI-MiniMax-H3-Turbo v1.2.3 (Apache-2.0, THIRD_PARTY_LICENSES/)
     Path(__file__).resolve().parent / "h3_silu_temb_grid.safetensors",
     Path(__file__).resolve().parents[2]
     / "third_party"

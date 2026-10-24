@@ -121,6 +121,28 @@ def upscale(latent, method="model", model_name=U.NO_MODEL, width=1280, height=70
     return out, "\n".join(lines)
 
 
+SIZE_BY = ("width / height", "scale", "megapixels")
+PX_PER_CELL = 16          # H3's VAE: one latent cell per 16 x 16 pixels
+
+
+def target_size(latent, size_by, width, height, scale=2.0, megapixels=1.0):
+    """(width, height, note) in pixels for the chosen sizing; upscale() snaps them to the 32 px grid."""
+    if size_by == SIZE_BY[0]:
+        return int(width), int(height), ""
+    video, _audio = _streams(latent, "H3 Latent Upscale")
+    cur_w, cur_h = int(video.shape[-1]) * PX_PER_CELL, int(video.shape[-2]) * PX_PER_CELL
+    if size_by == "scale":
+        k = float(scale)
+        how = f"size: {cur_w}x{cur_h} x {k:g}"
+    elif size_by == "megapixels":
+        k = (float(megapixels) * 1e6 / float(cur_w * cur_h)) ** 0.5
+        how = f"size: {cur_w}x{cur_h} at {float(megapixels):g} MP (x {k:.3f})"
+    else:
+        raise ValueError(f"H3 Latent Upscale: size_by must be one of {', '.join(SIZE_BY)}; got {size_by!r}")
+    w, h = max(32, round(cur_w * k)), max(32, round(cur_h * k))
+    return w, h, f"{how} -> {w}x{h} before the 32 px grid"
+
+
 class MiniMaxH3_LatentUpscaleModel(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -159,15 +181,29 @@ class MiniMaxH3_LatentUpscaleModel(io.ComfyNode):
                 io.Boolean.Input("offload_model", default=True, advanced=True,
                                  tooltip="Move the upscaler back to the CPU afterwards, so the H3 model and the "
                                          "upscaler are never both on the GPU."),
+                # C2C L9.39, appended (saved widgets keep their positions): size by factor or pixel budget as the
+                # reference upscalers do, not only by width / height
+                io.Combo.Input("size_by", options=list(SIZE_BY), default=SIZE_BY[0], optional=True,
+                               tooltip="width / height: the two size widgets. scale: the latent's own size times "
+                                       "'scale'. megapixels: the latent's aspect at about this many megapixels. All "
+                                       "snap to H3's 32 px grid."),
+                io.Float.Input("scale", default=2.0, min=0.25, max=8.0, step=0.05, optional=True,
+                               tooltip="size_by = scale: multiply the current size by this."),
+                io.Float.Input("megapixels", default=1.0, min=0.05, max=33.0, step=0.05, optional=True,
+                               tooltip="size_by = megapixels: the target pixel count in millions, aspect kept."),
             ],
             outputs=[io.Latent.Output(display_name="latent"), io.String.Output(display_name="report")],
         )
 
     @classmethod
     def execute(cls, latent, method="model", model_name=U.NO_MODEL, width=1280, height=704, device="auto",
-                precision="fp16", chunk_latent_steps=0, chunk_overlap_steps=4, offload_model=True) -> io.NodeOutput:
+                precision="fp16", chunk_latent_steps=0, chunk_overlap_steps=4, offload_model=True,
+                size_by=None, scale=2.0, megapixels=1.0) -> io.NodeOutput:
+        width, height, how = target_size(latent, size_by or SIZE_BY[0], width, height, scale, megapixels)
         out, report = upscale(latent, method, model_name, width, height, device, precision, chunk_latent_steps,
                               chunk_overlap_steps, offload_model)
+        if how:
+            report = f"{how}\n{report}"
         return io.NodeOutput(out, report, ui={"text": [report]})
 
 

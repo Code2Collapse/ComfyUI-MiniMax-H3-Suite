@@ -76,11 +76,21 @@ class MiniMaxH3_AudioQualityGate(io.ComfyNode):
                     step=0.01,
                     tooltip="Low-mel energy ratio below this fails (bass collapse).",
                 ),
+                # C2C L9.39: appended. A gate whose bool feeds nothing never ran (not an output node) and could
+                # not stop anything; it is an output node now, and this decides what a failure does.
+                io.Combo.Input("on_fail", options=["report only", "stop the run"], default="report only",
+                               optional=True,
+                               tooltip="report only: the verdict shows on the node and in the outputs. stop the "
+                                       "run: a failure stops the queue - put this gate BEFORE your Save (wire the "
+                                       "passthrough output) and nothing failing is saved."),
             ],
             outputs=[
                 io.Boolean.Output("passed"),
                 io.String.Output("report"),
+                io.Audio.Output("generated_out", tooltip="The checked audio, unchanged: wire it on to your Save so "
+                                                          "a failed gate (on_fail = stop the run) stops before it."),
             ],
+            is_output_node=True,
         )
 
     @classmethod
@@ -92,6 +102,7 @@ class MiniMaxH3_AudioQualityGate(io.ComfyNode):
         centroid_drift_hz_max=800.0,
         rms_ratio_min=0.55,
         low_mel_ratio_min=0.45,
+        on_fail="report only",
     ) -> io.NodeOutput:
         ref_wf = reference["waveform"]
         gen_wf = generated["waveform"]
@@ -125,4 +136,6 @@ class MiniMaxH3_AudioQualityGate(io.ComfyNode):
         report = result.report
         if not result.passed:
             report = "FAILED — " + report
-        return io.NodeOutput(bool(result.passed), report)
+            if on_fail == "stop the run":
+                raise ValueError(f"H3 Audio Quality Gate stopped the run: {report}")
+        return io.NodeOutput(bool(result.passed), report, generated, ui={"text": [report]})

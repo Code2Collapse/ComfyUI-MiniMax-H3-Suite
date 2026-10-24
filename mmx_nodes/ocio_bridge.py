@@ -16,7 +16,7 @@ if str(_PKG) not in sys.path:
 
 from mmx_utils.device import output_device, run_with_cpu_fallback
 from mmx_utils.ocio_bridge import OCIO_FORCES_PER_FRAME_PLANES, transform_image_batch
-from mmx_utils.ocio_config import config_source_note, list_colorspaces, list_displays, list_views
+from mmx_utils.ocio_config import all_views, check_view, config_source_note, list_colorspaces, list_displays
 
 try:
     import comfy.model_management as mm
@@ -27,7 +27,7 @@ except Exception:  # not just ImportError: the comfy_kitchen skew raises Attribu
 def _schema_lists() -> tuple[list[str], list[str], list[str]]:
     colorspaces = list_colorspaces()
     displays = list_displays()
-    views = list_views(displays[0] if displays else "sRGB - Display")
+    views = all_views(displays)
     return colorspaces, displays, views
 
 
@@ -85,6 +85,10 @@ class MiniMaxH3_OCIOBridge(io.ComfyNode):
         display="sRGB - Display",
         view="ACES 2.0 - SDR 100 nits (Rec.709)",
     ) -> io.NodeOutput:
+        try:
+            check_view(display, view)
+        except ValueError as exc:
+            raise ValueError(f"{cls.__name__.replace('MiniMaxH3_', 'H3 ')}: {exc}") from exc
         if image.ndim == 3:
             image = image.unsqueeze(0)
 

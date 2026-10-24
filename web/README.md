@@ -40,6 +40,8 @@ Widgets read **UI payload keys** from `onExecuted` (not socket outputs):
 | `w2_token_grid.js` | `MiniMaxH3_MaskPrep` | `mmx_pixel_mask`, `mmx_token_preview` |
 | `w3_sigma_plot.js` | `MiniMaxH3_SigmaInspector` | `mmx_sigma` (+ live shift recompute) |
 | `w4_drift_curve.js` | `MiniMaxH3_DriftQC` | `mmx_drift` (`{drift_px, passed}`) |
+| `w11_preview_override.js` | `MiniMaxH3_PreviewOverride` | event `minimax_h3_preview` (animated WebP while sampling) |
+| `w12_tone_drift.js` | `MiniMaxH3_ToneCompensate` | `mmx_tone_drift` (`{drift_per_frame, drift_per_channel, ...}`) |
 
 V3 only forwards `NodeOutput.ui` to the browser (`execution.py:377-381`). Socket outputs
 (`boxes_json`, `sigma_json`, etc.) remain for graph wiring; widgets do not read them.

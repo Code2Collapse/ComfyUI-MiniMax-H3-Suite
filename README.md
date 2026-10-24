@@ -39,6 +39,41 @@ Every node shows its stage, its run status and H3 errors in plain English. That 
 
 N1 is a **planner**, not a detector — wire `subject_mask` and/or `bboxes_json`.
 
+## Fixes 2026-10-24: nodes that did less than they said
+
+- **QC gates now gate.** H3 Audio Quality Gate, H3 Color Round-Trip QC and H3 Edit Validator run even with nothing
+  after them, show their verdict on the node, and pass the checked audio, image or prompt through. Put one before
+  your Save and set `on_fail = stop the run`: a failed check stops the queue before anything is saved. Their pass/fail
+  output fed nothing before, and they did not run unless something was wired after them.
+- **Stitch Continuation checks the overlap.** Prepare Continuation stores the overlap it actually used (after grid
+  snapping) in the latent; a different `overlap_frames` on Stitch now stops the run instead of joining at the wrong
+  place.
+- **AV Bridge takes the clips' frame rates** (`start_fps`, `end_fps`) and converts each clip to 24 fps on the
+  constant-frame-rate grid (upstream's conversion); Assemble converts the same way.
+- **Legal Scheduler measures the schedule.** With the model connected, it works out which scheduler and denoise
+  produced the sigmas and checks those. The widgets were taken at their word before.
+- **Latent Upscale (Model) sizes by `scale` or `megapixels`** too (`size_by`), keeping the latent's aspect, and only
+  the widgets of the chosen mode are shown.
+- **Tone Compensate shows its drift curve** (R, G, B over the overlap frames). The measurement was sent to a panel
+  that did not exist.
+- **Turbo LoRA works on every install:** the time-embedding grid it needs now ships with the pack (Apache-2.0,
+  ComfyUI-MiniMax-H3-Turbo by Larryvrh; see CREDITS). **Hybrid Extract finds ComfyUI-GGUF** in ComfyUI's custom-nodes
+  folders under any folder name.
+- **Tagged Reference to Video** says when no VAE / audio VAE is connected (the references then reach the text encoder
+  only). **Strongest Pose** passthrough reports the real share of frames with a hint, not a flat 1.0.
+- **Dual-Clock Shim is deprecated:** every supported core has native ModelSamplingAV. It still loads in saved
+  workflows.
+- **OCIO nodes list the views of every display** (OCIO Bridge, HDR Round-Trip, Color Round-Trip QC). They showed the
+  first display's only, and a view the chosen display lacks is now refused with the ones it has.
+- **Region Mask maps crop-space depth through the crop** instead of stretching it over the plate, so the horizon
+  lands where it is when the crop is not the full frame.
+- **Control Hints / Pose Puppeteer** name their consumer (core's Apply MiniMax H3 Fun ControlNet, or H3 Mask-Aware
+  ControlNet). They said no consumer existed.
+- **Promptor settings moved out of the pack:** `user/default/minimax_suite/promptor_config.json`. The old in-pack
+  `config.json` is tracked by git; an edited copy is moved over once. API keys can come from environment variables:
+  set a provider's `api_key_env` to the variable name, write `api_key` as `env:NAME`, or leave it empty for
+  `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`.
+
 ## Masked replacement without a spatial offset (A16)
 
 When the sampler starts from the SOURCE video latent (masked editing) and references are attached, every stream that

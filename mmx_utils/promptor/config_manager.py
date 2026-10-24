@@ -48,10 +48,13 @@ DEFAULT_CONFIG = {
 class ConfigManager:
     """Manages configuration for the H3 Promptor extension."""
 
-    def __init__(self, root_dir: str | Path | None = None):
+    def __init__(self, root_dir: str | Path | None = None, user_dir: str | Path | None = None):
         self.root_dir = Path(root_dir) if root_dir else PROMPTOR_ROOT
-        self.config_path = self.root_dir / "config.json"
         self.example_path = self.root_dir / "config.example.json"
+        self.legacy_path = self.root_dir / "config.json"
+        # C2C L9.39: the settings (and any API key) lived in config.json INSIDE the pack, a file git tracks - one
+        # commit or pull away from publishing a key or losing it. They live in ComfyUI's user folder now.
+        self.config_path = _user_config_path(user_dir) or self.legacy_path
         self._config: dict | None = None
 
     def load(self) -> dict:
@@ -175,6 +178,13 @@ class ConfigManager:
     def _create_default_config(self):
         from .utils import log_info
 
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.config_path != self.legacy_path and self.legacy_path.exists() and _differs(self.legacy_path,
+                                                                                         self.example_path):
+            shutil.copy2(self.legacy_path, self.config_path)       # someone edited the old in-pack file: keep it
+            log_info(f"Moved the Promptor settings to {self.config_path} (outside the pack). Remove the API keys "
+                     f"from {self.legacy_path}; set them there or as environment variables instead.")
+            return
         if self.example_path.exists():
             shutil.copy2(self.example_path, self.config_path)
             log_info("Created config.json from config.example.json")
@@ -182,7 +192,8 @@ class ConfigManager:
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_CONFIG, f, indent=2, ensure_ascii=False)
             log_info("Created config.json with default settings")
-        log_info(f"Please edit {self.config_path} to set your API keys.")
+        log_info(f"Settings: {self.config_path}. For API keys prefer environment variables: set a provider's "
+                 f"api_key_env to the variable's name (or api_key to \"env:NAME\").")
 
     @staticmethod
     def _merge_defaults(user_config: dict, defaults: dict, is_root: bool = True) -> dict:
@@ -211,6 +222,44 @@ class ConfigManager:
 
             log_error(f"Failed to save config.json: {e}")
             return False
+
+
+def _user_config_path(user_dir=None) -> Path | None:
+    """<ComfyUI user dir>/default/minimax_suite/promptor_config.json, or None outside ComfyUI."""
+    try:
+        if user_dir is None:
+            import folder_paths  # type: ignore
+            user_dir = folder_paths.get_user_directory()
+        return Path(user_dir) / "default" / "minimax_suite" / "promptor_config.json"
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _differs(a: Path, b: Path) -> bool:
+    try:
+        return json.loads(a.read_text(encoding="utf-8")) != json.loads(b.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return True
+
+
+_ENV_FOR_TYPE = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY", "claude": "ANTHROPIC_API_KEY",
+                 "gemini": "GEMINI_API_KEY"}
+
+
+def resolve_api_key(provider_config: dict) -> str:
+    """The provider's key: its api_key_env variable, an "env:NAME" api_key, the literal api_key, else the usual
+    variable for its type (OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY)."""
+    import os
+    env_name = str(provider_config.get("api_key_env") or "").strip()
+    if env_name:
+        return os.environ.get(env_name, "")
+    key = str(provider_config.get("api_key") or "")
+    if key.startswith("env:"):
+        return os.environ.get(key[4:].strip(), "")
+    if key:
+        return key
+    std = _ENV_FOR_TYPE.get(str(provider_config.get("type", "openai")).lower())
+    return os.environ.get(std, "") if std else ""
 
 
 _config_manager: ConfigManager | None = None

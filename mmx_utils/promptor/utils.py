@@ -134,7 +134,8 @@ def _create_provider(provider_name: str, config_manager, api_key_override: str =
         raise ValueError(f"Provider '{provider_name}' not configured.")
 
     api_base = provider_config.get("api_base", "")
-    api_key = api_key_override or provider_config.get("api_key", "")
+    from .config_manager import resolve_api_key
+    api_key = api_key_override or resolve_api_key(provider_config)
     model = provider_config.get("model", "") or provider_config.get("default_model", "")
     provider_type = provider_config.get("type", "openai").lower()
     disable_thinking = provider_config.get("disable_thinking", True)

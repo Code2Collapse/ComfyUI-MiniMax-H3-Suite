@@ -37,8 +37,9 @@ class MiniMaxH3_ControlHints(io.ComfyNode):
                 "Track + Crop (same affine_crop_batch as N1 — never re-detect).\n\n"
                 "canny: native torch Canny on the plate, warped into crop space.\n"
                 "passthrough: warp externally computed plate_hints (depth/pose/HED/MLSD).\n\n"
-                "These hints currently have NO CONSUMER in ComfyUI — ControlNet-Union has no "
-                "apply path yet. They exist so crop-space geometry is correct the day it does."
+                # C2C L9.39: this said the hints had no consumer; core has applied them since 0.36
+                "Feed the hints to core's Apply MiniMax H3 Fun ControlNet (control_video) or to H3 Mask-Aware "
+                "ControlNet (control_video), which also respects the latent mask."
             ),
             inputs=[
                 io.Image.Input("plate"),
@@ -118,6 +119,6 @@ class MiniMaxH3_ControlHints(io.ComfyNode):
         report = (
             f"hint_type={hint_type} crop_space={cw}x{ch} frames={b}\n"
             f"transform planner={transform.planner_mode} (shared affine spine)\n"
-            f"No downstream Union apply node exists yet — hints are geometry-only."
+            f"wire hints -> control_video of Apply MiniMax H3 Fun ControlNet or H3 Mask-Aware ControlNet"
         )
         return io.NodeOutput(hints, report)

@@ -16,15 +16,36 @@ _GGUF_GET_ORIG_SHAPE = None
 _GGUF_IMPORT_ERROR: str | None = None
 
 
+def _gguf_candidates(pack_root: Path) -> list[Path]:
+    """Where city96/ComfyUI-GGUF may be: every custom_nodes folder ComfyUI uses (any folder name containing "gguf"
+    that has dequant.py + loader.py), then the pack's sibling folders. C2C L9.39: only two dev-box paths were
+    searched, so a normal install never found it."""
+    roots: list[Path] = []
+    try:
+        import folder_paths  # type: ignore
+        roots += [Path(p) for p in folder_paths.get_folder_paths("custom_nodes")]
+    except Exception:  # noqa: BLE001 - outside ComfyUI
+        pass
+    roots += [pack_root.parent, pack_root.parent.parent / "ComfyUI_windows_portable" / "ComfyUI" / "custom_nodes",
+              pack_root.parent / "third_party"]
+    out: list[Path] = []
+    for root in roots:
+        try:
+            dirs = [d for d in root.iterdir() if d.is_dir() and "gguf" in d.name.lower()]
+        except OSError:
+            continue
+        for d in sorted(dirs):
+            if (d / "dequant.py").is_file() and (d / "loader.py").is_file() and d not in out:
+                out.append(d)
+    return out
+
+
 def _load_gguf_helpers():
     global _GGUF_DEQUANT, _GGUF_GET_ORIG_SHAPE, _GGUF_IMPORT_ERROR
     if _GGUF_DEQUANT is not None or _GGUF_IMPORT_ERROR is not None:
         return _GGUF_DEQUANT, _GGUF_GET_ORIG_SHAPE
     pack_root = Path(__file__).resolve().parents[1]
-    for candidate in (
-        pack_root.parent.parent / "ComfyUI_windows_portable" / "ComfyUI" / "custom_nodes" / "ComfyUI-GGUF",
-        pack_root.parent / "third_party" / "ComfyUI-GGUF",
-    ):
+    for candidate in _gguf_candidates(pack_root):
         p = str(candidate)
         if p not in sys.path and candidate.is_dir():
             sys.path.insert(0, p)

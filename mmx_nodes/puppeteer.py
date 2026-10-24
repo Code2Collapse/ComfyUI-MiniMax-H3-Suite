@@ -74,7 +74,8 @@ class MiniMaxH3_PosePuppeteer(io.ComfyNode):
             )
             report = (
                 f"rig={rig_type} frames={int(hints.shape[0])} "
-                f"size={hints.shape[2]}x{hints.shape[1]} — conditioning hints only (Union blocked D1)"
+                f"size={hints.shape[2]}x{hints.shape[1]} — pose hints: wire them to control_video of Apply MiniMax H3 "
+                f"Fun ControlNet or H3 Mask-Aware ControlNet"
             )
             return hints, text, report
 

@@ -6,6 +6,15 @@
 - **Licence:** MIT
 - **Ported into this pack:** `mmx_utils/split_upscale.py`, `mmx_nodes/split_upscale.py` — direct port of the split/tiled upsampler. The learned 3D latent upscaler came later through the MMH3 port (H3 Latent Upscale (Model), see below); its weights are not shipped.
 
+## ComfyUI-MiniMax-H3-Turbo (turbo time-embedding grid)
+
+- **Source:** [ComfyUI-MiniMax-H3-Turbo](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo) by Larryvrh, v1.2.3
+- **Licence:** Apache-2.0 (declared in its pyproject.toml and README; it ships no licence file, so
+  `THIRD_PARTY_LICENSES/ComfyUI-MiniMax-H3-Turbo-LICENSE.txt` carries the standard text).
+- **Shipped in this pack (2026-10-24):** `mmx_utils/h3_silu_temb_grid.safetensors`, unchanged: `silu(time_embedder(t))`
+  on a 1025-point grid, read by `mmx_utils/turbo_lora.py`. Before, the file was found only on the development
+  machine, so the turbo path failed on every other install.
+
 ## ComfyUI-MiniMax-H3-Image-Studio (still-image generation)
 
 - **Source:** [ComfyUI-MiniMax-H3-Image-Studio](https://github.com/) (upstream vendored at `third_party/ComfyUI-MiniMax-H3-Image-Studio`)

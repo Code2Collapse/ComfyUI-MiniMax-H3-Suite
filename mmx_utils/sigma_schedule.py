@@ -114,6 +114,32 @@ def apply_ratio_lock(
     return sv, sa, note
 
 
+INFER_SCHEDULERS = ("simple", "sgm_uniform", "karras", "exponential", "beta")
+
+
+def infer_schedule(model_sampling, sigmas: torch.Tensor, calculate=None, max_factor: int = 10):
+    """Which (scheduler, denoise) produced `sigmas` on this model: core's own schedules recomputed and compared
+    (BasicScheduler denoise d keeps the last steps+1 of a round(steps/d)-step schedule). None when nothing matches
+    - a custom curve. C2C L9.39: LegalScheduler took both from widgets the user set, unchecked."""
+    if calculate is None:
+        import comfy.samplers
+        calculate = comfy.samplers.calculate_sigmas
+    steps = int(len(sigmas)) - 1
+    if steps < 1:
+        return None
+    ref = sigmas.detach().float().cpu()
+    for total in range(steps, steps * max_factor + 1):
+        for name in INFER_SCHEDULERS:
+            try:
+                full = calculate(model_sampling, name, total).float().cpu()
+            except Exception:  # noqa: BLE001 - a scheduler this core does not have
+                continue
+            tail = full[-(steps + 1):]
+            if tail.shape == ref.shape and torch.allclose(tail, ref, atol=1e-4, rtol=1e-4):
+                return name, steps / float(total)
+    return None
+
+
 def validate_h3_sigmas(
     sigmas: torch.Tensor,
     *,

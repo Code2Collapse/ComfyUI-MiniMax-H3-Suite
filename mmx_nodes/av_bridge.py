@@ -30,6 +30,7 @@ from mmx_utils.h3_bridge import (  # noqa: E402
     encode_audio_window,
     encode_video_window,
     pixel_frames,
+    to_h3_rate,
 )
 
 CATEGORY = "MiniMax H3/Long"
@@ -43,8 +44,13 @@ def _nested(parts):
 
 
 def prepare_bridge(latent, vae, audio_vae, start_frames, start_audio, end_frames, end_audio, preserve_frames=39,
-                   crop="center"):
+                   crop="center", start_fps=FPS, end_fps=FPS):
     import torch
+
+    # C2C L9.39: the clips' own frame rates (upstream's fps inputs, dropped in the first port) - each clip is
+    # resampled to H3's 24 fps on the constant-frame-rate grid; at 24 nothing changes.
+    start_frames = to_h3_rate(start_frames, start_fps)
+    end_frames = to_h3_rate(end_frames, end_fps)
 
     v, a = _streams(latent, "H3 AV Bridge")
     if int(v.shape[0]) != 1 or int(a.shape[0]) != 1:
@@ -88,8 +94,11 @@ def prepare_bridge(latent, vae, audio_vae, start_frames, start_audio, end_frames
     out["samples"] = _nested((out_v, out_a))
     out["noise_mask"] = _nested((vm, am))
     middle = target - 2 * n
-    info = {"target_frames": target, "preserve_frames": n, "middle_frames": middle, "crop": crop}
-    report = (f"bridge {target} frames at {width}x{height}: keep {n} frames of clip A's end + {n} of clip B's start "
+    info = {"target_frames": target, "preserve_frames": n, "middle_frames": middle, "crop": crop,
+            "start_fps": float(start_fps), "end_fps": float(end_fps)}
+    rates = "" if (abs(float(start_fps) - FPS) < 1e-6 and abs(float(end_fps) - FPS) < 1e-6) else (
+        f" (clips converted to 24 fps from {float(start_fps):g} / {float(end_fps):g} fps)")
+    report = (f"bridge {target} frames at {width}x{height}{rates}: keep {n} frames of clip A's end + {n} of clip B's start "
               f"({sk} video steps / {st} audio ticks each), generate the middle {middle} frames ({middle / FPS:.2f} s)")
     return out, json.dumps(info), middle, report
 
@@ -118,6 +127,13 @@ class MiniMaxH3_AVBridge(io.ComfyNode):
                                tooltip="How the clips are fitted to the target canvas."),
                 io.Audio.Input("start_audio", optional=True, tooltip="Clip A's sound (silence if not connected)."),
                 io.Audio.Input("end_audio", optional=True, tooltip="Clip B's sound (silence if not connected)."),
+                # C2C L9.39: appended (saved widgets keep their positions)
+                io.Float.Input("start_fps", default=24.0, min=1.0, max=240.0, step=0.001, optional=True,
+                               tooltip="Clip A's frame rate. Anything but 24 is converted to H3's 24 fps on the "
+                                       "constant-frame-rate grid (frames repeated or dropped, never blended); its "
+                                       "sound keeps its own timing. Assemble converts the same way."),
+                io.Float.Input("end_fps", default=24.0, min=1.0, max=240.0, step=0.001, optional=True,
+                               tooltip="Clip B's frame rate, converted the same way."),
             ],
             outputs=[
                 io.Latent.Output(display_name="latent"),
@@ -129,10 +145,10 @@ class MiniMaxH3_AVBridge(io.ComfyNode):
 
     @classmethod
     def execute(cls, latent, vae, audio_vae, start_frames, end_frames, preserve_frames=39, crop="center",
-                start_audio=None, end_audio=None) -> io.NodeOutput:
+                start_audio=None, end_audio=None, start_fps=24.0, end_fps=24.0) -> io.NodeOutput:
         try:
             out, info, middle, report = prepare_bridge(latent, vae, audio_vae, start_frames, start_audio, end_frames,
-                                                       end_audio, preserve_frames, crop)
+                                                       end_audio, preserve_frames, crop, start_fps, end_fps)
         except BridgeError as exc:
             raise ValueError(f"H3 AV Bridge: {exc}") from exc
         return io.NodeOutput(out, info, middle, report, ui={"text": [report]})
@@ -166,6 +182,9 @@ class MiniMaxH3_AVBridgeAssemble(io.ComfyNode):
                 end_audio=None) -> io.NodeOutput:
         try:
             info = json.loads(bridge_info)
+            # the same 24 fps conversion the bridge used (older bridge_info has none: 24)
+            start_frames = to_h3_rate(start_frames, float(info.get("start_fps", 24.0)))
+            end_frames = to_h3_rate(end_frames, float(info.get("end_fps", 24.0)))
             frames, sound, report = assemble(images, audio, start_frames, start_audio, end_frames, end_audio,
                                              int(info["target_frames"]), int(info["preserve_frames"]),
                                              info.get("crop", "center"))

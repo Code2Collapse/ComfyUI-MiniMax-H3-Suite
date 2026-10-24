@@ -59,6 +59,23 @@ def _validate_depth_space(
     )
 
 
+def depth_to_plate(depth: torch.Tensor, transform: H3Transform) -> torch.Tensor:
+    """Crop-space depth [B,ch,cw,C] -> plate space [B,H,W,C] through each frame's crop box (the inverse of the
+    crop). Outside the crop the depth's edge is extended. C2C L9.39: crop depth was stretched over the whole plate,
+    so the horizon landed in the wrong place whenever the crop was not the full frame."""
+    import torch.nn.functional as F
+
+    from mmx_utils.affine_transform import inverse_affine_theta
+    src_w, src_h = int(transform.src_size[0]), int(transform.src_size[1])
+    n = int(depth.shape[0])
+    boxes = [transform.boxes[min(i, len(transform.boxes) - 1)] for i in range(n)]
+    th = inverse_affine_theta(boxes, src_w, src_h, depth.device)
+    grid = F.affine_grid(th, (n, 3, src_h, src_w), align_corners=False)
+    out = F.grid_sample(depth.movedim(-1, 1).float(), grid, mode="bilinear", padding_mode="border",
+                        align_corners=False)
+    return out.movedim(1, -1).to(depth.dtype)
+
+
 class MiniMaxH3_RegionMask(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -107,8 +124,12 @@ class MiniMaxH3_RegionMask(io.ComfyNode):
             images = images.unsqueeze(0)
         b, h, w, _c = images.shape
 
+        depth_note_space = ""
         if depth is not None:
             _validate_depth_space(images, depth, transform)
+            if (int(depth.shape[-3]), int(depth.shape[-2])) != (h, w):
+                depth = depth_to_plate(depth, transform)
+                depth_note_space = " (crop-space depth mapped into the plate through the crop boxes)"
 
         dev = images.device
         if mm is not None:
@@ -160,7 +181,7 @@ class MiniMaxH3_RegionMask(io.ComfyNode):
             )
             note = (
                 f"mode={mode_l} horizon_bias={horizon_bias} feather_px={feather_px}px "
-                f"frames={b} size={w}x{h} {depth_note} — pixel MASK for N2 mask_to_token"
+                f"frames={b} size={w}x{h} {depth_note}{depth_note_space} — pixel MASK for N2 mask_to_token"
             )
             return mask_b, preview, note
 
