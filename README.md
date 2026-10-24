@@ -74,6 +74,12 @@ ComfyUI's own layout code; the effect on real outputs still needs a GPU run).
   `crop_bboxes` (a plate-sized control / source / mask gets the source's own crop instead of ComfyUI's cover-crop).
   A gate that cannot be built is now an error instead of a silent fall back to ungated control. What can run together
   in one pass, and what wins when constraints disagree: `docs/h3_mask_control_matrix.md`.
+  Its panel now ends with **Last run**: how many generated rows the gate fully controlled, held back or blended in
+  the run that just sampled. The gate is only known once sampling starts, and this count used to be computed and
+  never shown (2026-10-24).
+- **MiniMax H3 Preview Override** shows the animated preview on the node. With the default target (`node`) it sent
+  its frames to a panel that did not exist, and also hid ComfyUI's own preview, so nothing appeared at all. The
+  panel shows the step, frame count, playback rate and what each preview cost (2026-10-24).
 
 Caching fixed for 36 nodes: their `fingerprint_inputs` read linked tensors (or used their id()), which ComfyUI never passes (they arrive as
 None), so ComfyUI stored NaN and the node - and everything after it, the sampler included - ran again on every queue.

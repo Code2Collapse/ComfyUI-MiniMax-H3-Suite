@@ -21,6 +21,21 @@ from pathlib import Path
 import torch
 from comfy_api.latest import io
 
+GATE_EVENT = "minimax_h3_gate_report"
+
+
+def _send_gate_report(node_id: str, report: str, hint: str = "") -> None:
+    """C2C L9.39: the gate is only known once sampling starts (the denoise mask arrives with the sampler), after
+    this node has returned its text output - so the measured report goes to the node's panel as an event (it was
+    computed and never shown). Never raises: a report must not stop a render."""
+    if not node_id:
+        return
+    try:
+        import server
+        server.PromptServer.instance.send_sync(GATE_EVENT, {"node_id": node_id, "report": report, "hint": hint})
+    except Exception:  # noqa: BLE001
+        pass
+
 logger = logging.getLogger(__name__)
 
 _PKG = Path(__file__).resolve().parents[1]
@@ -78,8 +93,9 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
     def __init__(self, *args, preserved_strength: float = 0.0,
                  boundary_softness: float = 0.0, affect_text_rows: bool = False,
                  inpaint: bool = False, control_region=None, schedule: str = "constant",
-                 crop_boxes=None, **kwargs):
+                 crop_boxes=None, node_id: str = "", **kwargs):
         super().__init__(*args, **kwargs)
+        self.node_id = str(node_id or "")
         self.control_region = control_region
         self.schedule = schedule
         self.crop_boxes = crop_boxes
@@ -239,6 +255,7 @@ class MaskAwareControlPatch(MiniMaxH3FunControlPatch):  # type: ignore[misc,vali
         self._gate = gate.to(device)
         self._gate_key = key
         self.last_report = describe_gate(gate, layout.img_update)
+        _send_gate_report(self.node_id, self.last_report, getattr(self, "hint_report", ""))
         return self._gate
 
     def after_block(self, block_index, args, out):
@@ -390,6 +407,7 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                     tooltip="What was configured, and what to look for if the "
                             "control still fights the mask."),
             ],
+            hidden=[io.Hidden.unique_id],
         )
 
     @classmethod
@@ -441,6 +459,7 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
             control_region=control_region,
             schedule=schedule,
             crop_boxes=boxes_from_bboxes(crop_bboxes),
+            node_id=str(getattr(cls.hidden, "unique_id", "") or ""),
         )
         patch.register(patched)
 

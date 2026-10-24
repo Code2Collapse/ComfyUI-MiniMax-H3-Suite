@@ -26,8 +26,10 @@
  */
 import {
   app,
+  api,
   chainOnRemoved,
   disposeState,
+  findNodeByExecId,
   widgetByName,
 } from "./shared.js";
 import {
@@ -39,7 +41,7 @@ import {
 
 const NODE_ID = "MiniMaxH3_MaskAwareControlNet";
 const STATE = "_mmxMaskGate";
-const PANEL_MIN = 280;
+const PANEL_MIN = 320;   // +40 for the "Last run" line (C2C L9.39)
 const NODE_MIN_W = 380;
 
 /** The gate the node actually applies, for one row's mask value in 0..1. */
@@ -201,11 +203,14 @@ function build(node) {
   const { row: channelRow, chips: channelChips } = buildChannelChips();
   const regimeLine = statusLine();
   const modeLine = statusLine();
+  // C2C L9.39: what the gate actually did in the last run (sent while sampling; it was computed, never shown)
+  const measuredLine = statusLine();
 
   root.appendChild(chart.el);
   root.appendChild(channelRow);
   root.appendChild(regimeLine.el);
   root.appendChild(modeLine.el);
+  root.appendChild(measuredLine.el);
 
   const st = {
     dead: false,
@@ -214,6 +219,7 @@ function build(node) {
     channelChips,
     regimeLine,
     modeLine,
+    measuredLine,
     zoomOff: null,
   };
   node[STATE] = st;
@@ -247,8 +253,19 @@ function build(node) {
   return st;
 }
 
+const GATE_EVENT = "minimax_h3_gate_report";
+
 app.registerExtension({
   name: "MiniMaxSuite.MaskAwareControlGate",
+
+  async setup() {
+    api.addEventListener(GATE_EVENT, ({ detail }) => {
+      const node = findNodeByExecId(detail?.node_id);        // "12:5" inside a subgraph
+      const st = node?.[STATE];
+      if (!st || st.dead || !detail?.report) return;
+      try { st.measuredLine.setText(`Last run: ${detail.report}`, "ok"); } catch (_e) { /* ignore */ }
+    });
+  },
 
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (String(nodeData?.name || "") !== NODE_ID) return;
