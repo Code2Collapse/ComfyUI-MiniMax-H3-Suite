@@ -81,8 +81,8 @@ def rope_offset_for_frame(start_frame: int) -> float:
 
 def plan_context_windows(
     total_frames: int,
-    window_frames: int = 81,
-    overlap_frames: int = 17,
+    window_frames: int = 141,
+    overlap_frames: int = 39,
     snap: str = "up",
 ) -> dict[str, Any]:
     """Tile `total_frames` with overlapping, H3-legal windows.

@@ -49,7 +49,9 @@ class MiniMaxH3_ContextWindows(io.ComfyNode):
                 "pinning the previous pass's tail inside the new one instead.\n\n"
                 "This node does the tiling arithmetic and tells you what it had "
                 "to change and why. Nothing here touches weights, so it is "
-                "instant."
+                "instant. Its windows are exactly the ones H3 Context Window "
+                "Sampling uses for the same window / overlap: wire window_frames "
+                "and overlap_frames into that node to sample with this plan."
             ),
             inputs=[
                 io.Int.Input(
@@ -58,15 +60,16 @@ class MiniMaxH3_ContextWindows(io.ComfyNode):
                             "24 fps. 409 is about 17 seconds. This is the only "
                             "number you normally set."),
                 io.Int.Input(
-                    "window_frames", default=81, min=5, max=100_000,
+                    "window_frames", default=141, min=5, max=100_000,
                     tooltip="Frames per pass - how much H3 renders at once, which "
                             "is bounded by VRAM. Snapped up to the nearest legal "
                             "length (n %% 17 == 5) because a window off the grid "
-                            "does not tile onto the latent rows at all. 81 fits "
-                            "8 GB comfortably; 149 or 217 give longer coherent "
+                            "does not tile onto the latent rows at all. 141 "
+                            "(about 6 s) is H3 Context Window Sampling's default; "
+                            "81 fits 8 GB comfortably, 217 gives longer coherent "
                             "motion if you have the memory."),
                 io.Int.Input(
-                    "overlap_frames", default=17, min=0, max=100_000,
+                    "overlap_frames", default=39, min=0, max=100_000,
                     tooltip="Shared frames between neighbouring passes - the "
                             "material the stitch cross-fades over. More overlap "
                             "buys a softer seam and costs render time, since "
@@ -96,6 +99,10 @@ class MiniMaxH3_ContextWindows(io.ComfyNode):
                 io.String.Output(display_name="report",
                                  tooltip="Plain-English summary, including anything "
                                          "that had to be adjusted and why."),
+                # L9.39: appended last so saved links keep their slots
+                io.Int.Output(display_name="overlap_frames",
+                              tooltip="Overlap after snapping (17m + 5) - wire it with "
+                                      "window_frames into H3 Context Window Sampling."),
             ],
         )
 
@@ -128,5 +135,6 @@ class MiniMaxH3_ContextWindows(io.ComfyNode):
             plan["stride_frames"],
             schedule,
             report,
+            plan["overlap_frames"],
             ui={"mmx_context_plan": [schedule]},
         )

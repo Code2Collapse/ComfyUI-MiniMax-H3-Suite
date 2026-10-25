@@ -73,6 +73,17 @@ N1 is a **planner**, not a detector — wire `subject_mask` and/or `bboxes_json`
   `config.json` is tracked by git; an edited copy is moved over once. API keys can come from environment variables:
   set a provider's `api_key_env` to the variable name, write `api_key` as `env:NAME`, or leave it empty for
   `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`.
+- **H3 Temporal Depth runs real depth models.** Depth Anything V2 / 3, Depth Pro, DepthCrafter and DVD now run
+  through ComfyUI-CustomNodePacks' depth runners when that pack is installed. Before, DepthCrafter and DVD always
+  stopped with an error and nothing else was offered. Without CustomNodePacks they say what is missing. Any depth node
+  works too: wire core's "Run Depth Anything 3" into `passthrough_hints`. With nothing wired, `passthrough` is a
+  luminance proxy, and the report now says so. `temporal = align (experimental)` puts the frames on one depth scale
+  over the `window` (which did nothing before). Measured: it removes 98 % of per-frame scale / offset flicker on
+  synthetic jitter, but it did not help a clean pan, so it is off by default. `normals` carries zeros when off,
+  instead of nothing.
+- **H3 Context Windows plans what H3 Context Window Sampling does.** Its defaults are now the sampler's (141 / 39). A
+  new `overlap_frames` output goes with `window_frames` into the sampler. A test checks that both nodes cut the same
+  windows.
 
 ## Masked replacement without a spatial offset (A16)
 
