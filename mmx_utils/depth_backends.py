@@ -105,7 +105,16 @@ def temporal_align(depth_bhwc: torch.Tensor, window: int = 17) -> tuple[torch.Te
     d = _to_bhwc(depth_bhwc)[..., 0].float()
     b = d.shape[0]
     flick = lambda x: float((x.mean(dim=(1, 2))[1:] - x.mean(dim=(1, 2))[:-1]).abs().mean()) if x.shape[0] > 1 else 0.0  # noqa: E731
-    before = flick(d)
+
+    def clip_norm(x: torch.Tensor) -> torch.Tensor:
+        flat = x.reshape(-1)
+        k = max(1, flat.numel() // 2_000_000)                # quantile on a subsample for long clips
+        lo, hi = torch.quantile(flat[::k], torch.tensor([0.02, 0.98], dtype=flat.dtype, device=flat.device))
+        return ((x - lo) / (hi - lo).clamp_min(1e-6)).clamp(0, 1)
+
+    # "before" on the same clip-wide normalisation as "after": the two numbers compare like for like (raw-unit before
+    # vs stretched after made a low-contrast clip look like align added flicker it had only made visible, L9.39)
+    before = flick(clip_norm(d))
     if window <= 1 or b < 2:
         return depth_bhwc, {"flicker_before": before, "flicker_after": before, "aligned": False}
     out = torch.empty_like(d)
@@ -117,10 +126,7 @@ def temporal_align(depth_bhwc: torch.Tensor, window: int = 17) -> tuple[torch.Te
         var = ((x - xm) ** 2).mean()
         a = ((x - xm) * (y - ym)).mean() / var if var > 1e-12 else x.new_tensor(1.0)
         out[t] = a * d[t] + (ym - a * xm)
-    flat = out.reshape(-1)
-    k = max(1, flat.numel() // 2_000_000)                    # quantile on a subsample for long clips
-    lo, hi = torch.quantile(flat[::k], torch.tensor([0.02, 0.98], dtype=flat.dtype, device=flat.device))
-    out = ((out - lo) / (hi - lo).clamp_min(1e-6)).clamp(0, 1)
+    out = clip_norm(out)
     after = flick(out)
     return out.unsqueeze(-1).repeat(1, 1, 1, 3), {"flicker_before": before, "flicker_after": after, "aligned": True}
 
