@@ -93,6 +93,14 @@ HDR conversion is a later stage.
 They run on this pack's own copy of the C2C shared engine (`mmx_vendor/c2c_core`, Apache-2.0, kept byte-identical to
 CustomNodePacks' by a sync check; see `mmx_vendor/VENDORED.md`). CustomNodePacks is not needed.
 
+With CustomNodePacks installed, its **Load Video (C2C)** also loads stills, EXRs (any layer) and image / EXR
+sequences (2026-11-01). Its `video` output plugs straight into H3 Media Probe (`c2c_video`) or H3 Frame Window
+Reader (`media`):
+- a single still becomes a one-frame source;
+- a sequence keeps its own frame numbers (Load Video's `frame_map`).
+
+This was checked live on core 0.39 with frontend 1.53.10.
+
 ## Fixes 2026-10-24: nodes that did less than they said
 
 - **QC gates now gate.** H3 Audio Quality Gate, H3 Color Round-Trip QC and H3 Edit Validator run even with nothing
