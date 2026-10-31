@@ -183,6 +183,10 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.segment_io", "MiniMaxH3_SegmentWriter"),
     (".mmx_nodes.segment_io", "MiniMaxH3_SequenceAssembler"),
     (".mmx_nodes.media_conform", "MiniMaxH3_MediaConform"),
+    (".mmx_nodes.proxy_manager", "MiniMaxH3_ProxyManager"),
+    (".mmx_nodes.sequence_diff", "MiniMaxH3_SequenceDiff"),
+    (".mmx_nodes.review_package", "MiniMaxH3_ReviewPackage"),
+    (".mmx_nodes.shot_publisher", "MiniMaxH3_ShotPublisher"),
 )
 
 

@@ -26,22 +26,23 @@ _EXT = {"h264": ".mp4", "prores": ".mov", "ffv1": ".mkv"}
 _SEG = re.compile(r"^seg_(\d+)\.(mp4|mov|mkv)$")
 
 
-def job_folder(job_dir: str, *, create: bool) -> Path:
-    """job_dir inside ComfyUI's output folder - never outside it."""
+def job_folder(job_dir: str, *, create: bool, who: str = "H3 segment I/O") -> Path:
+    """job_dir inside ComfyUI's output folder - never outside it. ``who`` names the node in refusals."""
     import folder_paths
     root = Path(folder_paths.get_output_directory()).resolve()
     rel = str(job_dir or "").strip().replace("\\", "/").strip("/")
     if not rel:
-        raise ValueError("H3 segment I/O: 'job_dir' is empty - name a folder inside ComfyUI's output folder, "
+        raise ValueError(f"{who}: 'job_dir' is empty - name a folder inside ComfyUI's output folder, "
                          "e.g. h3_jobs/shot010.")
     target = (root / rel).resolve()
     if target != root and root not in target.parents:
-        raise ValueError(f"H3 segment I/O: 'job_dir' must stay inside ComfyUI's output folder ({root}); "
+        raise ValueError(f"{who}: 'job_dir' must stay inside ComfyUI's output folder ({root}); "
                          f"'{job_dir}' points outside it.")
     if create:
         target.mkdir(parents=True, exist_ok=True)
     elif not target.is_dir():
-        raise ValueError(f"H3 Sequence Assembler: the job folder does not exist: {target}")
+        raise ValueError(f"{who if who != 'H3 segment I/O' else 'H3 Sequence Assembler'}: the job folder does not "
+                         f"exist: {target}")
     return target
 
 

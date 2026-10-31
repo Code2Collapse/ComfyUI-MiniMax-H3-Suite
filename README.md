@@ -90,6 +90,34 @@ file headers (OpenImageIO, else PIL), decodes a few frames for a contact sheet, 
 Its `ledger_json` names the source frame of every output frame. Colour tags pass through unchanged; colour and
 HDR conversion is a later stage.
 
+**H3 Proxy Manager** writes a smaller copy of the lazy video and hands it back as a lazy handle.
+- Sizes: 1/2, 1/4, 1/8 or custom. Codecs: h264, ProRes 10-bit or FFV1 lossless. The selection's audio can be kept.
+- It writes into `<job_dir>/proxies/` inside the output folder.
+- Proxies are cached: the same source (file, selection, crop, size, layer) with the same settings is reused, never
+  re-encoded. A changed source makes a new proxy.
+- Its `source_map` takes proxy frames and coordinates back to the source.
+
+**H3 Sequence Diff** compares two versions frame by frame.
+- Methods: pixel difference, block SSIM, or multi-scale SSIM on luma. Multi-scale SSIM is a structural measure, not a
+  learned perceptual metric.
+- It can compare inside a mask, and can pair frames by their frame maps (the same source frame number).
+- It streams both inputs in chunks.
+- Outputs: heatmaps of the worst frames, a numeric report, the changed intervals (in frame numbers) and a flicker
+  graph.
+
+**H3 Review Package** writes a review folder:
+- `review.html`, self-contained: an A/B wipe per frame, difference heatmaps, QC markers and notes. All text is
+  escaped;
+- a contact sheet with frame numbers and timecode;
+- an A | B side-by-side movie;
+- a manifest with a sha256 for every file.
+
+**H3 Shot Publisher** publishes rendered media into `publish/<show>/<seq>/<shot>/<task>/v###/`.
+- Each version is reserved atomically, so two publishes never share one.
+- Stage: wip / review / final. `require_qc = pass` refuses without a passing QC.
+- It never overwrites another version, and verifies every copy by sha256.
+- Every path stays inside ComfyUI's output folder.
+
 They run on this pack's own copy of the C2C shared engine (`mmx_vendor/c2c_core`, Apache-2.0, kept byte-identical to
 CustomNodePacks' by a sync check; see `mmx_vendor/VENDORED.md`). CustomNodePacks is not needed.
 
