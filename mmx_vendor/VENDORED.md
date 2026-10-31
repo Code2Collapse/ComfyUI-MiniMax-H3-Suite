@@ -16,4 +16,12 @@ Rules:
 Contents (2026-10-31):
 - `c2c_core/video`: the lazy video handle, the probe / index table with exact variable-frame-rate timestamps, the
   window reader, the memory budget, the audio descriptor, source metadata and test media.
-- `c2c_core/timeline`: the frame ledger (contract `h3.frame_ledger` v1).
+- `c2c_core/video` (L9.89, owner A21 Rev 3 Part 3): the media entry point CustomNodePacks' unified Load Video (C2C)
+  uses. It has:
+  - `sequence.py`: frame numbers, padding classes, steps, missing frames, Nuke frame ranges, timelines;
+  - `exr.py`: EXR parts, layers, channels and header;
+  - `media.py`: `probe_media` for a movie, a sequence or one still, and `apply_timeline`;
+  - `passes.py`: the lazy `C2C_EXR_PASSES` bundle.
+  The reader gained black frames, named EXR layers, a bounded frame cache, and random access for reversed selections.
+- `c2c_core/timeline`: the frame ledger (contract `h3.frame_ledger` v1.1: `source.numbers` holds an image sequence's
+  own frame numbers, and -1 marks a black frame).
