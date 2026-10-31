@@ -174,6 +174,9 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.region_edit", "MiniMaxH3_RegionEdit"),
     (".mmx_nodes.sigma_presets", "MiniMaxH3_SigmaPresets"),
     (".mmx_nodes.context_executor", "MiniMaxH3_ContextWindowSampling"),
+    # owner A20 Phase 1 slice 1 (L9.74): lazy media on the vendored C2C core (mmx_vendor/c2c_core, L9.73)
+    (".mmx_nodes.media_window", "MiniMaxH3_MediaProbe"),
+    (".mmx_nodes.media_window", "MiniMaxH3_FrameWindow"),
 )
 
 

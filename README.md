@@ -39,6 +39,28 @@ Every node shows its stage, its run status and H3 errors in plain English. That 
 
 N1 is a **planner**, not a detector — wire `subject_mask` and/or `bboxes_json`.
 
+## Long video without loading it whole: H3 Media Probe + H3 Frame Window Reader (A20 Phase 1)
+
+The first media nodes of the A20 plan.
+
+- **H3 Media Probe** reads a video's frame count, frame rate (constant or variable), size, rotation, colour tags and
+  audio without decoding the pictures, and hands on a lazy handle.
+  - Connect core **Load Video**: upload and file choice stay core's, and its trim and crop are honoured.
+  - Or connect a `C2C_VIDEO` handle from CustomNodePacks' Load Video (C2C).
+- **H3 Frame Window Reader** decodes only a window: `start`, `count`, plus `lookbehind` / `lookahead` handles for a
+  tracker.
+  - It checks free memory first; a window that does not fit fails in words, with the count that would.
+  - `window_json` (contract `h3.frame_window` v1) gives every row's source frame and exact presentation time,
+    variable frame rate included, and which rows are the window itself (`core_slice`; `core_start` / `core_count`).
+
+```
+Load Video ──VIDEO──► H3 Media Probe ──media──► H3 Frame Window Reader ──images──► …
+                                                                    └─window_json─► (frame map for later stages)
+```
+
+They run on this pack's own copy of the C2C shared engine (`mmx_vendor/c2c_core`, Apache-2.0, kept byte-identical to
+CustomNodePacks' by a sync check; see `mmx_vendor/VENDORED.md`). CustomNodePacks is not needed.
+
 ## Fixes 2026-10-24: nodes that did less than they said
 
 - **QC gates now gate.** H3 Audio Quality Gate, H3 Color Round-Trip QC and H3 Edit Validator run even with nothing
