@@ -58,6 +58,18 @@ Load Video ──VIDEO──► H3 Media Probe ──media──► H3 Frame Win
                                                                     └─window_json─► (frame map for later stages)
 ```
 
+**H3 Timeline Mapper** builds the frame ledger (contract `h3.frame_ledger` v1): which source frame every output frame
+shows after trim, reverse and frame-rate conversion, numbered from `offset`, plus a planner's segments (each with
+its own padding, overlap, context and accepted range). It moves no pixels: images, masks and audio read the same
+map, so a reverse or a retime applies to every frame-indexed signal at once. Its `report` shows the first and last
+rows and any gap or overlap between accepted ranges.
+
+**H3 Shot Boundary Analyzer** finds the shots: hard cuts with a confidence, dips to black / white when asked, a
+minimum shot length, manual add / remove, and a contact sheet of every shot's first frame (`shots_json`, contract
+`h3.shot_manifest` v1; with `window_json` the shots are also given in source frames). It uses PySceneDetect when
+installed and the dependency-free colour-histogram detector otherwise (the manifest says which). Latent context
+should not cross a cut: the manifest says so for later stages.
+
 They run on this pack's own copy of the C2C shared engine (`mmx_vendor/c2c_core`, Apache-2.0, kept byte-identical to
 CustomNodePacks' by a sync check; see `mmx_vendor/VENDORED.md`). CustomNodePacks is not needed.
 
