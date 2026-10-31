@@ -43,8 +43,9 @@ def correct_seams(images, fix_color_preset="medium", fix_motion_preset="off", fi
     if cut_detection:
         cuts = E._detect_shot_cuts(images, cut_threshold, device)
         if cuts is None:
-            E._say("shot detection unavailable (PySceneDetect not installed): every exposure step is treated as a seam, so "
-                   "a real shot cut is NOT told apart and may be corrected too (pip install scenedetect)")
+            E._say("shot detection unavailable (PySceneDetect or OpenCV not installed): every exposure step is treated as "
+                   "a seam, so a real shot cut is NOT told apart and may be corrected too (pip install scenedetect "
+                   "opencv-python)")
             seams, edit_points = step_boundaries()
         else:
             seams, edit_points = [], sorted(cuts)

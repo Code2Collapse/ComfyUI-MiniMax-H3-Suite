@@ -14,7 +14,6 @@ import tempfile
 import time
 import traceback  # noqa: F401
 
-import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -622,6 +621,9 @@ def _detect_shot_cuts(images, threshold, device, min_gap=_CUT_MIN_GAP):
     video = None
     try:
         from scenedetect import SceneManager, ContentDetector, open_video  # optional, lazy
+        # opencv only writes the temp video for PySceneDetect here; missing it falls back like a missing PySceneDetect
+        # (the module's own step detection), so the node loads without opencv (A20 Phase 0, L9.85)
+        import cv2
         with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
             tmp_path = tmp.name
 

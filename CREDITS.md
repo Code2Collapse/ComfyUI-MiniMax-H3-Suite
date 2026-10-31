@@ -229,3 +229,24 @@ The decisions for every pack in both reference folders are in the work area's
 - **Not ported:** the Scene Prompt Editor @ tray, Project Asset Carousel and Plan Studio front end (their UI is never
   ported), Qwen-only `#anchors`, the reference cache, the external RefMod backend, sequential / source-timeline modes
   that need Context-Loop's scene state, and the fingerprint lineage.
+
+## ComfyUI-MiniMax-H3-LongMedia (continuation latent ops)
+
+- **Source:** [vizart-vj/ComfyUI-MiniMax-H3-LongMedia](https://github.com/vizart-vj/ComfyUI-MiniMax-H3-LongMedia)
+- **Licence:** Apache-2.0. The licence text and the upstream's own third-party notice are in
+  `THIRD_PARTY_LICENSES/ComfyUI-MiniMax-H3-LongMedia-LICENSE.txt` and `...-THIRD_PARTY_NOTICE.md` (added 2026-10-31;
+  the local reference copy lacked the file, so the A20 Phase 0 licence review read it from GitHub).
+- **Ported into this pack:** `mmx_nodes/continuation.py`, `mmx_utils/av_latent_ops.py`.
+
+## comfyui-minimax-h3-blockcache-T8 (dual-metric block cache)
+
+- **Source:** [T8mars/comfyui-minimax-h3-blockcache-T8](https://github.com/T8mars/comfyui-minimax-h3-blockcache-T8)
+- **Licence:** Apache-2.0 (`THIRD_PARTY_LICENSES/comfyui-minimax-h3-blockcache-T8-LICENSE.txt`, added 2026-10-31).
+- **Ported into this pack:** `mmx_utils/h3_block_cache.py` (H3 Block Cache T8).
+
+## C2C shared core (vendored)
+
+- **Source:** ComfyUI-CustomNodePacks `c2c_core/` (Code2Collapse, same author), copied byte for byte into
+  `mmx_vendor/c2c_core/` and kept equal by a sync check (`mmx_vendor/VENDORED.md`).
+- **Licence:** Apache-2.0 (`THIRD_PARTY_LICENSES/c2c_core-LICENSE.txt`).
+- **Used by:** H3 Media Probe, H3 Frame Window Reader.
