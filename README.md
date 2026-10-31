@@ -70,6 +70,26 @@ minimum shot length, manual add / remove, and a contact sheet of every shot's fi
 installed and the dependency-free colour-histogram detector otherwise (the manifest says which). Latent context
 should not cross a cut: the manifest says so for later stages.
 
+**H3 Sequence Auditor** checks an image sequence before anything renders from it: missing frames, identical
+frames, unreadable or empty files and frames of another size, against an expected range and size. It reads only
+file headers (OpenImageIO, else PIL), decodes a few frames for a contact sheet, and gives `valid_ranges` in
+`manifest_json` (contract `h3.sequence_manifest` v1) plus a plain report. Give it a pattern (`shot.####.exr`,
+`%04d`, `@@@@`, `$F4`), a folder, or one frame of the sequence.
+
+**H3 Segment Writer** + **H3 Sequence Assembler**: a long job never holds the whole video.
+- Each run writes its segment as one file (`seg_00012.mp4` + a `.json` note) in a job folder inside ComfyUI's
+  output folder. Codecs: h264, ProRes 422 HQ 10-bit or FFV1 lossless; BT.709-tagged; written through a
+  `.partial` name, so a crash never leaves half a file.
+- The assembler joins the segments in number order by remuxing: no decoding, no re-encoding, one packet in
+  memory. A missing segment number stops it unless `allow_gaps`.
+
+**H3 Media Conform** conforms the lazy handle and stays lazy (nothing is decoded):
+- a source range;
+- a constant frame rate, judged on the file's real timestamps so variable-rate clips come out right;
+- a size: fit / fill (centre crop) / exact, optionally a multiple of N.
+Its `ledger_json` names the source frame of every output frame. Colour tags pass through unchanged; colour and
+HDR conversion is a later stage.
+
 They run on this pack's own copy of the C2C shared engine (`mmx_vendor/c2c_core`, Apache-2.0, kept byte-identical to
 CustomNodePacks' by a sync check; see `mmx_vendor/VENDORED.md`). CustomNodePacks is not needed.
 

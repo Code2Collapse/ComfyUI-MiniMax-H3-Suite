@@ -179,6 +179,10 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.media_window", "MiniMaxH3_FrameWindow"),
     (".mmx_nodes.timeline_mapper", "MiniMaxH3_TimelineMapper"),
     (".mmx_nodes.shot_boundaries", "MiniMaxH3_ShotBoundaries"),
+    (".mmx_nodes.sequence_auditor", "MiniMaxH3_SequenceAuditor"),
+    (".mmx_nodes.segment_io", "MiniMaxH3_SegmentWriter"),
+    (".mmx_nodes.segment_io", "MiniMaxH3_SequenceAssembler"),
+    (".mmx_nodes.media_conform", "MiniMaxH3_MediaConform"),
 )
 
 

@@ -13,5 +13,7 @@ Rules:
   `c2c_core.shared_state()`, and objects that cross packs (such as the `C2C_VIDEO` handle) are checked by their
   fields or contract name, never with `isinstance`.
 
-Contents (slice 1, 2026-10-31): `c2c_core/video` (lazy video handle, probe / index table with exact VFR timestamps,
-window reader, memory budget, audio descriptor, source metadata, test media).
+Contents (2026-10-31):
+- `c2c_core/video`: the lazy video handle, the probe / index table with exact variable-frame-rate timestamps, the
+  window reader, the memory budget, the audio descriptor, source metadata and test media.
+- `c2c_core/timeline`: the frame ledger (contract `h3.frame_ledger` v1).
