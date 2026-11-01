@@ -43,6 +43,7 @@ from .segment_io import job_folder  # noqa: E402
 TASKS = ("edit (source-driven)", "generate (source-free)")
 APPROVAL = ("QC decides", "review when QC fails", "review every segment")
 ACTIONS = ("run", "pause", "cancel", "resume", "approve held segment", "reject held segment",
+           "generate alternate take",
            "retry segment (new seed)", "rollback to segment", "choose take")
 DECISIONS = ("auto (QC + approval policy)", "accept", "reject (retry)", "hold for review")
 SPEC = "h3.task_spec"
@@ -345,8 +346,17 @@ class MiniMaxH3_JobController(io.ComfyNode):
             final = assemble(j, j.m["spec"])
             j.complete({"video": final})
             note = (note + "; " if note else "") + f"assembled {final}"
-        seg = j.next_segment() if j.state not in J.STOPPED else None
-        if seg is None or j.state in J.STOPPED:
+        alternate = ""
+        if action == "generate alternate take" and not auto:
+            # an extra take of an ACCEPTED segment, kept beside the chosen one (choose it later with "choose take")
+            seg = j.seg(int(action_segment))
+            if seg["status"] != "accepted":
+                raise ValueError(f"H3 Job Controller: segment {action_segment} is {seg['status']} - an alternate "
+                                 f"take needs an accepted segment to sit beside.")
+            alternate = str(action_take or "").strip() or f"take{len(seg['attempts']) + 1}"
+        else:
+            seg = j.next_segment() if j.state not in J.STOPPED else None
+        if not alternate and (seg is None or j.state in J.STOPPED):
             why = {"PAUSED": "paused - set action to resume or run", "CANCELLED": "cancelled",
                    "WAITING_FOR_REVIEW": "a segment waits for review - approve or reject it (action)",
                    "COMPLETED": "completed", "FAILED": "failed - see the job history",
@@ -366,7 +376,8 @@ class MiniMaxH3_JobController(io.ComfyNode):
         policy = "new seed" if seg["attempts"] else "first"
         seed = j.seed_for(sid, "new seed")
         att = j.begin(sid, seed=seed, inputs={"uses": ["plate", "prompt", "references"]},
-                      changes="" if policy == "first" else "retry")
+                      changes="alternate take" if alternate else ("" if policy == "first" else "retry"),
+                      alternate=bool(alternate))
         win = track = None
         if media is not None and is_handle(media):
             mf = int(spec["media_first"])
@@ -377,8 +388,9 @@ class MiniMaxH3_JobController(io.ComfyNode):
         ctx = _context_frames(j, p) if p["context_frames"] else torch.zeros((1, 8, 8, 3))
         seg_json = {"job": j.m["name"], "job_path": j.path, "segment": sid, "attempt": att["n"], "seed": seed,
                     "plan": p, "controller": str(getattr(cls.hidden, "unique_id", None) or ""), "approval": spec["approval"],
-                    "max_retries": spec["max_retries"]}
+                    "max_retries": spec["max_retries"], "alternate": alternate}
         status = (f"job {j.m['name']}: segment {sid + 1} of {len(j.m['plan'])}, attempt {att['n']}, seed {seed}"
+                  + (f" - alternate take '{alternate}'" if alternate else "")
                   + (f" ({note})" if note else ""))
         b = _blocked()
         return io.NodeOutput(win if win is not None else b, track if track is not None else b, ctx, seed,
@@ -613,7 +625,10 @@ class MiniMaxH3_JobCommit(io.ComfyNode):
             digest = hashlib.sha256("".join(J.sha256_file(os.path.join(d, f))
                                             for f in sorted(os.listdir(d))).encode()).hexdigest()
             outputs = {"frames_dir": d, "frames": int(keep.shape[0]), "frames_sha256": digest}
-            if choice == "accept":
+            if seg.get("alternate"):                            # kept as a named take; nothing else moves
+                j.accept(sid, outputs, take=seg["alternate"])
+                notes.append(f"segment {sid}: take '{seg['alternate']}' kept beside the chosen one")
+            elif choice == "accept":
                 j.accept(sid, outputs)
                 notes.append(f"segment {sid} accepted (frames {a0}-{a1 - 1})")
             else:

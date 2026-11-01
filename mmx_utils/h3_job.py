@@ -344,6 +344,9 @@ class Job:
     def record_qc(self, seg_id: int, report: dict) -> None:
         s = self.seg(seg_id)
         s["attempts"][-1]["qc"] = report
+        if s["attempts"][-1].get("alternate"):              # an extra take: the accepted segment and the job stay put
+            self.save()
+            return
         s["status"] = "qc"
         if self.state == "GENERATING":
             self.transition("SEGMENT_QC", f"segment {seg_id} QC: {report.get('verdict')}")

@@ -150,7 +150,7 @@ A long H3 job is planned once and then runs by itself. You no longer queue every
   padding stay separate. The accepted ranges tile the range exactly, and the planner checks this.
 - **H3 Job Controller** opens the job (on disk under `output/h3_jobs/<job>/`) and hands each run its next segment:
   the plate window, the seed and the context frames. It also applies your actions: pause, resume, cancel, approve or
-  reject a held segment, retry a segment with a new seed, roll back, choose another take.
+  reject a held segment, retry a segment with a new seed, roll back, generate an alternate take of an accepted segment (kept beside the chosen one), choose another take (only the segments after it are redone).
 - **H3 QC Gate** judges the segment:
   - frame count;
   - finite values;
