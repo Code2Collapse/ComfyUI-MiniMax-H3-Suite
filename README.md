@@ -265,6 +265,25 @@ Live check on the CPU testbed: the shipped workflow with a stand-in in place of 
 with sound. It passes in the classic renderer, Nodes 2.0, inside a subgraph, after an interrupted run, and on a
 second plate of another length and size. See the C2C workspace, evidence L9.76.
 
+### Character swap groundwork: a seam check and the finishing algorithms (2026-11-01, in progress)
+
+- **H3 QC Gate `seam_ratio_max`** (1.5; 0 = off). With a plate and continuation, it compares the step from the
+  previous accepted frame into the segment with the steps around it. It also compares that with the plate's own
+  ratio at the same place, so real motion or a flash in the plate is not mistaken for a generation seam.
+- `mmx_utils/body_double.py` ports the finishing steps of open-source-higgsfield's Body Double (Apache-2.0; see
+  CREDITS):
+  - follow-camera crop plan;
+  - colour-histogram re-identification;
+  - mesh-warp alignment;
+  - cast matte;
+  - mask dropout bridging;
+  - background colour match;
+  - temporal deflicker.
+
+  The character-swap nodes built on them come next.
+- The limits (seam 1.5x, the 9x5 alignment knots) are the reference's values for another model. They are
+  parameters, not yet measured on H3 output.
+
 ### Convert to Subgraph no longer re-wires nodes with autogrow inputs
 
 ComfyUI's front end has a fault on 1.53.10, 1.55.14 and 1.57.0, with core nodes alone. Converting a node that has

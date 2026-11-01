@@ -250,3 +250,25 @@ The decisions for every pack in both reference folders are in the work area's
   `mmx_vendor/c2c_core/` and kept equal by a sync check (`mmx_vendor/VENDORED.md`).
 - **Licence:** Apache-2.0 (`THIRD_PARTY_LICENSES/c2c_core-LICENSE.txt`).
 - **Used by:** H3 Media Probe, H3 Frame Window Reader.
+
+## open-source-higgsfield / Body Double (character swap finishing)
+
+- **Source:** [open-source-higgsfield](https://github.com/lucataco/open-source-higgsfield) by lucataco, commit 864c8de
+  (2026-10-30), cloned read-only at `third_party/open-source-higgsfield`.
+- **Licence:** Apache-2.0. Its LICENSE and NOTICE are in `THIRD_PARTY_LICENSES/open-source-higgsfield-*`.
+  Apache-2.0 code may be included in this GPL-3.0 pack.
+- **Ported into this pack (2026-11-01, L9.78):** `mmx_utils/body_double.py`, a port of the model-independent steps
+  of `bodydouble/media.py` and `bodydouble/qc.py`, moved from 8-bit PIL frames to float images:
+  - follow-camera crop plan;
+  - colour-histogram re-identification;
+  - mesh-warp alignment;
+  - cast matte;
+  - plate-space mask dropout bridging;
+  - background colour transforms;
+  - temporal deflicker;
+  - seam ratio;
+  - background luma.
+
+  H3 Job QC Gate's source-relative seam check uses its seam ratio.
+- **Not carried over, on purpose:** its SCAIL-2 / FLUX Klein graphs and its model constraints (81-frame segments,
+  4n+1 padding). The 9x5 knot layout and the QC limits are kept as parameters, not as H3 rules.

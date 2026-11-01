@@ -582,7 +582,8 @@ def qc_checks(images: torch.Tensor, seg: dict, context: torch.Tensor | None = No
               freeze_max: float = 0.5, seam_max: float = 0.08, diff_report: dict | None = None,
               diff_max: float = 0.0, memory: dict | None = None, colour_drift_max: float = 0.0,
               plate: torch.Tensor | None = None, mask: torch.Tensor | None = None, protect_px: int = 4,
-              background_max: float = 0.008, mask_jump_max: float = 0.35, strict_masks: bool = False) -> dict:
+              background_max: float = 0.008, mask_jump_max: float = 0.35, strict_masks: bool = False,
+              seam_ratio_max: float = 1.5) -> dict:
     p = seg["plan"]
     checks = []
     expected = int(p["model_frames"])
@@ -621,9 +622,33 @@ def qc_checks(images: torch.Tensor, seg: dict, context: torch.Tensor | None = No
                            "max": colour_drift_max})
     checks += edit_checks(images, p, plate, mask, protect_px=protect_px, background_max=background_max,
                           mask_jump_max=mask_jump_max, strict_masks=strict_masks)
+    if plate is not None and context is not None and seam_ratio_max > 0:
+        checks += seam_check(images, p, plate, context, seam_ratio_max)
     verdict = "pass" if all(c["ok"] for c in checks) else "fail"
     return {"c2c_contract": QC, "c2c_contract_version": "1.0", "segment": seg["segment"], "attempt": seg["attempt"],
             "verdict": verdict, "checks": checks}
+
+
+def seam_check(images: torch.Tensor, p: dict, plate: torch.Tensor, context: torch.Tensor, limit: float) -> list[dict]:
+    """The step from the previous accepted frame into this segment, against the plate's own step at the same place
+    (Rev 3 Part 5's source-relative seam ratio; ported from open-source-higgsfield's qc.py): real motion at a seam
+    moves the plate too, a generation seam does not. Segments that start without continuation (a cut, the first) have
+    no seam to judge."""
+    from mmx_utils import body_double as BD
+    off, n = accepted_slice(p)
+    if not int(p.get("context_frames") or 0) or off < 1 or n < 2 or plate.shape[0] < off + 2             or context.shape[0] < 1 or tuple(context.shape[1:3]) != tuple(images.shape[1:3]):
+        return []
+
+    def lumas(frames):
+        h, w = max(8, frames.shape[1] // 4), max(8, frames.shape[2] // 4)
+        return [BD.resize2d(BD.luma(f), h, w) for f in frames]
+
+    k = min(n, 13)
+    out = lumas(torch.cat([context[-1:, ..., :3], images[off: off + k, ..., :3]]).float())
+    src = lumas(plate[off - 1: off + k, ..., :3].float())
+    seam, seam_src = BD.seam_ratio(out, 1), BD.seam_ratio(src, 1)
+    return [{"name": "no seam at the segment start", "ok": seam <= max(limit, limit * seam_src),
+             "value": round(seam, 3), "source": round(seam_src, 3), "max": limit}]
 
 
 def edit_checks(images: torch.Tensor, p: dict, plate: torch.Tensor | None, mask: torch.Tensor | None, *,
@@ -712,21 +737,25 @@ class MiniMaxH3_QCGate(io.ComfyNode):
                     io.Float.Input("mask_jump_max", default=0.35, min=0.0, max=1.0, step=0.01,
                                    tooltip="A frame whose mask area changes more than this share is flagged."),
                     io.Boolean.Input("strict_masks", default=False,
-                                     tooltip="Fail the segment on mask jumps / dropouts (otherwise a warning).")],
+                                     tooltip="Fail the segment on mask jumps / dropouts (otherwise a warning)."),
+                    io.Float.Input("seam_ratio_max", default=1.5, min=0.0, max=20.0, step=0.1,
+                                   tooltip="With a plate and continuation: the step into this segment may be at most "
+                                           "this many times the steps around it, and this many times the plate's own "
+                                           "ratio there (real motion is not a seam). 0 = do not judge.")],
             outputs=[io.String.Output("qc_report"), io.Boolean.Output("passed"), io.Image.Output("images")],
         )
 
     @classmethod
     def execute(cls, segment, images, context_images=None, diff_report="", min_mean=0.01, freeze_max=0.5,
                 seam_max=0.08, diff_max=0.0, memory="", colour_drift_max=12.0, plate=None, mask=None, protect_px=4,
-                background_max=0.008, mask_jump_max=0.35, strict_masks=False) -> io.NodeOutput:
+                background_max=0.008, mask_jump_max=0.35, strict_masks=False, seam_ratio_max=1.5) -> io.NodeOutput:
         seg = json.loads(segment)
         dr = json.loads(diff_report) if str(diff_report or "").strip() else None
         mem = _json(memory, MEMORY, "H3 QC Gate") if str(memory or "").strip() else None
         rep = qc_checks(images, seg, context_images, min_mean=min_mean, freeze_max=freeze_max, seam_max=seam_max,
                         diff_report=dr, diff_max=diff_max, memory=mem, colour_drift_max=colour_drift_max,
                         plate=plate, mask=mask, protect_px=protect_px, background_max=background_max,
-                        mask_jump_max=mask_jump_max, strict_masks=strict_masks)
+                        mask_jump_max=mask_jump_max, strict_masks=strict_masks, seam_ratio_max=seam_ratio_max)
         j = J.Job.open(os.path.dirname(os.path.dirname(seg["job_path"])), seg["job"], create=False, recover=False)
         j.record_qc(int(seg["segment"]), rep)
         return io.NodeOutput(json.dumps(rep), rep["verdict"] == "pass", images)

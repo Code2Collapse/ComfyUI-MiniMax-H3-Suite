@@ -1,0 +1,11 @@
+Body Double
+Copyright 2026 lucataco
+
+Licensed under the Apache License, Version 2.0 (see LICENSE). The license covers this repository's code and
+workflow files only.
+
+Model weights are not redistributed. setup.sh downloads each file from its official upstream, and each model keeps
+its own license (see MODELS.md). Outputs are AI-generated and should be labelled as such.
+
+Body Double drives an unmodified ComfyUI (GPL-3.0) over HTTP through comfy-sdk and comfy-api-proxy (MIT). It ships
+no ComfyUI code and no custom nodes.
