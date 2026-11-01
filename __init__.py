@@ -187,6 +187,13 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.sequence_diff", "MiniMaxH3_SequenceDiff"),
     (".mmx_nodes.review_package", "MiniMaxH3_ReviewPackage"),
     (".mmx_nodes.shot_publisher", "MiniMaxH3_ShotPublisher"),
+    # owner A21 P1 / A20 Phase 2 (L9.75): the job engine (mmx_utils/h3_job.py) - one click runs a whole job
+    (".mmx_nodes.h3_job_nodes", "MiniMaxH3_TaskSpec"),
+    (".mmx_nodes.h3_job_nodes", "MiniMaxH3_CompatibilityValidator"),
+    (".mmx_nodes.h3_job_nodes", "MiniMaxH3_SegmentPlanner"),
+    (".mmx_nodes.h3_job_nodes", "MiniMaxH3_JobController"),
+    (".mmx_nodes.h3_job_nodes", "MiniMaxH3_QCGate"),
+    (".mmx_nodes.h3_job_nodes", "MiniMaxH3_JobCommit"),
 )
 
 

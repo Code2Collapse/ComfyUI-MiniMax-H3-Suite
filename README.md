@@ -131,6 +131,47 @@ Reader (`media`):
 
 This was checked live on core 0.39 with frontend 1.53.10.
 
+## One click runs a whole job: H3 Task Spec -> Segment Planner -> Job Controller -> QC Gate -> Job Commit (2026-11-01)
+
+A long H3 job is planned once and then runs by itself. You no longer queue every segment.
+
+- **H3 Task Spec** says what the job is:
+  - the task (edit a plate, or generate);
+  - the frame range;
+  - the segment length on the H3 grid (17k + 5);
+  - the context frames each segment continues from, the cross-fade and the tracking handles;
+  - seed, retries, the approval policy, auto-continue and the delivery codec.
+
+  It fingerprints the plate, the prompt and the references, so changing one later redoes only the segments that
+  used it.
+- **H3 Compatibility Validator** checks it before anything runs: the 17k + 5 grid, sizes in multiples of 32, 24 fps,
+  the range inside the plate, and the context length. The reasons are given in words.
+- **H3 Segment Planner** splits the range into segments. Continuation context, cross-fade, tracking handles and grid
+  padding stay separate. The accepted ranges tile the range exactly, and the planner checks this.
+- **H3 Job Controller** opens the job (on disk under `output/h3_jobs/<job>/`) and hands each run its next segment:
+  the plate window, the seed and the context frames. It also applies your actions: pause, resume, cancel, approve or
+  reject a held segment, retry a segment with a new seed, roll back, choose another take.
+- **H3 QC Gate** judges the segment:
+  - frame count;
+  - finite values;
+  - no black frames;
+  - not frozen;
+  - it continues the accepted frames;
+  - optionally its difference from the source.
+- **H3 Job Commit** records the result, by the QC verdict and the approval policy:
+  - **accept**: the frames are kept as 16-bit PNGs numbered by global frame;
+  - **retry**: with a new seed, up to `max_retries`;
+  - **hold for review**.
+
+  When every segment is accepted it assembles the movie from the chosen takes. With auto-continue it queues the next
+  run itself, through ComfyUI's own `/prompt`. It stops when the job is paused, cancelled, waiting for review or
+  complete, after `max_auto_runs` runs in a chain, or when `H3_AUTO_CONTINUE=0`.
+- The job file keeps every state change, each segment's attempts (seed, QC, outputs with sha256), the takes and the
+  retry history.
+  - A run that dies mid-segment is retried on the next click.
+  - An assembly that dies is finished on the next click.
+  - A rejected segment is never used as continuation context.
+
 ## Fixes 2026-10-24: nodes that did less than they said
 
 - **QC gates now gate.** H3 Audio Quality Gate, H3 Color Round-Trip QC and H3 Edit Validator run even with nothing
