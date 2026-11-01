@@ -23,6 +23,7 @@ if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
 from mmx_vendor.c2c_core.timeline import ledger as L  # noqa: E402
+from mmx_vendor.c2c_core.video import media as _media  # noqa: E402
 from mmx_vendor.c2c_core.video import probe as _probe  # noqa: E402
 
 from .media_window import C2C_VIDEO, is_handle  # noqa: E402
@@ -32,13 +33,18 @@ SIZE_POLICIES = ("keep", "fit", "fill", "exact")
 
 
 def source_times(media) -> tuple[list[float], str]:
-    """Seconds of every source frame: the file's own timestamps, or index / fps for a sequence."""
+    """Seconds of every source frame: the file's own timestamps; for an image sequence its frame NUMBERS over the
+    rate (L9.93: frame 1051 after a gap plays at 1051, not one frame after 1049), else index / fps."""
     src = media.source
     if getattr(src, "kind", "") == "file":
         table = _probe.get_index_table(src.stat_key, stream_index=media.stream_index)
         tb = Fraction(table.time_base)
         first = table.pts_of(0)
         return [float((table.pts_of(i) - first) * tb) for i in range(int(media.frame_count))], "file timestamps"
+    if tuple(getattr(src, "numbers", ()) or ()):
+        times = _media.source_times(media)
+        if times is not None and len(times) == int(media.frame_count):
+            return times, "frame numbers / rate (a gap in the numbers is time that passed)"
     fps = Fraction(media.fps)
     return [i / float(fps) for i in range(int(media.frame_count))], "frame index / fps (no timestamps in a sequence)"
 

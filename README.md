@@ -85,7 +85,9 @@ file headers (OpenImageIO, else PIL), decodes a few frames for a contact sheet, 
 
 **H3 Media Conform** conforms the lazy handle and stays lazy (nothing is decoded):
 - a source range;
-- a constant frame rate, judged on the file's real timestamps so variable-rate clips come out right;
+- a constant frame rate, judged on the file's real timestamps so variable-rate clips come out right. An image
+  sequence is timed by its frame NUMBERS, so a gap in the numbers is time that passed and later frames do not slip
+  early;
 - a size: fit / fill (centre crop) / exact, optionally a multiple of N.
 Its `ledger_json` names the source frame of every output frame. Colour tags pass through unchanged; colour and
 HDR conversion is a later stage.
