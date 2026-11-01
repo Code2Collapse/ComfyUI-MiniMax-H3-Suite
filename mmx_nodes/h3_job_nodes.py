@@ -126,6 +126,10 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
                 io.String.Input("references", default="", optional=True,
                                 tooltip="Reference identity (any text / JSON that changes when they change) - e.g. "
                                         "H3 Reference Bank's fingerprint."),
+                io.Int.Input("hold_head", default=0, min=0, max=64, optional=True,
+                             tooltip="Frames of the first picture a segment without continuation context generates "
+                                     "before its window and then drops (the PRB workflow's AV handles: 8). The model's "
+                                     "first frames settle on a held picture, not on the cut."),
                 io.String.Input("shot_plan", optional=True, force_input=True,
                                 tooltip="From H3 Shot Planner: the job becomes its shots (their length sets 'count'; "
                                         "each segment gets its shot's prompt, with 'prompt' above as a shared "
@@ -137,7 +141,8 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
     @classmethod
     def execute(cls, task=TASKS[0], first=-1, count=0, segment_frames=124, context=39, blend=0, lookbehind=0,
                 lookahead=0, seed=0, max_retries=2, approval=APPROVAL[0], auto_continue=True, max_auto_runs=100,
-                fps=24.0, deliver_codec="prores", media=None, prompt="", references="", shot_plan=None) -> io.NodeOutput:
+                fps=24.0, deliver_codec="prores", media=None, prompt="", references="", shot_plan=None,
+                hold_head=0) -> io.NodeOutput:
         fps_ = Fraction(fps).limit_denominator(1001000)
         fingerprints = {"prompt": _sha(prompt), "references": _sha(references)}
         media_first, media_frames = 0, None
@@ -175,7 +180,25 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
         if shots is not None:
             # not a fingerprint: an edited shot re-opens only its own segments (Job.set_plan compares plan entries)
             spec["shots"] = shots
+        spec["hold_head"] = int(hold_head or 0)
+        if media is not None:
+            audio = audio_span(media.trimmed(start - media_first, start - media_first + n))
+            if audio:
+                spec["audio"] = audio                           # the assembly puts the plate's sound back
         return io.NodeOutput(json.dumps(spec))
+
+
+def audio_span(handle) -> dict | None:
+    """Where the plate's sound for these frames is (file, stream, start, length), for the assembly to mux. None for
+    image sequences and silent clips. Read from the vendored lazy-audio object the loader itself uses."""
+    from mmx_vendor.c2c_core.video.audio import lazy_audio_for_handle
+    la = lazy_audio_for_handle(handle)
+    path = getattr(la, "_path", None)
+    if not path:
+        return None
+    return {"path": str(path), "stream_index": int(getattr(la, "_stream_index", 0)),
+            "start_sec": float(getattr(la, "_start_sec", 0.0)), "duration_sec": float(getattr(la, "_duration_sec", 0.0)),
+            "reverse": bool(getattr(la, "_reverse", False))}
 
 
 # ── H3 Compatibility Validator ─────────────────────────────────────────────────────────────────────────────────────
@@ -242,7 +265,7 @@ class MiniMaxH3_CompatibilityValidator(io.ComfyNode):
 
 def plan_from_spec(spec: dict) -> dict:
     kw = dict(segment_frames=spec["segment_frames"], context=spec["context"], blend=spec["blend"],
-              lookbehind=spec["lookbehind"], lookahead=spec["lookahead"])
+              lookbehind=spec["lookbehind"], lookahead=spec["lookahead"], hold_head=int(spec.get("hold_head", 0)))
     try:
         segs = J.plan_shots(spec["shots"], **kw) if spec.get("shots") else \
             J.plan_segments(spec["first"], spec["count"], **kw)
@@ -276,7 +299,8 @@ class MiniMaxH3_SegmentPlanner(io.ComfyNode):
         if plan["problems"]:
             raise ValueError("H3 Segment Planner: " + "; ".join(plan["problems"]))
         rows = [(f"shot {s['shot'] + 1:>2} {s['transition']:<8} " if "shot" in s else "")
-                + f"seg {s['id']:>3}  model {s['global'][0]}-{s['global'][1] - 1} (+{s['pad_tail']} pad)  "
+                + f"seg {s['id']:>3}  model " + (f"{s['pad_head']} held + " if s.get("pad_head") else "")
+                + f"{s['global'][0]}-{s['global'][1] - 1} (+{s['pad_tail']} pad)  "
                 f"context {s['context_frames']}  accept {s['accepted'][0]}-{s['accepted'][1] - 1}"
                 + (f"  cross-fade {s['overlap_head']}" if s["overlap_head"] else "")
                 for s in plan["segments"]]
@@ -344,6 +368,9 @@ class MiniMaxH3_JobController(io.ComfyNode):
                 io.Int.Input("action_segment", default=0, min=0, max=100000),
                 io.String.Input("action_take", default=""),
                 C2C_VIDEO.Input("media", optional=True, tooltip="The source plate (edit tasks)."),
+                C2C_VIDEO.Input("matte", optional=True,
+                                tooltip="A matte clip frame-aligned with the plate: matte_window is cut exactly like "
+                                        "window (same frames, same held frames)."),
             ],
             outputs=[
                 C2C_VIDEO.Output("window", tooltip="The plate frames this segment generates over (edit tasks)."),
@@ -355,6 +382,10 @@ class MiniMaxH3_JobController(io.ComfyNode):
                 io.String.Output("status"),
                 io.String.Output("prompt", tooltip="This segment's prompt: the task spec's prompt, then its shot's "
                                                    "prompt when the job has a shot plan."),
+                io.Latent.Output("context_latent",
+                                 tooltip="The accepted latent of the segment this one continues from (its chosen "
+                                         "take), for H3 Motion Context's context_latent. Empty when there is none."),
+                C2C_VIDEO.Output("matte_window", tooltip="The matte, cut exactly like window."),
             ],
             # the auto-continue token rides in the queued run's extra_pnginfo: no widget for anyone to edit
             hidden=[io.Hidden.unique_id, io.Hidden.extra_pnginfo],
@@ -362,7 +393,7 @@ class MiniMaxH3_JobController(io.ComfyNode):
 
     @classmethod
     def fingerprint_inputs(cls, task_spec, segment_plan, job="h3_job", action="run", action_segment=0,
-                           action_take="", media=None):
+                           action_take="", media=None, matte=None):
         try:
             return J.Job.open(_jobs_dir(), job, create=False, recover=False).state_token()
         except Exception:  # noqa: BLE001 - a new job: run
@@ -370,7 +401,7 @@ class MiniMaxH3_JobController(io.ComfyNode):
 
     @classmethod
     def execute(cls, task_spec, segment_plan, job="h3_job", action="run", action_segment=0, action_take="",
-                media=None) -> io.NodeOutput:
+                media=None, matte=None) -> io.NodeOutput:
         auto_token = str(((getattr(cls.hidden, "extra_pnginfo", None) or {}).get("h3_auto_token")) or "")
         spec = _json(task_spec, SPEC, "H3 Job Controller")
         plan = _json(segment_plan, PLAN, "H3 Job Controller")
@@ -408,27 +439,37 @@ class MiniMaxH3_JobController(io.ComfyNode):
             status = f"job {j.m['name']}: {why}" + (f" ({note})" if note else "")
             b = _blocked()
             return io.NodeOutput(b, b, b, b, b, json.dumps({"job": j.m["name"], "state": j.state, "idle": True}),
-                                 status, b)
+                                 status, b, b, b)
         sid = int(seg["id"])
         ok, why = j.context_ok(sid)
         if not ok:
             j.hold_for_review(sid, why)
             b = _blocked()
             return io.NodeOutput(b, b, b, b, b, json.dumps({"job": j.m["name"], "state": j.state, "idle": True}),
-                                 f"job {j.m['name']}: {why}", b)
+                                 f"job {j.m['name']}: {why}", b, b, b)
         p = j.plan_of(sid)
         policy = "new seed" if seg["attempts"] else "first"
         seed = j.seed_for(sid, "new seed")
         att = j.begin(sid, seed=seed, inputs={"uses": ["plate", "prompt", "references"]},
                       changes="alternate take" if alternate else ("" if policy == "first" else "retry"),
                       alternate=bool(alternate))
-        win = track = None
+        win = track = mwin = None
         if media is not None and is_handle(media):
             mf = int(spec["media_first"])
             g0, g1 = p["global"]
-            win = media.trimmed(max(0, g0 - mf), max(0, g1 - mf))
+            win = generation_window(media, g0 - mf, g1 - mf, int(p.get("pad_head") or 0), int(p.get("pad_tail") or 0))
             t0, t1 = p["track_window"]
             track = media.trimmed(max(0, t0 - mf), max(0, t1 - mf))
+            if matte is not None:
+                if not is_handle(matte):
+                    raise ValueError("H3 Job Controller: 'matte' is not a C2C video handle.")
+                if (int(matte.width), int(matte.height)) != (int(media.width), int(media.height)):
+                    raise ValueError(f"H3 Job Controller: the matte is {matte.width}x{matte.height} and the plate "
+                                     f"{media.width}x{media.height} - they must be the same size, frame for frame.")
+                if len(matte) < g1 - mf:
+                    raise ValueError(f"H3 Job Controller: the matte has {len(matte)} frames; this segment needs the "
+                                     f"plate's frames up to {g1 - mf} - give a matte as long as the plate.")
+                mwin = generation_window(matte, g0 - mf, g1 - mf, int(p.get("pad_head") or 0), int(p.get("pad_tail") or 0))
         ctx = _context_frames(j, p) if p["context_frames"] else torch.zeros((1, 8, 8, 3))
         text = segment_prompt(spec, p)
         seg_json = {"job": j.m["name"], "job_path": j.path, "segment": sid, "attempt": att["n"], "seed": seed,
@@ -441,7 +482,22 @@ class MiniMaxH3_JobController(io.ComfyNode):
                   + (f" ({note})" if note else ""))
         b = _blocked()
         return io.NodeOutput(win if win is not None else b, track if track is not None else b, ctx, seed,
-                             int(p["model_frames"]), json.dumps(seg_json), status, text)
+                             int(p["model_frames"]), json.dumps(seg_json), status, text, _context_latent(j, p),
+                             mwin if mwin is not None else b)
+
+
+def generation_window(handle, lo: int, hi: int, hold: int, pad_tail: int = 0):
+    """The model's frames for a segment: positions lo..hi of a handle, ``hold`` copies of its first frame before them
+    (a timeline repeat: the lazy audio starts that many frames earlier with silence), and ``pad_tail`` grid-padding
+    frames after them - the plate's own next frames while it has them, then copies of the last one - so the window is
+    exactly the segment's model length (H3 Source AV Latent refuses anything off the 17k + 5 grid)."""
+    hi_real = min(len(handle), max(0, hi) + max(0, int(pad_tail)))
+    win = handle.trimmed(max(0, lo), hi_real)
+    sel = [int(i) for i in win.selected_indices()]
+    short = max(0, hi + int(pad_tail) - hi_real)
+    if (hold > 0 or short) and sel:
+        win = win.with_timeline([sel[0]] * max(0, hold) + sel + [sel[-1]] * short)
+    return win
 
 
 def segment_prompt(spec: dict, p: dict) -> str:
@@ -468,6 +524,45 @@ def _context_frames(j: J.Job, p: dict) -> torch.Tensor:
     return torch.stack([_read_png16(os.path.join(d, f)) for f in want])
 
 
+LATENT_FILE = "latent.safetensors"
+
+
+def save_latent(d: str, latent) -> str:
+    """The accepted attempt's latent next to its frames: video (+ audio) streams, as H3 Motion Context saves them."""
+    from mmx_utils.motion_context import streams_from_latent, write_safetensors
+    samples = latent["samples"]
+    # a plain tensor is ONE video stream (unbinding it would split the batch); an AV latent is a nested pair
+    parts = [samples] if isinstance(samples, torch.Tensor) else streams_from_latent(latent)
+    data = {"video": parts[0].cpu().contiguous()}
+    if len(parts) > 1:
+        data["audio"] = parts[1].cpu().contiguous()
+    path = os.path.join(d, LATENT_FILE)
+    write_safetensors(path, data)
+    return path
+
+
+def _context_latent(j: J.Job, p: dict):
+    """The chosen take's latent of the segment this one continues from; None (= not connected) when there is none."""
+    cf = p.get("context_from")
+    if cf is None:
+        return None
+    s = j.seg(cf)
+    path = os.path.join(_attempt_dir(j, int(cf), int(s["takes"].get(s.get("take") or "main", len(s["attempts"])))),
+                        LATENT_FILE)
+    if not os.path.isfile(path):
+        return None
+    from safetensors.torch import load_file
+    data = load_file(path)
+    video = data["video"].contiguous().clone()
+    return {"samples": [video, data["audio"].contiguous().clone()]} if "audio" in data else {"samples": video}
+
+
+def accepted_slice(p: dict) -> tuple[int, int]:
+    """Where the accepted frames sit in a segment's generated images: after the held frames and the context."""
+    a0, a1 = p["accepted"]
+    return a0 - p["global"][0] + int(p.get("pad_head") or 0), a1 - a0
+
+
 def _write_png16(path: str, frame: torch.Tensor) -> None:
     import cv2
     arr = np.clip(frame[..., :3].float().cpu().numpy(), 0.0, 1.0)
@@ -485,7 +580,9 @@ def _read_png16(path: str) -> torch.Tensor:
 
 def qc_checks(images: torch.Tensor, seg: dict, context: torch.Tensor | None = None, *, min_mean: float = 0.01,
               freeze_max: float = 0.5, seam_max: float = 0.08, diff_report: dict | None = None,
-              diff_max: float = 0.0, memory: dict | None = None, colour_drift_max: float = 0.0) -> dict:
+              diff_max: float = 0.0, memory: dict | None = None, colour_drift_max: float = 0.0,
+              plate: torch.Tensor | None = None, mask: torch.Tensor | None = None, protect_px: int = 4,
+              background_max: float = 0.008, mask_jump_max: float = 0.35, strict_masks: bool = False) -> dict:
     p = seg["plan"]
     checks = []
     expected = int(p["model_frames"])
@@ -493,16 +590,21 @@ def qc_checks(images: torch.Tensor, seg: dict, context: torch.Tensor | None = No
                    "value": int(images.shape[0]), "expected": expected})
     finite = bool(torch.isfinite(images).all())
     checks.append({"name": "finite values", "ok": finite})
-    means = images[..., :3].float().mean(dim=(1, 2, 3))
-    dark = [int(i) for i in torch.nonzero(means < min_mean).flatten().tolist()]
+    # the content checks judge the frames that will be KEPT - held head frames and grid padding repeat on purpose
+    off, n = accepted_slice(p)
+    kept = images[off: off + n] if images.shape[0] >= off + n > off else images
+    a0 = int(p["accepted"][0]) if kept is not images else 0
+    means = kept[..., :3].float().mean(dim=(1, 2, 3))
+    dark = [a0 + int(i) for i in torch.nonzero(means < min_mean).flatten().tolist()]
     checks.append({"name": "not black", "ok": len(dark) <= max(0, int(0.05 * len(means))), "frames": dark[:50]})
-    if images.shape[0] > 1:
-        step = (images[1:, ..., :3] - images[:-1, ..., :3]).abs().mean(dim=(1, 2, 3))
+    if kept.shape[0] > 1:
+        step = (kept[1:, ..., :3] - kept[:-1, ..., :3]).abs().mean(dim=(1, 2, 3))
         frozen = float((step < 1e-4).float().mean())
         checks.append({"name": "not frozen", "ok": frozen <= freeze_max, "value": round(frozen, 4)})
+    ph = int(p.get("pad_head") or 0)
     if context is not None and int(p["context_frames"]) and context.shape[0] == int(p["context_frames"]) \
             and context.shape[1:3] == images.shape[1:3]:
-        seam = float((images[: context.shape[0], ..., :3] - context[..., :3]).abs().mean())
+        seam = float((images[ph: ph + context.shape[0], ..., :3] - context[..., :3]).abs().mean())
         checks.append({"name": "continues the accepted frames", "ok": seam <= seam_max, "value": round(seam, 4)})
     if diff_report and diff_max > 0:
         checks.append({"name": "difference from the source", "ok": float(diff_report.get("max", 0)) <= diff_max,
@@ -510,17 +612,71 @@ def qc_checks(images: torch.Tensor, seg: dict, context: torch.Tensor | None = No
     base = (memory or {}).get("baseline")
     if base and colour_drift_max > 0 and (memory or {}).get("scene") == p.get("scene"):
         # the scene's look so far, from accepted segments only; a scene's first segment has no baseline (skipped)
-        a0, a1 = p["accepted"]
-        off = a0 - p["global"][0]
-        acc = images[off: off + (a1 - a0)]
+        off, n = accepted_slice(p)
+        acc = images[off: off + n]
         if acc.shape[0]:
             st = frame_stats(acc.float())
             de = math.sqrt(sum((a - b) ** 2 for a, b in zip(st["lab_mean"], base["lab_mean"])))
             checks.append({"name": "keeps the scene's colour", "ok": de <= colour_drift_max, "value": round(de, 3),
                            "max": colour_drift_max})
+    checks += edit_checks(images, p, plate, mask, protect_px=protect_px, background_max=background_max,
+                          mask_jump_max=mask_jump_max, strict_masks=strict_masks)
     verdict = "pass" if all(c["ok"] for c in checks) else "fail"
     return {"c2c_contract": QC, "c2c_contract_version": "1.0", "segment": seg["segment"], "attempt": seg["attempt"],
             "verdict": verdict, "checks": checks}
+
+
+def edit_checks(images: torch.Tensor, p: dict, plate: torch.Tensor | None, mask: torch.Tensor | None, *,
+                protect_px: int = 4, background_max: float = 0.008, mask_jump_max: float = 0.35,
+                strict_masks: bool = False) -> list[dict]:
+    """Rev 3 Part 13 / 14 for edits, on the ACCEPTED frames (global numbers in the report):
+    background preservation - outside the mask (grown by protect_px) the result is the plate within background_max;
+    mask stability - area jumps and dropouts between frames (a warning unless strict_masks)."""
+    out: list[dict] = []
+    off, n = accepted_slice(p)
+    a0 = int(p["accepted"][0])
+    m = None
+    if mask is not None:
+        m = mask if mask.ndim == 3 else mask[..., 0]
+        if m.shape[0] != images.shape[0] or tuple(m.shape[1:3]) != tuple(images.shape[1:3]):
+            raise ValueError(f"H3 QC Gate: the mask is {tuple(m.shape)} and the images {tuple(images.shape[:3])} - "
+                             f"give the mask of THIS segment's window (Job Controller matte_window).")
+        m = m[off: off + n].float()
+    if plate is not None:
+        if plate.shape[0] != images.shape[0] or tuple(plate.shape[1:3]) != tuple(images.shape[1:3]):
+            raise ValueError(f"H3 QC Gate: the plate is {tuple(plate.shape[:3])} and the images "
+                             f"{tuple(images.shape[:3])} - give the plate of THIS segment's window.")
+        res, ref = images[off: off + n, ..., :3].float(), plate[off: off + n, ..., :3].float()
+        if m is not None:
+            grown = m[:, None]
+            if protect_px > 0:
+                k = 2 * int(protect_px) + 1
+                grown = F.max_pool2d(grown, k, stride=1, padding=int(protect_px))
+            outside = (grown[:, 0] < 0.5)
+        else:
+            outside = torch.ones(res.shape[:3], dtype=torch.bool)
+        diff = (res - ref).abs().amax(-1)
+        sel = diff[outside]
+        worst = float(sel.max()) if sel.numel() else 0.0
+        per = [float(diff[t][outside[t]].max()) if outside[t].any() else 0.0 for t in range(diff.shape[0])]
+        bad = [a0 + t for t, v in enumerate(per) if v > background_max]
+        out.append({"name": "keeps the plate outside the edit", "ok": worst <= background_max,
+                    "value": round(worst, 5), "mean": round(float(sel.mean()) if sel.numel() else 0.0, 6),
+                    "max": background_max, "frames": bad[:100]})
+    if m is not None and m.shape[0]:
+        area = m.flatten(1).mean(1)
+        flagged, dropouts = [], []
+        for t in range(1, area.shape[0]):
+            prev, cur = float(area[t - 1]), float(area[t])
+            if max(prev, cur) > 0 and abs(cur - prev) / max(prev, cur) > mask_jump_max:
+                flagged.append(a0 + t)
+            if cur == 0 and prev > 0 and t + 1 < area.shape[0] and float(area[t + 1]) > 0:
+                dropouts.append(a0 + t)
+        steady = not flagged and not dropouts
+        out.append({"name": "mask is steady", "ok": steady or not strict_masks, "warning": not steady,
+                    "jumps": flagged[:100], "dropouts": dropouts[:100],
+                    "area_min": round(float(area.min()), 5), "area_max": round(float(area.max()), 5)})
+    return out
 
 
 class MiniMaxH3_QCGate(io.ComfyNode):
@@ -543,18 +699,34 @@ class MiniMaxH3_QCGate(io.ComfyNode):
                                     tooltip="From H3 Subject Memory: judge the segment against its scene's look."),
                     io.Float.Input("colour_drift_max", default=12.0, min=0.0, max=100.0, step=0.1,
                                    tooltip="With a memory: the largest mean-colour distance (CIE76 delta E) from the "
-                                           "scene's accepted frames. 0 = do not judge.")],
+                                           "scene's accepted frames. 0 = do not judge."),
+                    io.Image.Input("plate", optional=True,
+                                   tooltip="The plate of this segment's window (edit tasks): outside the mask the "
+                                           "result must stay the plate."),
+                    io.Mask.Input("mask", optional=True,
+                                  tooltip="The edit mask of this segment's window (e.g. from matte_window)."),
+                    io.Int.Input("protect_px", default=4, min=0, max=128,
+                                 tooltip="The mask is grown by this many pixels before the plate check."),
+                    io.Float.Input("background_max", default=0.008, min=0.0, max=1.0, step=0.001,
+                                   tooltip="Largest difference from the plate allowed outside the edit (2/255)."),
+                    io.Float.Input("mask_jump_max", default=0.35, min=0.0, max=1.0, step=0.01,
+                                   tooltip="A frame whose mask area changes more than this share is flagged."),
+                    io.Boolean.Input("strict_masks", default=False,
+                                     tooltip="Fail the segment on mask jumps / dropouts (otherwise a warning).")],
             outputs=[io.String.Output("qc_report"), io.Boolean.Output("passed"), io.Image.Output("images")],
         )
 
     @classmethod
     def execute(cls, segment, images, context_images=None, diff_report="", min_mean=0.01, freeze_max=0.5,
-                seam_max=0.08, diff_max=0.0, memory="", colour_drift_max=12.0) -> io.NodeOutput:
+                seam_max=0.08, diff_max=0.0, memory="", colour_drift_max=12.0, plate=None, mask=None, protect_px=4,
+                background_max=0.008, mask_jump_max=0.35, strict_masks=False) -> io.NodeOutput:
         seg = json.loads(segment)
         dr = json.loads(diff_report) if str(diff_report or "").strip() else None
         mem = _json(memory, MEMORY, "H3 QC Gate") if str(memory or "").strip() else None
         rep = qc_checks(images, seg, context_images, min_mean=min_mean, freeze_max=freeze_max, seam_max=seam_max,
-                        diff_report=dr, diff_max=diff_max, memory=mem, colour_drift_max=colour_drift_max)
+                        diff_report=dr, diff_max=diff_max, memory=mem, colour_drift_max=colour_drift_max,
+                        plate=plate, mask=mask, protect_px=protect_px, background_max=background_max,
+                        mask_jump_max=mask_jump_max, strict_masks=strict_masks)
         j = J.Job.open(os.path.dirname(os.path.dirname(seg["job_path"])), seg["job"], create=False, recover=False)
         j.record_qc(int(seg["segment"]), rep)
         return io.NodeOutput(json.dumps(rep), rep["verdict"] == "pass", images)
@@ -679,11 +851,34 @@ def assemble(j: J.Job, spec: dict) -> str:
     if codec != "ffv1":
         w, h = w - w % 2, h - h % 2
     part = out + ".partial" + ext
-    with StreamWriter(part, Fraction(spec["fps"]), w, h, codec=codec, ten_bit=codec != "h264") as wr:
+    fps = Fraction(spec["fps"])
+    wave, sr = _plate_audio(spec)
+    akw = {"audio_rate": sr, "audio_channels": int(wave.shape[0])} if wave is not None else {}
+    with StreamWriter(part, fps, w, h, codec=codec, ten_bit=codec != "h264", **akw) as wr:
         for i in range(0, len(items), 8):
             wr.write(torch.stack([_assembly_frame(it, h, w) for it in items[i:i + 8]]))
+        samples = wr.write_audio(wave) if wave is not None else 0
     os.replace(part, out)
+    seconds = samples / sr if wave is not None else None
+    off_frames = (seconds - len(items) / float(fps)) * float(fps) if seconds is not None else None
+    j.m["assembly"] = {"frames": len(items), "fps": spec["fps"], "audio": wave is not None,
+                       "audio_seconds": round(seconds, 6) if seconds is not None else None,
+                       "audio_offset_frames": round(off_frames, 3) if off_frames is not None else None,
+                       "av_sync_ok": off_frames is None or abs(off_frames) < 1.0}
+    j.save()
     return out
+
+
+def _plate_audio(spec: dict):
+    """The plate's sound for the job's frames ([channels, samples] float32, rate), or (None, 0)."""
+    a = spec.get("audio")
+    if not a:
+        return None, 0
+    from mmx_vendor.c2c_core.video.audio import LazyAudio
+    la = LazyAudio(path=a["path"], stream_index=int(a.get("stream_index", 0)), start_sec=float(a["start_sec"]),
+                   duration_sec=float(a["duration_sec"]), reverse=bool(a.get("reverse", False)))
+    wave = la["waveform"]
+    return wave[0].float(), int(la["sample_rate"])
 
 
 class MiniMaxH3_JobCommit(io.ComfyNode):
@@ -697,14 +892,17 @@ class MiniMaxH3_JobCommit(io.ComfyNode):
                         "queues the next run itself.",
             inputs=[io.String.Input("segment", force_input=True), io.Image.Input("images"),
                     io.String.Input("qc_report", default="", optional=True, force_input=True),
-                    io.Combo.Input("decision", options=list(DECISIONS), default=DECISIONS[0])],
+                    io.Combo.Input("decision", options=list(DECISIONS), default=DECISIONS[0]),
+                    io.Latent.Input("latent", optional=True,
+                                    tooltip="The sampler's latent: kept with the accepted frames and handed to the "
+                                            "next segment as context_latent.")],
             outputs=[io.String.Output("status"), io.String.Output("job_json"), io.String.Output("final_path")],
             hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, segment, images, qc_report="", decision=DECISIONS[0]) -> io.NodeOutput:
+    def execute(cls, segment, images, qc_report="", decision=DECISIONS[0], latent=None) -> io.NodeOutput:
         seg = json.loads(segment)
         j = J.Job.open(os.path.dirname(os.path.dirname(seg["job_path"])), seg["job"], create=False, recover=False)
         spec = j.m["spec"]
@@ -726,7 +924,7 @@ class MiniMaxH3_JobCommit(io.ComfyNode):
             d = _attempt_dir(j, sid, n)
             os.makedirs(d, exist_ok=True)
             a0, a1 = p["accepted"]
-            off = a0 - p["global"][0]
+            off, _n = accepted_slice(p)
             keep = images[off: off + (a1 - a0)]
             if keep.shape[0] != a1 - a0:
                 raise ValueError(f"H3 Job Commit: segment {sid} must cover frames {a0}-{a1 - 1}, the images give "
@@ -744,6 +942,8 @@ class MiniMaxH3_JobCommit(io.ComfyNode):
                                             for f in sorted(os.listdir(d)) if f.endswith(".png")).encode()).hexdigest()
             outputs = {"frames_dir": d, "frames": int(keep.shape[0]), "frames_sha256": digest,
                        "tail_frames": int(tail.shape[0])}
+            if latent is not None:
+                outputs["latent"] = save_latent(d, latent)
             if seg.get("alternate"):                            # kept as a named take; nothing else moves
                 j.accept(sid, outputs, take=seg["alternate"])
                 notes.append(f"segment {sid}: take '{seg['alternate']}' kept beside the chosen one")

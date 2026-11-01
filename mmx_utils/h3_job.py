@@ -113,7 +113,7 @@ def _atomic_json(path: str, data: dict) -> None:
 def plan_segments(first: int, count: int, *, segment_frames: int, context: int = 0, blend: int = 0,
                   lookbehind: int = 0, lookahead: int = 0, source_first: int | None = None,
                   source_last: int | None = None, grid: tuple[int, int] | None = (17, 5),
-                  lead_context: int = 0, tail: int = 0) -> list[dict]:
+                  lead_context: int = 0, tail: int = 0, hold_head: int = 0) -> list[dict]:
     """Segments covering global frames first .. first + count - 1.
 
     * ``segment_frames``: the model-local length of every segment (H3: 17k + 5; ``grid`` checks it, None = any);
@@ -126,7 +126,11 @@ def plan_segments(first: int, count: int, *, segment_frames: int, context: int =
     * the accepted ranges tile first .. first + count exactly;
     * ``lead_context``: segment 0 also continues from accepted frames before ``first`` (a shot that continues the
       previous take, L9.77); ``tail``: frames past the end the last segment keeps generating, as the overlap tail a
-      following dissolve cross-fades with (taken from what would otherwise be grid padding).
+      following dissolve cross-fades with (taken from what would otherwise be grid padding);
+    * ``hold_head``: a segment with no continuation context first generates this many copies of its first frame,
+      then discards them (``pad_head``; the PRB workflow's AV handles, L9.76) - the model's first frames settle on a
+      held picture instead of on the cut. It takes model frames from the segment, so ``segment_frames`` stays on the
+      grid.
     """
     L, first, count = int(segment_frames), int(first), int(count)
     if count <= 0:
@@ -137,6 +141,9 @@ def plan_segments(first: int, count: int, *, segment_frames: int, context: int =
     context, blend = int(context), int(blend)
     if context < 0 or blend < 0 or context + blend >= L:
         raise JobError(f"context ({context}) + blend ({blend}) must be shorter than a segment ({L} frames).")
+    hold_head = int(hold_head)
+    if hold_head < 0 or hold_head + blend >= L - 1:
+        raise JobError(f"hold_head ({hold_head}) + blend ({blend}) must leave room in a segment ({L} frames).")
     end = first + count
     src_lo = first if source_first is None else int(source_first)
     src_hi = end if source_last is None else int(source_last) + 1
@@ -145,8 +152,9 @@ def plan_segments(first: int, count: int, *, segment_frames: int, context: int =
     accepted_from = first
     while accepted_from < end:
         head = int(lead_context) if k == 0 else context
+        hold = hold_head if head == 0 else 0                    # held copies of frame ``start`` before it
         gen_lo = start + head                                   # first frame the model generates
-        gen_hi = start + L                                      # model-local end
+        gen_hi = start + L - hold                               # model-local end
         acc_lo = accepted_from
         acc_hi = min(end, gen_hi - (blend if gen_hi < end else 0))
         if acc_hi <= acc_lo:
@@ -158,7 +166,7 @@ def plan_segments(first: int, count: int, *, segment_frames: int, context: int =
             "global": [start, min(gen_hi, end + tail_kept)],     # timeline frames the segment touches
             "context_frames": head, "context_from": (k - 1) if k > 0 else None,
             "overlap_head": (blend if k > 0 else 0), "overlap_tail": (blend if gen_hi < end else tail_kept),
-            "pad_head": 0, "pad_tail": max(0, gen_hi - end - tail_kept),
+            "pad_head": hold, "pad_tail": max(0, gen_hi - end - tail_kept),
             "accepted": [acc_lo, acc_hi],
             "track_window": [max(src_lo, start - int(lookbehind)), min(src_hi, gen_hi + int(lookahead))],
             "generated": [gen_lo, min(gen_hi, end)],
@@ -233,7 +241,7 @@ def parse_timeline(text: str, fps: float, first: int = 0) -> list[dict]:
 
 
 def plan_shots(shots: list[dict], *, segment_frames: int, context: int = 0, blend: int = 0, lookbehind: int = 0,
-               lookahead: int = 0, grid: tuple[int, int] | None = (17, 5)) -> list[dict]:
+               lookahead: int = 0, grid: tuple[int, int] | None = (17, 5), hold_head: int = 0) -> list[dict]:
     """Segments for a shot list. A CUT starts its shot with no continuation context (nothing leaks across a cut); a
     CONTINUE shot's first segment continues from the previous shot's last segment; a DISSOLVE N shot is a cut whose
     first N frames are cross-faded with N frames the previous shot keeps generating past its end."""
@@ -244,7 +252,8 @@ def plan_shots(shots: list[dict], *, segment_frames: int, context: int = 0, blen
         tail = int(nxt["dissolve"]) if nxt is not None and nxt["transition"] == "dissolve" else 0
         lead = int(context) if (shot["transition"] == "continue" and out) else 0
         segs = plan_segments(a, b - a, segment_frames=segment_frames, context=context, blend=blend,
-                             lookbehind=lookbehind, lookahead=lookahead, grid=grid, lead_context=lead, tail=tail)
+                             lookbehind=lookbehind, lookahead=lookahead, grid=grid, lead_context=lead, tail=tail,
+                             hold_head=hold_head)
         if tail and segs[-1]["overlap_tail"] < tail:
             raise JobError(f"shot {i + 1}: the dissolve into shot {i + 2} needs {tail} frames past its end and its "
                            f"last segment has {segs[-1]['overlap_tail']} to spare - shorten the dissolve, or change "
@@ -266,7 +275,7 @@ def plan_shots(shots: list[dict], *, segment_frames: int, context: int = 0, blen
 
 
 _KEY_FIELDS = ("accepted", "global", "context_from", "context_frames", "overlap_head", "overlap_tail", "shot", "prompt",
-               "transition")
+               "transition", "pad_head")
 
 
 def plan_key(seg: dict) -> str:

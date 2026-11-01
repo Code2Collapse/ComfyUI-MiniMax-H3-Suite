@@ -226,6 +226,55 @@ frame numbers run in order, the shot colour changes exactly at the cuts, and the
 mixes. It passes in the classic renderer, in Nodes 2.0 and inside a subgraph. A CPU stand-in replaced the sampler,
 so the check shows the job logic, not image quality.
 
+## Attribute transfer on a plate as a job: blood, dirt, wounds, makeup (2026-11-01)
+
+The first benchmark of Revision 3 (the PRB Blood Chunk workflow) is an edit of a whole plate. The job engine now
+does that properly. Workflow `workflows/tasks/15_attribute_transfer_job.json` puts it together.
+
+- **Held frames before a fresh segment.** H3 Task Spec `hold_head` (8 in the PRB workflow's AV handles): a segment
+  that does not continue from accepted frames first generates that many copies of its first plate frame, then
+  drops them. The sound starts that many frames earlier, with silence, so picture and sound stay together.
+- **Windows that fit the model.** The Job Controller's `window` is exactly the segment's model length (17k + 5).
+  Held frames come first. Grid padding at the end is the plate's own next frames while it has them, then the last
+  one repeated. H3 Source AV Latent takes every segment without refusing the last one.
+- **A matte cut exactly like the plate.** The Job Controller takes an optional `matte` (a mask clip of the same
+  length and size) and gives `matte_window`: the same frames, the same held frames. A matte of another size, or
+  shorter than the plate, is refused in words.
+- **Accepted latents handed on.**
+  - H3 Job Commit takes the sampler's `latent` and keeps it with the accepted frames.
+  - The Job Controller's `context_latent` gives the next segment the latent of the take it continues from, for H3
+    Motion Context. A rejected attempt is never handed on.
+  - This replaces saving and loading context latents by file path.
+- **The plate's sound.** H3 Task Spec records where the plate's sound for the job's frames is, and the assembled
+  movie carries it. The assembly checks that the sound lasts as long as the picture (within one frame) and records
+  the result in the job.
+- **QC for edits.** H3 QC Gate gains `plate` and `mask`.
+  - Outside the mask (grown by `protect_px`) the result must stay the plate within `background_max` (2/255). The
+    frames that changed are listed by their global numbers.
+  - Mask area jumps and dropouts are flagged: a warning, or a failure with `strict_masks`.
+  - The black / frozen checks now look only at the frames the job keeps, so held frames and padding no longer count
+    as frozen.
+- **Workflow 15** is workflow 06's masked-edit chain inside the job. It runs on core Load Video -> H3 Media Probe,
+  so it works without other packs.
+  - The GPU stage (crop, Image + Reference to Video with the look-dev picture, Source AV Latent, Motion Context
+    with `context_latent`, sampler, decode, Subject Uncrop exact outside mask) is one native subgraph. Open it to
+    edit.
+  - Not run on H3 weights yet.
+
+Live check on the CPU testbed: the shipped workflow with a stand-in in place of the GPU subgraph, on a 70-frame plate
+with sound. It passes in the classic renderer, Nodes 2.0, inside a subgraph, after an interrupted run, and on a
+second plate of another length and size. See the C2C workspace, evidence L9.76.
+
+### Convert to Subgraph no longer re-wires nodes with autogrow inputs
+
+ComfyUI's front end has a fault on 1.53.10, 1.55.14 and 1.57.0, with core nodes alone. Converting a node that has
+growing input groups (H3 Image + Reference to Video, core MiniMax H3 Reference to Video and others) into a subgraph
+puts its links on the wrong inputs. Measured: a reference video arrived on an AUDIO input, and `width`'s link on
+`length`.
+
+`web/subgraph_autogrow_fix.js` puts every link back on the input it was on, through the front end's own connect
+calls, and removes the empty slots the mistake grew. Nodes that were not affected are not touched.
+
 ## Fixes 2026-10-24: nodes that did less than they said
 
 - **QC gates now gate.** H3 Audio Quality Gate, H3 Color Round-Trip QC and H3 Edit Validator run even with nothing
