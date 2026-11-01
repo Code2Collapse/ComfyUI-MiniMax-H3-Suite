@@ -8,15 +8,22 @@ every continuation segment"). Guards: the job's state (paused / review / complet
 (``max_auto_runs``), the kill switch ``H3_AUTO_CONTINUE=0``.
 
 Accepted frames are kept as 16-bit PNGs per segment attempt (exact, any length), numbered by GLOBAL frame; the final
-movie is assembled from the chosen takes in plan order, streamed (one chunk in memory).
+movie is assembled from the chosen takes in plan order, streamed (one chunk in memory). Frames generated past a
+segment's accepted end (blend / dissolve tail) are kept beside them and cross-faded at assembly.
 
-Original nodes, GPL-3.0. Design: docs/evidence/A21/phase2/DESIGN_L9.75_job_engine.md in the workspace.
+Long generative video (Rev 3 Parts 11 + 15; L9.77): H3 Shot Planner turns a prompt timeline into shots (cut /
+continue / dissolve; context never crosses a cut), H3 Reference Bank keeps role-tagged references with duplicate
+marks, H3 Subject Memory rebuilds the scene's identity anchors and colour baseline from ACCEPTED segments only.
+
+Original nodes, GPL-3.0. Design: docs/evidence/A21/phase2/DESIGN_L9.75_job_engine.md and DESIGN_L9.77_long_video.md
+in the workspace.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import sys
 import uuid
@@ -25,6 +32,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from comfy_api.latest import io
 
 _PKG = Path(__file__).resolve().parents[1]
@@ -33,6 +41,7 @@ if str(_PKG) not in sys.path:
 
 from mmx_utils import h3_constants as HC  # noqa: E402
 from mmx_utils import h3_job as J  # noqa: E402
+from mmx_utils.h3_session import frame_stats  # noqa: E402
 from mmx_vendor.c2c_core.timeline import ledger as L  # noqa: E402
 from mmx_vendor.c2c_core.video import media as _media  # noqa: E402
 from mmx_vendor.c2c_core.video.writer import StreamWriter  # noqa: E402
@@ -49,6 +58,13 @@ DECISIONS = ("auto (QC + approval policy)", "accept", "reject (retry)", "hold fo
 SPEC = "h3.task_spec"
 PLAN = "h3.segment_plan"
 QC = "h3.qc_report"
+SHOTS = "h3.shot_plan"
+BANK = "h3.reference_bank"
+MEMORY = "h3.subject_memory"
+ROLES = ("identity", "face", "head", "hair", "body", "outfit", "footwear", "props", "expression", "performance",
+         "scene", "lighting", "camera", "style")
+IDENTITY_ROLES = ("identity", "face", "head")
+MEMORY_ROLES = ("identity", "face", "head", "hair", "body", "outfit", "props")
 
 
 def _jobs_dir() -> str:
@@ -108,7 +124,12 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
                 C2C_VIDEO.Input("media", optional=True, tooltip="The source plate (edit tasks)."),
                 io.String.Input("prompt", default="", optional=True, multiline=True),
                 io.String.Input("references", default="", optional=True,
-                                tooltip="Reference identity (any text / JSON that changes when they change)."),
+                                tooltip="Reference identity (any text / JSON that changes when they change) - e.g. "
+                                        "H3 Reference Bank's fingerprint."),
+                io.String.Input("shot_plan", optional=True, force_input=True,
+                                tooltip="From H3 Shot Planner: the job becomes its shots (their length sets 'count'; "
+                                        "each segment gets its shot's prompt, with 'prompt' above as a shared "
+                                        "prefix). Cuts never carry context; dissolves cross-fade."),
             ],
             outputs=[io.String.Output("task_spec", tooltip="h3.task_spec v1")],
         )
@@ -116,7 +137,7 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
     @classmethod
     def execute(cls, task=TASKS[0], first=-1, count=0, segment_frames=124, context=39, blend=0, lookbehind=0,
                 lookahead=0, seed=0, max_retries=2, approval=APPROVAL[0], auto_continue=True, max_auto_runs=100,
-                fps=24.0, deliver_codec="prores", media=None, prompt="", references="") -> io.NodeOutput:
+                fps=24.0, deliver_codec="prores", media=None, prompt="", references="", shot_plan=None) -> io.NodeOutput:
         fps_ = Fraction(fps).limit_denominator(1001000)
         fingerprints = {"prompt": _sha(prompt), "references": _sha(references)}
         media_first, media_frames = 0, None
@@ -130,6 +151,18 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
             media_frames = len(media)
             fps_ = Fraction(media.fps)
         start = media_first if int(first) < 0 else int(first)
+        shots = None
+        if str(shot_plan or "").strip():
+            sp = _json(shot_plan, SHOTS, "H3 Task Spec")
+            if Fraction(sp["fps"]) != fps_:
+                raise ValueError(f"H3 Task Spec: the shot plan was timed at {float(Fraction(sp['fps'])):g} fps and the "
+                                 f"job runs at {float(fps_):g} - set the same fps on H3 Shot Planner.")
+            if int(count) and int(count) != int(sp["frames"]):
+                raise ValueError(f"H3 Task Spec: 'count' is {int(count)} and the shot plan lasts {sp['frames']} "
+                                 f"frames - set count to 0 (the shots decide) or change the shots.")
+            count = int(sp["frames"])
+            # the plan's frames are offsets from the job's first frame
+            shots = [{**s, "global": [start + int(s["global"][0]), start + int(s["global"][1])]} for s in sp["shots"]]
         n = int(count) or (media_frames - (start - media_first) if media_frames is not None else 0)
         if n <= 0:
             raise ValueError("H3 Task Spec: 'count' is 0 and there is no media to take the length from.")
@@ -139,6 +172,9 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
                 "max_retries": int(max_retries), "approval": approval, "auto_continue": bool(auto_continue),
                 "max_auto_runs": int(max_auto_runs), "fps": f"{fps_.numerator}/{fps_.denominator}",
                 "deliver_codec": deliver_codec, "fingerprints": fingerprints, "prompt": prompt}
+        if shots is not None:
+            # not a fingerprint: an edited shot re-opens only its own segments (Job.set_plan compares plan entries)
+            spec["shots"] = shots
         return io.NodeOutput(json.dumps(spec))
 
 
@@ -205,9 +241,13 @@ class MiniMaxH3_CompatibilityValidator(io.ComfyNode):
 # ── H3 Segment Planner ─────────────────────────────────────────────────────────────────────────────────────────────
 
 def plan_from_spec(spec: dict) -> dict:
-    segs = J.plan_segments(spec["first"], spec["count"], segment_frames=spec["segment_frames"],
-                           context=spec["context"], blend=spec["blend"], lookbehind=spec["lookbehind"],
-                           lookahead=spec["lookahead"])
+    kw = dict(segment_frames=spec["segment_frames"], context=spec["context"], blend=spec["blend"],
+              lookbehind=spec["lookbehind"], lookahead=spec["lookahead"])
+    try:
+        segs = J.plan_shots(spec["shots"], **kw) if spec.get("shots") else \
+            J.plan_segments(spec["first"], spec["count"], **kw)
+    except J.JobError as exc:
+        raise ValueError(f"H3 Segment Planner: {exc}") from exc
     led = L.new(list(range(spec["count"])), fps=spec["fps"], offset=spec["first"],
                 total_source=spec["count"])
     led = L.add_segments(led, [{"id": s["id"], "global": s["global"], "pad_head": s["pad_head"],
@@ -235,8 +275,10 @@ class MiniMaxH3_SegmentPlanner(io.ComfyNode):
         plan = plan_from_spec(_json(task_spec, SPEC, "H3 Segment Planner"))
         if plan["problems"]:
             raise ValueError("H3 Segment Planner: " + "; ".join(plan["problems"]))
-        rows = [f"seg {s['id']:>3}  model {s['global'][0]}-{s['global'][1] - 1} (+{s['pad_tail']} pad)  "
+        rows = [(f"shot {s['shot'] + 1:>2} {s['transition']:<8} " if "shot" in s else "")
+                + f"seg {s['id']:>3}  model {s['global'][0]}-{s['global'][1] - 1} (+{s['pad_tail']} pad)  "
                 f"context {s['context_frames']}  accept {s['accepted'][0]}-{s['accepted'][1] - 1}"
+                + (f"  cross-fade {s['overlap_head']}" if s["overlap_head"] else "")
                 for s in plan["segments"]]
         return io.NodeOutput(json.dumps(plan), "\n".join(rows), len(plan["segments"]))
 
@@ -311,6 +353,8 @@ class MiniMaxH3_JobController(io.ComfyNode):
                 io.Int.Output("frames", tooltip="Model frames of this segment (17k + 5)."),
                 io.String.Output("segment", tooltip="Feed H3 QC Gate and H3 Job Commit."),
                 io.String.Output("status"),
+                io.String.Output("prompt", tooltip="This segment's prompt: the task spec's prompt, then its shot's "
+                                                   "prompt when the job has a shot plan."),
             ],
             # the auto-continue token rides in the queued run's extra_pnginfo: no widget for anyone to edit
             hidden=[io.Hidden.unique_id, io.Hidden.extra_pnginfo],
@@ -331,7 +375,7 @@ class MiniMaxH3_JobController(io.ComfyNode):
         spec = _json(task_spec, SPEC, "H3 Job Controller")
         plan = _json(segment_plan, PLAN, "H3 Job Controller")
         j = J.Job.open(_jobs_dir(), job, spec=spec)
-        if not j.m["plan"] or [s["accepted"] for s in j.m["plan"]] != [s["accepted"] for s in plan["segments"]]:
+        if not j.m["plan"] or [J.plan_key(s) for s in j.m["plan"]] != [J.plan_key(s) for s in plan["segments"]]:
             j.set_plan(plan["segments"])
         auto = bool(auto_token) and auto_token == j.m.get("auto_token")
         if not auto:
@@ -364,14 +408,14 @@ class MiniMaxH3_JobController(io.ComfyNode):
             status = f"job {j.m['name']}: {why}" + (f" ({note})" if note else "")
             b = _blocked()
             return io.NodeOutput(b, b, b, b, b, json.dumps({"job": j.m["name"], "state": j.state, "idle": True}),
-                                 status)
+                                 status, b)
         sid = int(seg["id"])
         ok, why = j.context_ok(sid)
         if not ok:
             j.hold_for_review(sid, why)
             b = _blocked()
             return io.NodeOutput(b, b, b, b, b, json.dumps({"job": j.m["name"], "state": j.state, "idle": True}),
-                                 f"job {j.m['name']}: {why}")
+                                 f"job {j.m['name']}: {why}", b)
         p = j.plan_of(sid)
         policy = "new seed" if seg["attempts"] else "first"
         seed = j.seed_for(sid, "new seed")
@@ -386,15 +430,23 @@ class MiniMaxH3_JobController(io.ComfyNode):
             t0, t1 = p["track_window"]
             track = media.trimmed(max(0, t0 - mf), max(0, t1 - mf))
         ctx = _context_frames(j, p) if p["context_frames"] else torch.zeros((1, 8, 8, 3))
+        text = segment_prompt(spec, p)
         seg_json = {"job": j.m["name"], "job_path": j.path, "segment": sid, "attempt": att["n"], "seed": seed,
                     "plan": p, "controller": str(getattr(cls.hidden, "unique_id", None) or ""), "approval": spec["approval"],
-                    "max_retries": spec["max_retries"], "alternate": alternate}
+                    "max_retries": spec["max_retries"], "alternate": alternate, "shot": p.get("shot"),
+                    "scene": p.get("scene"), "transition": p.get("transition"), "prompt": text}
         status = (f"job {j.m['name']}: segment {sid + 1} of {len(j.m['plan'])}, attempt {att['n']}, seed {seed}"
+                  + (f", shot {p['shot'] + 1} ({p['transition']})" if p.get("shot") is not None else "")
                   + (f" - alternate take '{alternate}'" if alternate else "")
                   + (f" ({note})" if note else ""))
         b = _blocked()
         return io.NodeOutput(win if win is not None else b, track if track is not None else b, ctx, seed,
-                             int(p["model_frames"]), json.dumps(seg_json), status)
+                             int(p["model_frames"]), json.dumps(seg_json), status, text)
+
+
+def segment_prompt(spec: dict, p: dict) -> str:
+    """The task spec's prompt (shared by every shot), then the segment's shot prompt."""
+    return ", ".join(x for x in (str(spec.get("prompt") or "").strip(), str(p.get("prompt") or "").strip()) if x)
 
 
 def _attempt_dir(j: J.Job, sid: int, n: int) -> str:
@@ -433,7 +485,7 @@ def _read_png16(path: str) -> torch.Tensor:
 
 def qc_checks(images: torch.Tensor, seg: dict, context: torch.Tensor | None = None, *, min_mean: float = 0.01,
               freeze_max: float = 0.5, seam_max: float = 0.08, diff_report: dict | None = None,
-              diff_max: float = 0.0) -> dict:
+              diff_max: float = 0.0, memory: dict | None = None, colour_drift_max: float = 0.0) -> dict:
     p = seg["plan"]
     checks = []
     expected = int(p["model_frames"])
@@ -455,6 +507,17 @@ def qc_checks(images: torch.Tensor, seg: dict, context: torch.Tensor | None = No
     if diff_report and diff_max > 0:
         checks.append({"name": "difference from the source", "ok": float(diff_report.get("max", 0)) <= diff_max,
                        "value": diff_report.get("max")})
+    base = (memory or {}).get("baseline")
+    if base and colour_drift_max > 0 and (memory or {}).get("scene") == p.get("scene"):
+        # the scene's look so far, from accepted segments only; a scene's first segment has no baseline (skipped)
+        a0, a1 = p["accepted"]
+        off = a0 - p["global"][0]
+        acc = images[off: off + (a1 - a0)]
+        if acc.shape[0]:
+            st = frame_stats(acc.float())
+            de = math.sqrt(sum((a - b) ** 2 for a, b in zip(st["lab_mean"], base["lab_mean"])))
+            checks.append({"name": "keeps the scene's colour", "ok": de <= colour_drift_max, "value": round(de, 3),
+                           "max": colour_drift_max})
     verdict = "pass" if all(c["ok"] for c in checks) else "fail"
     return {"c2c_contract": QC, "c2c_contract_version": "1.0", "segment": seg["segment"], "attempt": seg["attempt"],
             "verdict": verdict, "checks": checks}
@@ -475,17 +538,23 @@ class MiniMaxH3_QCGate(io.ComfyNode):
                     io.Float.Input("freeze_max", default=0.5, min=0.0, max=1.0, step=0.01),
                     io.Float.Input("seam_max", default=0.08, min=0.0, max=1.0, step=0.001),
                     io.Float.Input("diff_max", default=0.0, min=0.0, max=1.0, step=0.001,
-                                   tooltip="0 = do not judge the difference report.")],
+                                   tooltip="0 = do not judge the difference report."),
+                    io.String.Input("memory", default="", optional=True, force_input=True,
+                                    tooltip="From H3 Subject Memory: judge the segment against its scene's look."),
+                    io.Float.Input("colour_drift_max", default=12.0, min=0.0, max=100.0, step=0.1,
+                                   tooltip="With a memory: the largest mean-colour distance (CIE76 delta E) from the "
+                                           "scene's accepted frames. 0 = do not judge.")],
             outputs=[io.String.Output("qc_report"), io.Boolean.Output("passed"), io.Image.Output("images")],
         )
 
     @classmethod
     def execute(cls, segment, images, context_images=None, diff_report="", min_mean=0.01, freeze_max=0.5,
-                seam_max=0.08, diff_max=0.0) -> io.NodeOutput:
+                seam_max=0.08, diff_max=0.0, memory="", colour_drift_max=12.0) -> io.NodeOutput:
         seg = json.loads(segment)
         dr = json.loads(diff_report) if str(diff_report or "").strip() else None
+        mem = _json(memory, MEMORY, "H3 QC Gate") if str(memory or "").strip() else None
         rep = qc_checks(images, seg, context_images, min_mean=min_mean, freeze_max=freeze_max, seam_max=seam_max,
-                        diff_report=dr, diff_max=diff_max)
+                        diff_report=dr, diff_max=diff_max, memory=mem, colour_drift_max=colour_drift_max)
         j = J.Job.open(os.path.dirname(os.path.dirname(seg["job_path"])), seg["job"], create=False, recover=False)
         j.record_qc(int(seg["segment"]), rep)
         return io.NodeOutput(json.dumps(rep), rep["verdict"] == "pass", images)
@@ -507,13 +576,27 @@ def _server_url() -> str:
     return f"{scheme}://{host}:{port}"
 
 
+def _client_id() -> str | None:
+    """The browser that queued the running prompt. Core sends progress and outputs only to a prompt's client_id, so
+    the runs auto-continue queues carry it too - without it the person who clicked sees none of them."""
+    try:
+        from server import PromptServer  # type: ignore[import-not-found]
+        return getattr(PromptServer.instance, "client_id", None)
+    except Exception:  # noqa: BLE001 - outside a server (tests): no browser to report to
+        return None
+
+
 def post_prompt(prompt: dict, extra_pnginfo: dict | None) -> str:
     """Queue ``prompt`` through the server's own public POST /prompt (validation, ids, on_prompt hooks all apply).
     ``extra_pnginfo`` carries the workflow (for saved files) and the auto-continue token."""
     import ssl
     import urllib.request
 
-    body = json.dumps({"prompt": prompt, "extra_data": {"extra_pnginfo": extra_pnginfo or {}}}).encode("utf-8")
+    payload = {"prompt": prompt, "extra_data": {"extra_pnginfo": extra_pnginfo or {}}}
+    cid = _client_id()
+    if cid:
+        payload["client_id"] = cid
+    body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(_server_url() + "/prompt", data=body, method="POST",
                                  headers={"Content-Type": "application/json"})
     ctx = ssl._create_unverified_context() if req.full_url.startswith("https") else None   # our own server
@@ -538,6 +621,11 @@ def auto_continue(j: J.Job, spec: dict, seg: dict, prompt: dict | None, extra_pn
         return "auto-continue could not find the Job Controller in this prompt - queue the next run yourself"
     token = uuid.uuid4().hex
     nxt = json.loads(json.dumps(prompt))
+    for node in nxt.values():
+        # core's IsChangedCache writes each node's fingerprint INTO the running prompt; a copy that kept them would
+        # replay this run's values and the next run would come entirely from the cache (seen live, source-free job)
+        if isinstance(node, dict):
+            node.pop("is_changed", None)
     nxt[seg["controller"]].setdefault("inputs", {})["action"] = "run"     # an approve / retry is not repeated
     extra = dict(extra_pnginfo or {}, h3_auto_token=token)
     j.m["auto_token"], j.m["auto_chain"] = token, chain + 1
@@ -550,27 +638,50 @@ def auto_continue(j: J.Job, spec: dict, seg: dict, prompt: dict | None, extra_pn
     return f"queued the next segment automatically (run {chain + 1}, prompt {pid[:8]})"
 
 
+def _pngs(d: str) -> list[str]:
+    return [os.path.join(d, f) for f in sorted(os.listdir(d)) if f.endswith(".png")] if os.path.isdir(d) else []
+
+
+def assembly_frames(j: J.Job) -> list:
+    """The movie's frames in order: a PNG path, or (previous tail, frame, weight of frame) where a segment's first
+    ``overlap_head`` frames cross-fade with the previous segment's tail (blend, dissolve) - linear, never a pure copy
+    of either end. A tail missing (an older job, a short generation) leaves the frames as they are."""
+    items: list = []
+    prev_tail: list[str] = []
+    for p in j.m["plan"]:
+        s = j.seg(p["id"])
+        d = _attempt_dir(j, int(p["id"]), int(s["takes"].get(s.get("take") or "main", len(s["attempts"]))))
+        files = _pngs(d)
+        n = min(int(p.get("overlap_head") or 0), len(prev_tail), len(files))
+        n = next((k for k in range(n) if os.path.basename(prev_tail[k]) != os.path.basename(files[k])), n)
+        items += [(prev_tail[k], files[k], (k + 1) / (n + 1)) for k in range(n)] + files[n:]
+        prev_tail = _pngs(os.path.join(d, "tail"))
+    return items
+
+
+def _assembly_frame(item, h: int, w: int) -> torch.Tensor:
+    if isinstance(item, str):
+        return _read_png16(item)[:h, :w]
+    a, b, wb = item
+    return (_read_png16(a)[:h, :w] * (1.0 - wb) + _read_png16(b)[:h, :w] * wb)
+
+
 def assemble(j: J.Job, spec: dict) -> str:
-    """The final movie from every segment's chosen take, in plan order, streamed."""
+    """The final movie from every segment's chosen take, in plan order, streamed (8 frames in memory)."""
     codec = spec.get("deliver_codec", "prores")
     ext = {"h264": ".mp4", "prores": ".mov", "ffv1": ".mkv"}[codec]
     out = os.path.join(j.root, f"{j.m['name']}{ext}")
-    files: list[str] = []
-    for p in j.m["plan"]:
-        s = j.seg(p["id"])
-        n = s["takes"].get(s.get("take") or "main", len(s["attempts"]))
-        d = _attempt_dir(j, int(p["id"]), int(n))
-        files += [os.path.join(d, f) for f in sorted(os.listdir(d)) if f.endswith(".png")]
-    if not files:
+    items = assembly_frames(j)
+    if not items:
         raise ValueError("H3 Job Commit: nothing to assemble.")
-    first = _read_png16(files[0])
+    first = _read_png16(items[0] if isinstance(items[0], str) else items[0][1])
     h, w = int(first.shape[0]), int(first.shape[1])
     if codec != "ffv1":
         w, h = w - w % 2, h - h % 2
     part = out + ".partial" + ext
     with StreamWriter(part, Fraction(spec["fps"]), w, h, codec=codec, ten_bit=codec != "h264") as wr:
-        for i in range(0, len(files), 8):
-            wr.write(torch.stack([_read_png16(f)[:h, :w] for f in files[i:i + 8]]))
+        for i in range(0, len(items), 8):
+            wr.write(torch.stack([_assembly_frame(it, h, w) for it in items[i:i + 8]]))
     os.replace(part, out)
     return out
 
@@ -622,9 +733,17 @@ class MiniMaxH3_JobCommit(io.ComfyNode):
                                  f"{keep.shape[0]} of {a1 - a0} (generate {p['model_frames']} frames).")
             for k in range(keep.shape[0]):
                 _write_png16(os.path.join(d, f"frame_{a0 + k:07d}.png"), keep[k])
+            # the frames generated past the accepted end (blend / dissolve tail): the assembly cross-fades the next
+            # segment's first overlap_head frames with them
+            tail = images[off + (a1 - a0): off + (a1 - a0) + int(p.get("overlap_tail") or 0)]
+            if tail.shape[0]:
+                os.makedirs(os.path.join(d, "tail"), exist_ok=True)
+                for k in range(tail.shape[0]):
+                    _write_png16(os.path.join(d, "tail", f"frame_{a1 + k:07d}.png"), tail[k])
             digest = hashlib.sha256("".join(J.sha256_file(os.path.join(d, f))
-                                            for f in sorted(os.listdir(d))).encode()).hexdigest()
-            outputs = {"frames_dir": d, "frames": int(keep.shape[0]), "frames_sha256": digest}
+                                            for f in sorted(os.listdir(d)) if f.endswith(".png")).encode()).hexdigest()
+            outputs = {"frames_dir": d, "frames": int(keep.shape[0]), "frames_sha256": digest,
+                       "tail_frames": int(tail.shape[0])}
             if seg.get("alternate"):                            # kept as a named take; nothing else moves
                 j.accept(sid, outputs, take=seg["alternate"])
                 notes.append(f"segment {sid}: take '{seg['alternate']}' kept beside the chosen one")
@@ -653,6 +772,299 @@ class MiniMaxH3_JobCommit(io.ComfyNode):
         return io.NodeOutput(status, json.dumps(j.summary()), final, ui={"text": [status]})
 
 
+# ── H3 Shot Planner (L9.77) ────────────────────────────────────────────────────────────────────────────────────────
+
+_TIMELINE_EXAMPLE = ("# seconds | prompt | transition into the shot (cut, continue, dissolve N frames)\n"
+                     "4 | a lighthouse keeper climbs the spiral stairs at dusk, lantern in hand | cut\n"
+                     "3 | she reaches the lamp room and looks out to sea | continue\n"
+                     "4 | a storm rolls in over the dark water, waves breaking on the rocks | dissolve 12")
+
+
+class MiniMaxH3_ShotPlanner(io.ComfyNode):
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="MiniMaxH3_ShotPlanner", display_name="H3 Shot Planner", category="MiniMax H3/Job",
+            description="A prompt timeline -> the shots of a long job. One shot per line: seconds | prompt | "
+                        "transition. cut (the default) starts a new scene and carries no context across; continue "
+                        "keeps the take going with a new prompt; dissolve N cross-fades N frames. Feed H3 Task "
+                        "Spec's shot_plan.",
+            inputs=[io.String.Input("timeline", default=_TIMELINE_EXAMPLE, multiline=True,
+                                    tooltip="seconds | prompt | transition, one shot per line (# = a note). JSON "
+                                            "works too: [{\"seconds\": 4, \"prompt\": \"...\", \"transition\": "
+                                            "\"cut\"}, ...]."),
+                    io.Float.Input("fps", default=24.0, min=1.0, max=240.0,
+                                   tooltip="The job's rate (H3 generates at 24): seconds become whole frames.")],
+            outputs=[io.String.Output("shot_plan", tooltip="h3.shot_plan v1"), io.String.Output("table"),
+                     io.Int.Output("shots"), io.Int.Output("frames")],
+        )
+
+    @classmethod
+    def execute(cls, timeline=_TIMELINE_EXAMPLE, fps=24.0) -> io.NodeOutput:
+        try:
+            shots = J.parse_timeline(timeline, fps)
+        except J.JobError as exc:
+            raise ValueError(f"H3 Shot Planner: {exc}") from exc
+        fps_ = Fraction(fps).limit_denominator(1001000)
+        total = int(shots[-1]["global"][1])
+        plan = {"c2c_contract": SHOTS, "c2c_contract_version": "1.0", "fps": f"{fps_.numerator}/{fps_.denominator}",
+                "frames": total, "scenes": int(shots[-1]["scene"]) + 1, "shots": shots}
+        rows = []
+        for s in shots:
+            tr = s["transition"] + (f" {s['dissolve']}" if s["dissolve"] else "")
+            rows.append(f"shot {s['id'] + 1:>2}  scene {s['scene'] + 1:>2}  {tr:<12} frames {s['global'][0]}-"
+                        f"{s['global'][1] - 1} ({s['frames']})  {s['prompt'][:70]}")
+        return io.NodeOutput(json.dumps(plan), "\n".join(rows), len(shots), total)
+
+
+# ── H3 Reference Bank (L9.77) ──────────────────────────────────────────────────────────────────────────────────────
+
+def _q16(img: torch.Tensor) -> np.ndarray:
+    return np.rint(np.clip(img[..., :3].float().cpu().numpy(), 0.0, 1.0) * 65535.0).astype(np.uint16)
+
+
+def dhash64(img: torch.Tensor) -> int:
+    """64-bit difference hash: grey 9x8, each pixel brighter than its left neighbour = 1. Near-duplicates (a re-save,
+    a small crop or resize) stay within a few bits."""
+    g = img[..., :3].float().mean(-1)[None, None]
+    s = F.interpolate(g, size=(8, 9), mode="area")[0, 0]
+    return sum(1 << i for i, b in enumerate((s[:, 1:] > s[:, :-1]).flatten().tolist()) if b)
+
+
+def _roles(text: str, n: int) -> list[str]:
+    rs = [r.strip().lower() for r in str(text or "").split(",") if r.strip()] or ["identity"]
+    bad = [r for r in rs if r not in ROLES]
+    if bad:
+        raise ValueError(f"H3 Reference Bank: unknown role(s) {', '.join(bad)} - use: {', '.join(ROLES)}.")
+    if len(rs) == 1:
+        return rs * n
+    if len(rs) != n:
+        raise ValueError(f"H3 Reference Bank: {len(rs)} roles for {n} images - give one role per image, or one for "
+                         f"all.")
+    return rs
+
+
+def add_references(bank: dict | None, images: torch.Tensor, roles: list[str], folder: str, *,
+                   near_max: int = 6) -> dict:
+    """Add images to a bank. Each entry: id, role, sha256 of the 16-bit pixels (an exact duplicate), a 64-bit dHash
+    (Hamming distance <= ``near_max`` from an earlier entry = a near duplicate), size, the saved PNG."""
+    entries = [dict(e) for e in (bank or {}).get("entries") or []]
+    for i in range(int(images.shape[0])):
+        q = _q16(images[i])
+        sha = hashlib.sha256(q.tobytes() + str(q.shape).encode()).hexdigest()
+        dh = dhash64(images[i])
+        dup = next(({"id": e["id"], "kind": "exact", "distance": 0} for e in entries if e["sha256"] == sha), None)
+        if dup is None and entries:
+            dist, near = min(((bin(dh ^ int(e["dhash"], 16)).count("1"), e) for e in entries), key=lambda t: t[0])
+            if dist <= int(near_max):
+                dup = {"id": near["id"], "kind": "near", "distance": dist}
+        path = os.path.join(folder, f"{sha[:16]}.png")
+        if not os.path.isfile(path):
+            _write_png16(path, images[i])
+        entries.append({"id": f"r{len(entries)}", "role": roles[i], "sha256": sha, "dhash": f"{dh:016x}",
+                        "width": int(images.shape[2]), "height": int(images.shape[1]), "path": path,
+                        "duplicate_of": dup})
+    fp = J.fingerprint([[e["sha256"], e["role"]] for e in entries])[:16]
+    return {"c2c_contract": BANK, "c2c_contract_version": "1.0", "entries": entries, "fingerprint": fp}
+
+
+def _load_ref(path: str, who: str) -> torch.Tensor:
+    if not os.path.isfile(path):
+        raise ValueError(f"{who}: the reference image {path} is missing - rebuild the bank (H3 Reference Bank).")
+    return _read_png16(path)
+
+
+def _letterbox(img: torch.Tensor, w: int, h: int) -> torch.Tensor:
+    """[H, W, 3] fitted inside w x h, the aspect kept, black bars."""
+    ih, iw = int(img.shape[0]), int(img.shape[1])
+    s = min(w / iw, h / ih)
+    nw, nh = max(1, round(iw * s)), max(1, round(ih * s))
+    x = img[..., :3].float().movedim(-1, 0)[None]
+    r = F.interpolate(x, size=(nh, nw), mode="area") if s < 1 else \
+        F.interpolate(x, size=(nh, nw), mode="bilinear", align_corners=False)
+    out = torch.zeros((h, w, 3))
+    y0, x0 = (h - nh) // 2, (w - nw) // 2
+    out[y0:y0 + nh, x0:x0 + nw] = r[0].movedim(0, -1)
+    return out
+
+
+def _stack_fitted(images: list[torch.Tensor]) -> torch.Tensor:
+    """One IMAGE batch at the first image's size (the others letterboxed into it)."""
+    h, w = int(images[0].shape[0]), int(images[0].shape[1])
+    return torch.stack([im[..., :3].float() if tuple(im.shape[:2]) == (h, w) else _letterbox(im, w, h)
+                        for im in images])
+
+
+def _unique_by_sha(entries: list[dict], roles: tuple[str, ...]) -> list[dict]:
+    seen, out = set(), []
+    for e in entries:
+        if e["role"] in roles and e["sha256"] not in seen:
+            seen.add(e["sha256"])
+            out.append(e)
+    return out
+
+
+def bank_gallery(entries: list[dict], tile: int = 192) -> torch.Tensor:
+    from .review_package import _label
+
+    cols = max(1, min(4, len(entries)))
+    rows = max(1, -(-len(entries) // cols))
+    sheet = torch.zeros((rows * tile, cols * tile, 3))
+    for i, e in enumerate(entries):
+        dup = e.get("duplicate_of")
+        mark = "" if not dup else (f" = {dup['id']}" if dup["kind"] == "exact" else f" ~ {dup['id']} ({dup['distance']})")
+        img = _label(_letterbox(_load_ref(e["path"], "H3 Reference Bank"), tile, tile), f"{e['id']} {e['role']}{mark}")
+        r, c = divmod(i, cols)
+        sheet[r * tile:(r + 1) * tile, c * tile:(c + 1) * tile] = img
+    return sheet[None]
+
+
+class MiniMaxH3_ReferenceBank(io.ComfyNode):
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="MiniMaxH3_ReferenceBank", display_name="H3 Reference Bank", category="MiniMax H3/Job",
+            description="Keeps a job's reference images with their roles (identity, face, outfit, scene, lighting "
+                        "...), marks exact and near duplicates, and saves each once. Chain banks to add more. Its "
+                        "fingerprint feeds H3 Task Spec's references; identity feeds the model's reference inputs; "
+                        "H3 Subject Memory reads the bank.",
+            inputs=[io.Image.Input("images"),
+                    io.String.Input("roles", default="identity",
+                                    tooltip="One role for every image, or one per image, comma-separated: "
+                                            + ", ".join(ROLES) + "."),
+                    io.String.Input("name", default="refs", tooltip="The bank's folder: output/h3_refs/<name>."),
+                    io.String.Input("bank", optional=True, force_input=True,
+                                    tooltip="An existing bank to add these images to."),
+                    io.Int.Input("near_max", default=6, min=0, max=32, advanced=True,
+                                 tooltip="Near duplicate: dHash bits that may differ (of 64).")],
+            outputs=[io.String.Output("bank", tooltip="h3.reference_bank v1"),
+                     io.String.Output("fingerprint", tooltip="Changes when an image or a role changes."),
+                     io.Image.Output("gallery", tooltip="Every entry with its id, role and duplicate mark."),
+                     io.Image.Output("identity", tooltip="The identity / face / head images (duplicates once).")],
+        )
+
+    @classmethod
+    def execute(cls, images, roles="identity", name="refs", bank=None, near_max=6) -> io.NodeOutput:
+        if images.ndim == 3:
+            images = images.unsqueeze(0)
+        prior = _json(bank, BANK, "H3 Reference Bank") if str(bank or "").strip() else None
+        folder = str(job_folder(f"h3_refs/{J.safe_name(name)}", create=True, who="H3 Reference Bank"))
+        b = add_references(prior, images, _roles(roles, int(images.shape[0])), folder, near_max=near_max)
+        ident = _unique_by_sha(b["entries"], IDENTITY_ROLES)
+        identity = _stack_fitted([_load_ref(e["path"], "H3 Reference Bank") for e in ident]) if ident else \
+            _blocker("H3 Reference Bank: no image has the role identity, face or head - give one of them that role "
+                     "(roles), or leave 'identity' unconnected.")
+        return io.NodeOutput(json.dumps(b), b["fingerprint"], bank_gallery(b["entries"]), identity)
+
+
+def _blocker(message: str):
+    from comfy_execution.graph_utils import ExecutionBlocker
+    return ExecutionBlocker(message)
+
+
+# ── H3 Subject Memory (L9.77) ──────────────────────────────────────────────────────────────────────────────────────
+
+def _chosen_frames(j: J.Job, sid: int) -> list[str]:
+    s = j.seg(sid)
+    return _pngs(_attempt_dir(j, sid, int(s["takes"].get(s.get("take") or "main", len(s["attempts"])))))
+
+
+def subject_memory(j: J.Job, bank: dict | None, seg_id: int | None, *, max_anchors: int = 4) -> dict:
+    """Rebuilt from the job manifest on every read, so a rejected generation can never be in it: identity from the
+    bank; approved examples (each accepted segment's last frame, nearest first) and the appearance baseline from the
+    ACCEPTED segments of the CURRENT scene only - a cut starts over with the bank alone."""
+    plan = {int(p["id"]): p for p in j.m["plan"]}
+    if seg_id is None:
+        nxt = j.next_segment()
+        seg_id = int(nxt["id"]) if nxt is not None else (max(plan) if plan else None)
+    scene = plan[seg_id].get("scene") if seg_id in plan else None
+    scene_segs = sorted((sid for sid, p in plan.items()
+                         if sid != seg_id and p.get("scene") == scene and j.seg(sid)["status"] == "accepted"),
+                        key=lambda sid: (abs(sid - (seg_id or 0)), -sid))
+    examples, files = [], []
+    for sid in scene_segs:
+        fr = _chosen_frames(j, sid)
+        if not fr:
+            continue
+        files += fr
+        if len(examples) < int(max_anchors):
+            examples.append({"segment": sid, "take": j.seg(sid).get("take") or "main", "path": fr[-1]})
+    baseline, sampled = None, 0
+    if files:
+        files.sort()
+        pick = files[:: max(1, len(files) // 16)][:16]
+        baseline = frame_stats(torch.stack([_read_png16(f) for f in pick]))
+        sampled = len(pick)
+    entries = (bank or {}).get("entries") or []
+    identity = [{"id": e["id"], "role": e["role"], "path": e["path"], "sha256": e["sha256"]}
+                for e in _unique_by_sha(entries, MEMORY_ROLES)]
+    notes = []
+    if bank is None:
+        notes.append("no reference bank connected: identity comes only from approved frames")
+    elif not _unique_by_sha(entries, IDENTITY_ROLES):
+        notes.append("the bank has no identity / face / head image: identity comes only from approved frames")
+    if seg_id is not None and not scene_segs:
+        notes.append(f"scene {0 if scene is None else scene + 1} has no accepted segment yet: no approved examples, no "
+                     f"colour baseline (nothing is carried across a cut)")
+    mem = {"c2c_contract": MEMORY, "c2c_contract_version": "1.0", "job": j.m["name"], "segment": seg_id,
+           "scene": scene, "identity": identity, "examples": examples, "baseline": baseline,
+           "baseline_frames": sampled, "notes": notes}
+    J._atomic_json(os.path.join(j.root, "memory.json"), mem)
+    return mem
+
+
+class MiniMaxH3_SubjectMemory(io.ComfyNode):
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="MiniMaxH3_SubjectMemory", display_name="H3 Subject Memory", category="MiniMax H3/Job",
+            description="What the subject looks like so far, rebuilt from the job on every run: the bank's identity "
+                        "images plus approved frames from ACCEPTED segments of the current scene (never a rejected "
+                        "one; a cut starts over). anchors feed the model's reference inputs; memory feeds H3 QC "
+                        "Gate's colour continuity check.",
+            inputs=[io.String.Input("segment", optional=True, force_input=True,
+                                    tooltip="H3 Job Controller's segment (this run's scene)."),
+                    io.String.Input("job", default="h3_job", tooltip="Used when 'segment' is not connected."),
+                    io.String.Input("bank", optional=True, force_input=True, tooltip="From H3 Reference Bank."),
+                    io.Int.Input("max_anchors", default=4, min=0, max=32,
+                                 tooltip="Approved frames to add after the identity images (nearest segments first).")],
+            outputs=[io.Image.Output("anchors", tooltip="Identity images, then approved frames of this scene."),
+                     io.String.Output("memory", tooltip="h3.subject_memory v1 (also written to <job>/memory.json)."),
+                     io.String.Output("notes")],
+        )
+
+    @classmethod
+    def _open(cls, segment, job):
+        seg = json.loads(segment) if str(segment or "").strip() else {}
+        j = J.Job.open(_jobs_dir(), seg.get("job") or job, create=False, recover=False)
+        return j, (int(seg["segment"]) if "segment" in seg else None)
+
+    @classmethod
+    def fingerprint_inputs(cls, segment=None, job="h3_job", bank=None, max_anchors=4):
+        try:
+            j, sid = cls._open(segment, job)
+            return f"{j.state_token()}|{sid}|{_sha(bank or '')}|{max_anchors}"
+        except Exception:  # noqa: BLE001 - let execute say what is wrong
+            return f"none|{_sha(segment or '')}"
+
+    @classmethod
+    def execute(cls, segment=None, job="h3_job", bank=None, max_anchors=4) -> io.NodeOutput:
+        try:
+            j, sid = cls._open(segment, job)
+        except J.JobError as exc:
+            raise ValueError(f"H3 Subject Memory: {exc}") from exc
+        b = _json(bank, BANK, "H3 Subject Memory") if str(bank or "").strip() else None
+        mem = subject_memory(j, b, sid, max_anchors=max_anchors)
+        imgs = [_load_ref(e["path"], "H3 Subject Memory") for e in mem["identity"]] + \
+               [_read_png16(e["path"]) for e in mem["examples"]]
+        anchors = _stack_fitted(imgs) if imgs else _blocker(
+            "H3 Subject Memory: nothing to anchor this scene yet - connect an H3 Reference Bank with an identity "
+            "image, or leave 'anchors' unconnected for prompt-only shots.")
+        notes = "; ".join(mem["notes"]) or (f"{len(mem['identity'])} identity image(s), {len(mem['examples'])} "
+                                            f"approved frame(s) from scene {(mem['scene'] or 0) + 1}")
+        return io.NodeOutput(anchors, json.dumps(mem), notes)
+
+
 NODE_CLASS_MAPPINGS = {
     "MiniMaxH3_TaskSpec": MiniMaxH3_TaskSpec,
     "MiniMaxH3_CompatibilityValidator": MiniMaxH3_CompatibilityValidator,
@@ -660,4 +1072,7 @@ NODE_CLASS_MAPPINGS = {
     "MiniMaxH3_JobController": MiniMaxH3_JobController,
     "MiniMaxH3_QCGate": MiniMaxH3_QCGate,
     "MiniMaxH3_JobCommit": MiniMaxH3_JobCommit,
+    "MiniMaxH3_ShotPlanner": MiniMaxH3_ShotPlanner,
+    "MiniMaxH3_ReferenceBank": MiniMaxH3_ReferenceBank,
+    "MiniMaxH3_SubjectMemory": MiniMaxH3_SubjectMemory,
 }

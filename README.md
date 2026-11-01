@@ -157,7 +157,8 @@ A long H3 job is planned once and then runs by itself. You no longer queue every
   - no black frames;
   - not frozen;
   - it continues the accepted frames;
-  - optionally its difference from the source.
+  - optionally its difference from the source;
+  - optionally its scene's colour (with H3 Subject Memory, below).
 - **H3 Job Commit** records the result, by the QC verdict and the approval policy:
   - **accept**: the frames are kept as 16-bit PNGs numbered by global frame;
   - **retry**: with a new seed, up to `max_retries`;
@@ -165,12 +166,65 @@ A long H3 job is planned once and then runs by itself. You no longer queue every
 
   When every segment is accepted it assembles the movie from the chosen takes. With auto-continue it queues the next
   run itself, through ComfyUI's own `/prompt`. It stops when the job is paused, cancelled, waiting for review or
-  complete, after `max_auto_runs` runs in a chain, or when `H3_AUTO_CONTINUE=0`.
+  complete, after `max_auto_runs` runs in a chain, or when `H3_AUTO_CONTINUE=0`. The queued runs report to the
+  browser tab that clicked, so you see every segment's progress, previews and status there.
 - The job file keeps every state change, each segment's attempts (seed, QC, outputs with sha256), the takes and the
   retry history.
   - A run that dies mid-segment is retried on the next click.
   - An assembly that dies is finished on the next click.
   - A rejected segment is never used as continuation context.
+
+## Long generative video: shots, references, subject memory (2026-11-01)
+
+The same job, generated from prompts with no source plate, in shots. It still runs from one click.
+
+- **H3 Shot Planner** turns a prompt timeline into shots, one shot per line:
+
+  ```
+  4 | a lighthouse keeper climbs the spiral stairs at dusk | cut
+  3 | she reaches the lamp room and looks out to sea | continue
+  4 | a storm rolls in over the dark water | dissolve 12
+  ```
+
+  - `seconds | prompt | transition` is the format.
+  - The transition is the one INTO the shot:
+    - **cut** (the default) starts a new scene, and no continuation context crosses it;
+    - **continue** keeps the take going with a new prompt;
+    - **dissolve N** cross-fades N frames with the end of the previous shot.
+  - JSON with the same fields works too.
+  - Bad lines are refused, naming the line.
+- **H3 Task Spec** takes the plan on `shot_plan`. The shots set the length (leave `count` at 0). Each segment gets
+  its shot's prompt, with the Task Spec's `prompt` as a prefix shared by every shot. The Job Controller's new
+  `prompt` output carries it to your text encoder.
+- **Editing a shot.** Change a shot's prompt and run again: only that shot's segments are generated again, plus
+  any `continue` shots that follow it. Shots after a cut or a dissolve are kept.
+- **A dissolve needs room.** The last segment of the shot before a dissolve keeps generating past the shot's end,
+  and those frames are kept as its tail. The assembly cross-fades them with the new shot's first frames, linearly.
+  The extra frames come from that segment's grid padding; if it has too little, the plan says so.
+  - The same tail now makes `blend` work. Earlier, blend frames were generated and then dropped.
+- **H3 Reference Bank** keeps the job's reference images, each with a role:
+  - the roles are identity, face, head, hair, body, outfit, footwear, props, expression, performance, scene,
+    lighting, camera and style;
+  - exact duplicates (the same pixels) and near duplicates (a 64-bit difference hash within 6 bits) are marked;
+  - each image is saved once under `output/h3_refs/<name>/`, and banks chain to add more;
+  - `fingerprint` goes to the Task Spec's `references`, `gallery` shows every entry with its marks, and
+    `identity` gives the identity / face / head images for the model's reference inputs.
+- **H3 Subject Memory** shows what the subject looks like so far. It is rebuilt from the job on every run, so a
+  rejected generation can never be in it.
+  - Identity comes from the bank.
+  - Approved frames come from accepted segments of the current scene, nearest first. After a cut it starts over
+    with the bank alone.
+  - The scene's colour baseline goes to the QC Gate. The QC Gate's optional `memory` input checks each segment
+    against its scene's look (`colour_drift_max`, mean-colour CIE76 delta E, 12 by default, 0 = off). The first
+    segment of each scene has no baseline, so it is not checked there. The default of 12 is a first guess, not yet
+    measured on real H3 output.
+  - With no bank and no accepted frames, `anchors` stops the node that uses it with a sentence saying so. It never
+    feeds a black frame.
+
+Live check, one click on the CPU testbed: a 2 s / 3 s / 2 s job (cut, continue, dissolve 6), 168 frames. The movie's
+frame numbers run in order, the shot colour changes exactly at the cuts, and the dissolve frames are the expected
+mixes. It passes in the classic renderer, in Nodes 2.0 and inside a subgraph. A CPU stand-in replaced the sampler,
+so the check shows the job logic, not image quality.
 
 ## Fixes 2026-10-24: nodes that did less than they said
 

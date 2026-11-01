@@ -112,7 +112,8 @@ def _atomic_json(path: str, data: dict) -> None:
 
 def plan_segments(first: int, count: int, *, segment_frames: int, context: int = 0, blend: int = 0,
                   lookbehind: int = 0, lookahead: int = 0, source_first: int | None = None,
-                  source_last: int | None = None, grid: tuple[int, int] | None = (17, 5)) -> list[dict]:
+                  source_last: int | None = None, grid: tuple[int, int] | None = (17, 5),
+                  lead_context: int = 0, tail: int = 0) -> list[dict]:
     """Segments covering global frames first .. first + count - 1.
 
     * ``segment_frames``: the model-local length of every segment (H3: 17k + 5; ``grid`` checks it, None = any);
@@ -122,7 +123,10 @@ def plan_segments(first: int, count: int, *, segment_frames: int, context: int =
       segment's side after the fade;
     * ``lookbehind`` / ``lookahead``: tracking handles - read from the source, never generated;
     * model-grid padding: the last segment's frames past the end (generated, then discarded) - ``pad_tail``;
-    * the accepted ranges tile first .. first + count exactly.
+    * the accepted ranges tile first .. first + count exactly;
+    * ``lead_context``: segment 0 also continues from accepted frames before ``first`` (a shot that continues the
+      previous take, L9.77); ``tail``: frames past the end the last segment keeps generating, as the overlap tail a
+      following dissolve cross-fades with (taken from what would otherwise be grid padding).
     """
     L, first, count = int(segment_frames), int(first), int(count)
     if count <= 0:
@@ -137,22 +141,24 @@ def plan_segments(first: int, count: int, *, segment_frames: int, context: int =
     src_lo = first if source_first is None else int(source_first)
     src_hi = end if source_last is None else int(source_last) + 1
     out: list[dict] = []
-    start, k = first, 0
+    start, k = first - int(lead_context), 0
     accepted_from = first
     while accepted_from < end:
-        head = 0 if k == 0 else context
+        head = int(lead_context) if k == 0 else context
         gen_lo = start + head                                   # first frame the model generates
         gen_hi = start + L                                      # model-local end
         acc_lo = accepted_from
         acc_hi = min(end, gen_hi - (blend if gen_hi < end else 0))
         if acc_hi <= acc_lo:
             raise JobError(f"segment {k} would accept nothing - lower context / blend or raise segment_frames.")
+        last = acc_hi >= end
+        tail_kept = min(int(tail), max(0, gen_hi - end)) if last else 0
         seg = {
             "id": k, "model_frames": L,
-            "global": [start, min(gen_hi, end)],                # source / timeline frames the segment touches
+            "global": [start, min(gen_hi, end + tail_kept)],     # timeline frames the segment touches
             "context_frames": head, "context_from": (k - 1) if k > 0 else None,
-            "overlap_head": (blend if k > 0 else 0), "overlap_tail": (blend if gen_hi < end else 0),
-            "pad_head": 0, "pad_tail": max(0, gen_hi - end),
+            "overlap_head": (blend if k > 0 else 0), "overlap_tail": (blend if gen_hi < end else tail_kept),
+            "pad_head": 0, "pad_tail": max(0, gen_hi - end - tail_kept),
             "accepted": [acc_lo, acc_hi],
             "track_window": [max(src_lo, start - int(lookbehind)), min(src_hi, gen_hi + int(lookahead))],
             "generated": [gen_lo, min(gen_hi, end)],
@@ -166,6 +172,106 @@ def plan_segments(first: int, count: int, *, segment_frames: int, context: int =
         start = acc_hi - context
         k += 1
     return out
+
+
+TRANSITIONS = ("cut", "continue", "dissolve")
+
+
+def parse_timeline(text: str, fps: float, first: int = 0) -> list[dict]:
+    """A prompt timeline -> shots. One shot per line: ``seconds | prompt | transition`` (the transition INTO the shot:
+    cut - the default -, continue, or ``dissolve N``); or JSON: a list of {seconds, prompt, transition}. Lines starting
+    with # are notes."""
+    raw = str(text or "").strip()
+    items: list[dict] = []
+    if raw.startswith("["):
+        try:
+            items = [dict(x) for x in json.loads(raw)]
+        except (ValueError, TypeError) as exc:
+            raise JobError(f"the timeline JSON is not a list of shots ({exc}).") from exc
+    else:
+        for n, line in enumerate(raw.splitlines(), 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = [x.strip() for x in line.split("|")]
+            if len(parts) < 2:
+                raise JobError(f"timeline line {n}: write 'seconds | prompt | transition' ({line!r}).")
+            items.append({"seconds": parts[0], "prompt": parts[1],
+                          "transition": parts[2] if len(parts) > 2 else "cut", "line": n})
+    if not items:
+        raise JobError("the timeline has no shots.")
+    shots, at, scene = [], int(first), 0
+    for i, it in enumerate(items):
+        where = f"timeline line {it.get('line', i + 1)}"
+        try:
+            secs = float(it["seconds"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise JobError(f"{where}: the first field must be the shot length in seconds.") from exc
+        frames = int(round(secs * float(fps)))
+        if frames <= 0:
+            raise JobError(f"{where}: {secs} s is less than one frame.")
+        tr = str(it.get("transition") or "cut").strip().lower()
+        kind, _, arg = tr.partition(" ")
+        if kind not in TRANSITIONS:
+            raise JobError(f"{where}: transition {tr!r} - one of cut, continue, dissolve N.")
+        dissolve = 0
+        if kind == "dissolve":
+            try:
+                dissolve = int(arg or 0)
+            except ValueError as exc:
+                raise JobError(f"{where}: write 'dissolve 12' (frames).") from exc
+            if dissolve <= 0 or dissolve >= frames:
+                raise JobError(f"{where}: a dissolve of {dissolve} frames must be shorter than the shot ({frames}).")
+        if i == 0:
+            kind, dissolve = "cut", 0                       # the first shot starts the film
+        if kind != "continue" and i:
+            scene += 1
+        shots.append({"id": i, "scene": scene, "seconds": secs, "frames": frames, "global": [at, at + frames],
+                      "prompt": str(it.get("prompt", "")), "transition": kind, "dissolve": dissolve})
+        at += frames
+    return shots
+
+
+def plan_shots(shots: list[dict], *, segment_frames: int, context: int = 0, blend: int = 0, lookbehind: int = 0,
+               lookahead: int = 0, grid: tuple[int, int] | None = (17, 5)) -> list[dict]:
+    """Segments for a shot list. A CUT starts its shot with no continuation context (nothing leaks across a cut); a
+    CONTINUE shot's first segment continues from the previous shot's last segment; a DISSOLVE N shot is a cut whose
+    first N frames are cross-faded with N frames the previous shot keeps generating past its end."""
+    out: list[dict] = []
+    for i, shot in enumerate(shots):
+        a, b = shot["global"]
+        nxt = shots[i + 1] if i + 1 < len(shots) else None
+        tail = int(nxt["dissolve"]) if nxt is not None and nxt["transition"] == "dissolve" else 0
+        lead = int(context) if (shot["transition"] == "continue" and out) else 0
+        segs = plan_segments(a, b - a, segment_frames=segment_frames, context=context, blend=blend,
+                             lookbehind=lookbehind, lookahead=lookahead, grid=grid, lead_context=lead, tail=tail)
+        if tail and segs[-1]["overlap_tail"] < tail:
+            raise JobError(f"shot {i + 1}: the dissolve into shot {i + 2} needs {tail} frames past its end and its "
+                           f"last segment has {segs[-1]['overlap_tail']} to spare - shorten the dissolve, or change "
+                           f"the shot length or segment_frames.")
+        base = len(out)
+        for sg in segs:
+            sg["id"] += base
+            if sg["context_from"] is not None:
+                sg["context_from"] += base
+            sg.update(shot=shot["id"], scene=shot["scene"], prompt=shot["prompt"], transition="within")
+        head = segs[0]
+        head["transition"] = shot["transition"]
+        if lead:
+            head["context_from"] = out[-1]["id"]
+        if shot["transition"] == "dissolve" and out:
+            head["overlap_head"] = int(shot["dissolve"])
+        out.extend(segs)
+    return out
+
+
+_KEY_FIELDS = ("accepted", "global", "context_from", "context_frames", "overlap_head", "overlap_tail", "shot", "prompt",
+               "transition")
+
+
+def plan_key(seg: dict) -> str:
+    """What makes a planned segment the same segment: a changed key re-opens it (and what continues from it)."""
+    return json.dumps([seg.get(k) for k in _KEY_FIELDS])
 
 
 def check_tiling(segments: list[dict], first: int, count: int) -> list[str]:
@@ -262,14 +368,19 @@ class Job:
 
     # -- plan ---------------------------------------------------------------------------------------------------------
     def set_plan(self, segments: list[dict]) -> None:
-        """Store the planner's segments. Segments already accepted with the SAME range are kept."""
+        """Store the planner's segments. A segment already accepted is kept when its plan entry is the SAME
+        (``plan_key``: ranges, context, overlaps, shot prompt) and so is the segment it continues from."""
         old = self.m["segments"]
+        old_keys = {str(p["id"]): plan_key(p) for p in self.m.get("plan") or []}
         self.m["plan"] = [dict(s) for s in segments]
         fresh = {}
         for s in segments:
             key = str(s["id"])
             prev = old.get(key)
-            if prev and prev.get("range") == s["accepted"] and prev["status"] == "accepted":
+            cf = s.get("context_from")
+            chain_kept = cf is None or fresh.get(str(cf), {}).get("status") == "accepted"
+            if prev and prev.get("range") == s["accepted"] and prev["status"] == "accepted" \
+                    and old_keys.get(key) == plan_key(s) and chain_kept:
                 fresh[key] = prev
             else:
                 fresh[key] = {"id": s["id"], "status": "planned", "range": list(s["accepted"]), "attempts": [],

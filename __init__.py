@@ -194,6 +194,10 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.h3_job_nodes", "MiniMaxH3_JobController"),
     (".mmx_nodes.h3_job_nodes", "MiniMaxH3_QCGate"),
     (".mmx_nodes.h3_job_nodes", "MiniMaxH3_JobCommit"),
+    # owner A21 / A20 Phase 4 (L9.77): long generative video - shots, references, subject continuity
+    (".mmx_nodes.h3_job_nodes", "MiniMaxH3_ShotPlanner"),
+    (".mmx_nodes.h3_job_nodes", "MiniMaxH3_ReferenceBank"),
+    (".mmx_nodes.h3_job_nodes", "MiniMaxH3_SubjectMemory"),
 )
 
 
