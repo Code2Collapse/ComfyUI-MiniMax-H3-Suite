@@ -395,6 +395,22 @@ Checked on a CPU, with the real SAM 3.1 and a stand-in for the H3 stage:
 
 The H3 stage itself has not been run on H3 weights yet.
 
+**Task workflows 17-21 (Task Mode, 2026-11-02).** The same chain for other targets, each shipped as ONE task node
+whose widgets are its controls. Opening the node gives the editable graph, in stage groups from media to QC.
+
+| Workflow | Task | Target word |
+|---|---|---|
+| 17 | Wardrobe Transfer | `jacket:10` |
+| 18 | Prop Replacement | `phone:10` |
+| 19 | Object Replacement | `car:10` |
+| 20 | Background Replacement | `person:20`, matte inverted so QC protects the person |
+| 21 | Body Swap | `person:20` (workflow 16 as one node) |
+
+- The target word is just the SAM 3 text: any garment, prop or object can be named.
+- The task node's controls: `target`, `prompt`, `selection` / `index`, `review` / `review_pick`, `decision` /
+  `candidate`, `props` / `locked_props`.
+- Its outputs: job, track, anchor and prop statuses, the gallery, the track preview and the anchor sheet.
+
 ### Fixed 2026-11-01: H3 Plate Restore did not paste the edit back
 
 H3 Plate Restore handed one frame's mask to a blend written for a batch, which read the mask's first three columns
