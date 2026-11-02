@@ -68,8 +68,12 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
                 io.Int.Input("canvas_height", default=512, min=128, max=1344, step=32),
                 io.Combo.Input(
                     "planner_mode",
-                    options=["tv_lp", "one_euro_preview"],
+                    options=["tv_lp", "one_euro_preview", "follow_camera (smooth zoom)"],
                     default="tv_lp",
+                    tooltip="tv_lp: one crop size, a pan-safe centre path. one_euro_preview: causal preview. "
+                            "follow_camera: a virtual camera that keeps the subject large - the crop has the "
+                            "canvas's aspect, its zoom follows the subject smoothly but never cuts it (limbs "
+                            "opening up), crop_factor is the margin around the subject (1.45 = tight).",
                 ),
                 io.Float.Input("movement_cost", default=1.0, min=0.05, max=16.0, step=0.05),
                 io.Boolean.Input("lock_size", default=True),
@@ -77,6 +81,11 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
                 io.Boolean.Input("smooth_detection", default=True),
                 io.Float.Input("one_euro_min_cutoff", default=1.0, min=0.05, max=10.0, step=0.05),
                 io.Float.Input("one_euro_beta", default=0.05, min=0.0, max=5.0, step=0.01),
+                io.Float.Input("min_crop", default=0.0, min=0.0, max=1.0, step=0.01, optional=True,
+                               tooltip="follow_camera: the smallest crop height, as a share of the frame height "
+                                       "(0 = no floor). Stops the camera zooming into a far-away subject."),
+                io.Int.Input("follow_radius", default=12, min=0, max=120, optional=True,
+                             tooltip="follow_camera: frames the camera's path and zoom are smoothed over."),
             ],
             outputs=[
                 io.Image.Output("crops"),
@@ -104,6 +113,8 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
         smooth_detection=True,
         one_euro_min_cutoff=1.0,
         one_euro_beta=0.05,
+        min_crop=0.0,
+        follow_radius=12,
     ):
         if images.ndim == 3:
             images = images.unsqueeze(0)
@@ -138,7 +149,23 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
         hold_mask = ~detected
         planner_note = ""
 
-        if planner_mode == "one_euro_preview":
+        if planner_mode.startswith("follow_camera"):
+            # PORTED FROM: open-source-higgsfield (Apache-2.0) bodydouble/media.plan_crops, via mmx_utils/body_double
+            from mmx_utils import body_double as BD
+            det = [(float(bx0[i]), float(by0[i]), float(bx1[i]) + 1.0, float(by1[i]) + 1.0) if detected[i] else None
+                   for i in range(b)]
+            if not any(d is not None for d in det):
+                raise ValueError("H3 Track + Crop: no subject in any frame - wire subject_mask or bboxes_json.")
+            aspect = float(canvas_width) / float(canvas_height) if canvas_mode == "manual" else 1.0
+            rects = BD.plan_crops(det, w, h, aspect, margin=float(crop_factor),
+                                  min_h=h * float(min_crop) if float(min_crop or 0) > 0 else None,
+                                  radius=int(follow_radius))
+            boxes = [tuple(float(v) for v in r) for r in rects]
+            crop_w = float(np.median([r[2] for r in rects]))
+            crop_h = float(np.median([r[3] for r in rects]))
+            planner_note = (f"mode=follow_camera aspect={aspect:.3f} zoom {min(r[3] for r in rects):.0f}-"
+                            f"{max(r[3] for r in rects):.0f}px")
+        elif planner_mode == "one_euro_preview":
             boxes, _cent = build_jitterless_boxes(
                 target_centers=centers,
                 anchor_size=anchor,

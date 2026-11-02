@@ -198,6 +198,9 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.h3_job_nodes", "MiniMaxH3_ShotPlanner"),
     (".mmx_nodes.h3_job_nodes", "MiniMaxH3_ReferenceBank"),
     (".mmx_nodes.h3_job_nodes", "MiniMaxH3_SubjectMemory"),
+    # owner A21 / A20 Phase 5 (L9.78): character swap / body double finishing
+    (".mmx_nodes.character_swap", "MiniMaxH3_TemporalDeflicker"),
+    (".mmx_nodes.character_swap", "MiniMaxH3_TemporalMatteChatterCorrector"),
 )
 
 

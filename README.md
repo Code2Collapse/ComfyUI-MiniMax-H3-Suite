@@ -280,13 +280,30 @@ second plate of another length and size. See the C2C workspace, evidence L9.76.
   - background colour match;
   - temporal deflicker.
 
-  The character-swap nodes built on them come next.
+  The first nodes built on them are listed below. Subject selection and re-identification come next.
 - The limits (seam 1.5x, the 9x5 alignment knots) are the reference's values for another model. They are
   parameters, not yet measured on H3 output.
 - **H3 Plate Restore: `register` = `mesh (experimental)`.** Instead of one shift, each frame gets a smooth warp
   fitted on the background around the edit, smoothed over time, for generations that squeeze or drift unevenly.
 - **H3 Plate Restore: `cast_matte`** (off by default; `cast_reach`). The composite also covers where the new
   character reaches past the edit mask (bigger hair, a wider costume), and only next to the edit.
+- **H3 Track + Crop: `planner_mode` = `follow_camera (smooth zoom)`** (`min_crop`, `follow_radius`). A crop with the
+  canvas's aspect follows the subject smoothly. It zooms out when the pose opens up (arms raised, a jump) and never
+  cuts the subject: the reference's smoothed centre could lag a fast subject out of frame, so each frame's crop is
+  also kept around that frame's box.
+- **H3 Temporal Deflicker** (new). Removes frame-to-frame boil in regions that hold still and leaves moving regions
+  alone (`motion_low` / `motion_high` set the ramp); an optional mask limits it to the regenerated area. The first
+  and last frames pass through unchanged.
+- **H3 Temporal Matte Chatter Corrector** (new). When a segmenter loses the hair, a sleeve or the whole subject for a
+  few frames, each lost frame would paste the plate back over the new character, which reads as flicker. A pixel
+  stays covered while the mask covered it within `window` frames before AND after it; a subject that really leaves
+  stays uncovered. With the crop `bboxes` it judges in plate space, where the set holds still while a follow-cam
+  crop moves.
+  - It adds only the bridged pixels. Frames without a dropout come out unchanged: no soft fringe, no growth.
+  - `bridge_take_ends` (off by default) also closes a dropout at the very start or end of the take. Use it only for a
+    subject that holds still: a moving subject's next `window` frames of path would be painted into the first frames.
+  - It closes a dropout where the subject was both before and after it. For a subject that crosses the frame during
+    the dropout, that is the overlap of the two silhouettes, not the whole subject.
 
 ### Fixed 2026-11-01: H3 Plate Restore did not paste the edit back
 

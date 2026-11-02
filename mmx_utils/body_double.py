@@ -122,11 +122,17 @@ def plan_crops(boxes, src_w: int, src_h: int, aspect: float, margin: float = 1.4
     h = np.maximum(smooth(need_h, radius), smooth(need_h, 2))
     cx, cy = smooth(cx, radius), smooth(cy, radius)
     rects = []
-    for x, y, hh in zip(cx, cy, h):
+    for (x, y, hh), bb in zip(zip(cx, cy, h), b):
         hh = min(hh, max_h)
         ww = hh * aspect
         x0 = min(max(x - ww / 2, 0), src_w - ww)
         y0 = min(max(y - hh / 2, 0), src_h - hh)
+        # Deviation from the reference: the smoothed centre lags a fast subject (8 px a frame lags ~25 px with
+        # radius 12) and a tight margin then cut it. Slide the rect - same size - just enough to hold this frame's box.
+        x0 = min(max(x0, bb[2] - ww), bb[0])
+        y0 = min(max(y0, bb[3] - hh), bb[1])
+        x0 = min(max(x0, 0), src_w - ww)
+        y0 = min(max(y0, 0), src_h - hh)
         rects.append([round(float(x0), 2), round(float(y0), 2), round(float(ww), 2), round(float(hh), 2)])
     return rects
 
@@ -252,11 +258,17 @@ def cast_matte(crop, src, person, seen=None, reach: float = 0.07, thresh: float 
     return np.clip(resize2d(grown.astype(np.float32), H, W), 0, 1)
 
 
-def steady_masks(masks, rects, plate_size: tuple[int, int], gap: int = 24, scale: float = 0.25):
+def steady_masks(masks, rects, plate_size: tuple[int, int], gap: int = 24, scale: float = 0.25, ends: bool = True):
     """Per-frame crop-space composite masks with short dropouts closed. ``masks``: per-frame crop-space masks (the source
     and cast masks' union, H x W, 0..1); ``rects``: the crop rect [x, y, w, h] of each frame in plate pixels. A plate
     pixel stays covered while it was covered within ``gap`` frames before AND within ``gap`` frames after - judged in
-    plate space, where the set holds still while the follow-cam crop moves; the take's ends count as covered."""
+    plate space, where the set holds still while the follow-cam crop moves. ``ends``: the take's ends count as covered
+    (the reference's choice, for a cast matte that grows over the first frames); it also paints where a MOVING subject
+    goes within ``gap`` frames into the first frames, so the node leaves it off by default.
+
+    Deviation from the reference (L9.78): only the newly bridged plate pixels are added to a frame's own mask. The
+    reference re-adds the whole low-res cover, which grows every mask by up to half a cover cell, puts a soft fringe on
+    every edge and lifts 0.99 values to 1 - harmless before its 0.5 threshold, wrong for a MASK output."""
     W, H = plate_size
     pw, ph = max(1, round(W * scale)), max(1, round(H * scale))
     n = len(rects)
@@ -268,22 +280,23 @@ def steady_masks(masks, rects, plate_size: tuple[int, int], gap: int = 24, scale
         x0, y0, x1, y1 = _box(rects[i], pw, ph, scale)
         if x1 > x0 and y1 > y0:
             cover[i, y0:y1, x0:x1] = resize2d(m.astype(np.float32), y1 - y0, x1 - x0) > 0.5
-    seen = np.zeros((ph, pw), np.int64)
+    never = 10 ** 9
+    seen = np.full((ph, pw), 0 if ends else -never, np.int64)
     last = np.empty((n, ph, pw), np.int64)
     for i in range(n):
         seen = np.where(cover[i], i, seen)
         last[i] = seen
-    seen = np.full((ph, pw), n - 1, np.int64)
+    seen = np.full((ph, pw), n - 1 if ends else never, np.int64)
     for i in reversed(range(n)):
         seen = np.where(cover[i], i, seen)
-        cover[i] = seen - last[i] <= gap
+        last[i] = (seen - last[i] <= gap) & ~cover[i]                                  # the newly bridged pixels
     for i in range(n):
         h, w = shapes[i]
         x0, y0, x1, y1 = _box(rects[i], pw, ph, scale)
-        held = np.zeros((h, w), np.float32)
-        if x1 > x0 and y1 > y0:
-            held = resize2d(cover[i, y0:y1, x0:x1].astype(np.float32), h, w)
-        yield np.maximum(_np(masks[i]), np.clip(held, 0, 1))
+        m = _np(masks[i])
+        if x1 > x0 and y1 > y0 and last[i, y0:y1, x0:x1].any():
+            m = np.maximum(m, np.clip(resize2d(last[i, y0:y1, x0:x1].astype(np.float32), h, w), 0, 1))
+        yield m
 
 
 def _box(rect, w: int, h: int, scale: float = 1.0) -> tuple[int, int, int, int]:
