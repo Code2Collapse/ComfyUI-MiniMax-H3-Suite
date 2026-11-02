@@ -371,6 +371,9 @@ class MiniMaxH3_JobController(io.ComfyNode):
                 C2C_VIDEO.Input("matte", optional=True,
                                 tooltip="A matte clip frame-aligned with the plate: matte_window is cut exactly like "
                                         "window (same frames, same held frames)."),
+                C2C_VIDEO.Input("driving", optional=True,
+                                tooltip="A driving performance frame-aligned with the plate (any size): "
+                                        "driving_window is cut exactly like window - performance transfer."),
             ],
             outputs=[
                 C2C_VIDEO.Output("window", tooltip="The plate frames this segment generates over (edit tasks)."),
@@ -386,6 +389,7 @@ class MiniMaxH3_JobController(io.ComfyNode):
                                  tooltip="The accepted latent of the segment this one continues from (its chosen "
                                          "take), for H3 Motion Context's context_latent. Empty when there is none."),
                 C2C_VIDEO.Output("matte_window", tooltip="The matte, cut exactly like window."),
+                C2C_VIDEO.Output("driving_window", tooltip="The driving performance, cut exactly like window."),
             ],
             # the auto-continue token rides in the queued run's extra_pnginfo: no widget for anyone to edit
             hidden=[io.Hidden.unique_id, io.Hidden.extra_pnginfo],
@@ -393,7 +397,7 @@ class MiniMaxH3_JobController(io.ComfyNode):
 
     @classmethod
     def fingerprint_inputs(cls, task_spec, segment_plan, job="h3_job", action="run", action_segment=0,
-                           action_take="", media=None, matte=None):
+                           action_take="", media=None, matte=None, driving=None):
         try:
             return J.Job.open(_jobs_dir(), job, create=False, recover=False).state_token()
         except Exception:  # noqa: BLE001 - a new job: run
@@ -401,7 +405,7 @@ class MiniMaxH3_JobController(io.ComfyNode):
 
     @classmethod
     def execute(cls, task_spec, segment_plan, job="h3_job", action="run", action_segment=0, action_take="",
-                media=None, matte=None) -> io.NodeOutput:
+                media=None, matte=None, driving=None) -> io.NodeOutput:
         auto_token = str(((getattr(cls.hidden, "extra_pnginfo", None) or {}).get("h3_auto_token")) or "")
         spec = _json(task_spec, SPEC, "H3 Job Controller")
         plan = _json(segment_plan, PLAN, "H3 Job Controller")
@@ -453,7 +457,7 @@ class MiniMaxH3_JobController(io.ComfyNode):
         att = j.begin(sid, seed=seed, inputs={"uses": ["plate", "prompt", "references"]},
                       changes="alternate take" if alternate else ("" if policy == "first" else "retry"),
                       alternate=bool(alternate))
-        win = track = mwin = None
+        win = track = mwin = dwin = None
         if media is not None and is_handle(media):
             mf = int(spec["media_first"])
             g0, g1 = p["global"]
@@ -470,6 +474,15 @@ class MiniMaxH3_JobController(io.ComfyNode):
                     raise ValueError(f"H3 Job Controller: the matte has {len(matte)} frames; this segment needs the "
                                      f"plate's frames up to {g1 - mf} - give a matte as long as the plate.")
                 mwin = generation_window(matte, g0 - mf, g1 - mf, int(p.get("pad_head") or 0), int(p.get("pad_tail") or 0))
+            if driving is not None:
+                if not is_handle(driving):
+                    raise ValueError("H3 Job Controller: 'driving' is not a C2C video handle.")
+                if len(driving) < g1 - mf:
+                    raise ValueError(f"H3 Job Controller: the driving clip has {len(driving)} frames; this segment needs "
+                                     f"the plate's frames up to {g1 - mf} - give a driving clip as long as the plate "
+                                     "(H3 Media Conform: same range and frame rate).")
+                dwin = generation_window(driving, g0 - mf, g1 - mf, int(p.get("pad_head") or 0),
+                                         int(p.get("pad_tail") or 0))
         ctx = _context_frames(j, p) if p["context_frames"] else torch.zeros((1, 8, 8, 3))
         text = segment_prompt(spec, p)
         seg_json = {"job": j.m["name"], "job_path": j.path, "segment": sid, "attempt": att["n"], "seed": seed,
@@ -483,7 +496,7 @@ class MiniMaxH3_JobController(io.ComfyNode):
         b = _blocked()
         return io.NodeOutput(win if win is not None else b, track if track is not None else b, ctx, seed,
                              int(p["model_frames"]), json.dumps(seg_json), status, text, _context_latent(j, p),
-                             mwin if mwin is not None else b)
+                             mwin if mwin is not None else b, dwin if dwin is not None else b)
 
 
 def generation_window(handle, lo: int, hi: int, hold: int, pad_tail: int = 0):

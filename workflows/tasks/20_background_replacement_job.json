@@ -1911,6 +1911,12 @@
         "links": [
          59
         ]
+       },
+       {
+        "localized_name": "driving_window",
+        "name": "driving_window",
+        "type": "C2C_VIDEO",
+        "links": null
        }
       ],
       "properties": {

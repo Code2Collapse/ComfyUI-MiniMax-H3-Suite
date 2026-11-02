@@ -1,6 +1,6 @@
 # MiniMax H3 task workflows
 
-Twenty-one ready-to-load workflows, one per task. Drag a file onto ComfyUI. Every workflow has:
+Twenty-four ready-to-load workflows, one per task. Drag a file onto ComfyUI. Every workflow has:
 
 - a guide note on the left: the models it needs, the checkpoint variants, the inputs, every control, the output and
   the limits;
@@ -38,8 +38,11 @@ H3 templates (res_multistep, simple, 20 steps, guider cfg 1). Treat quality sett
 | 19 | `19_object_replacement_job` | TASK MODE: an object in the scene (`car:10`) replaced with the same position and motion | ref2va + SAM 3.1 |
 | 20 | `20_background_replacement_job` | TASK MODE: everything BEHIND the tracked person replaced (matte inverted), the person protected by QC | ref2va + SAM 3.1 |
 | 21 | `21_body_swap_job` | TASK MODE: workflow 16 (one person replaced) as one task node | ref2va + SAM 3.1 |
+| 22 | `22_face_swap_job` | TASK MODE: one face (`face:20`) replaced through a whole plate, the performance kept (workflow 11's chain: Identity Fusion, exact uncrop), anchor-approved; the generation hears each window's sound | ref2va + SAM 3.1 |
+| 23 | `23_head_swap_job` | TASK MODE: one head and its hair (`head:20`) replaced, the performance kept | ref2va + SAM 3.1 |
+| 24 | `24_lip_sync_job` | TASK MODE: one person (`face:20`) speaks a NEW soundtrack - H3 Media Conform puts the sound on the plate, every window and the movie carry it, the identity stays (the plate's first frame) | ref2va + SAM 3.1 |
 
-Workflows 17-21 are in TASK MODE (Rev 3 Part 16): the whole pipeline is ONE node whose widgets are the task's controls (target word, prompt, selection, review, anchor decision, props); open it for the editable graph with every stage. They share workflow 16's chain and the job engine; built and server-validated like the others, not run on H3 weights. Workflow 16 puts subject tracking and an approved anchor in front of workflow 15's job: its subject, track and anchor nodes were run on the real SAM 3.1 (CPU), and the whole job end to end with a CPU stand-in for the GPU stage (evidence L9.78). Workflow 15 is the H3 job engine around workflow 06's chain; its job logic was also run end to end on the CPU with a
+Workflows 17-24 are in TASK MODE (Rev 3 Part 16): the whole pipeline is ONE node whose widgets are the task's controls (target word, prompt, selection, review, anchor decision, props); open it for the editable graph with every stage. They share workflow 16's chain and the job engine; built and server-validated like the others, not run on H3 weights. Workflow 16 puts subject tracking and an approved anchor in front of workflow 15's job: its subject, track and anchor nodes were run on the real SAM 3.1 (CPU), and the whole job end to end with a CPU stand-in for the GPU stage (evidence L9.78). Workflow 15 is the H3 job engine around workflow 06's chain; its job logic was also run end to end on the CPU with a
 stand-in in place of the GPU subgraph (evidence L9.76 in the C2C workspace).
 
 ## Inputs the workflows expect

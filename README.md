@@ -251,6 +251,8 @@ does that properly. Workflow `workflows/tasks/15_attribute_transfer_job.json` pu
 - **A matte cut exactly like the plate.** The Job Controller takes an optional `matte` (a mask clip of the same
   length and size) and gives `matte_window`: the same frames, the same held frames. A matte of another size, or
   shorter than the plate, is refused in words.
+- **A driving performance cut the same way (2026-11-02).** `driving` (any size, at least as long as the plate) gives
+  `driving_window`, so performance transfer takes the driving clip's matching frames in every segment.
 - **Accepted latents handed on.**
   - H3 Job Commit takes the sampler's `latent` and keeps it with the accepted frames.
   - The Job Controller's `context_latent` gives the next segment the latent of the take it continues from, for H3
@@ -398,7 +400,7 @@ Checked on a CPU, with the real SAM 3.1 and a stand-in for the H3 stage:
 
 The H3 stage itself has not been run on H3 weights yet.
 
-**Task workflows 17-21 (Task Mode, 2026-11-02).** The same chain for other targets, each shipped as ONE task node
+**Task workflows 17-24 (Task Mode, 2026-11-02).** The same chain for other targets, each shipped as ONE task node
 whose widgets are its controls. Opening the node gives the editable graph, in stage groups from media to QC.
 
 | Workflow | Task | Target word |
@@ -408,6 +410,11 @@ whose widgets are its controls. Opening the node gives the editable graph, in st
 | 19 | Object Replacement | `car:10` |
 | 20 | Background Replacement | `person:20`, matte inverted so QC protects the person |
 | 21 | Body Swap | `person:20` (workflow 16 as one node) |
+| 22 | Face Swap | `face:20`, on workflow 11's chain (Identity Fusion, exact uncrop), anchor-approved |
+| 23 | Head Swap | `head:20` (face and hair), the same chain |
+| 24 | Lip Sync Director | `face:20`. H3 Media Conform puts the NEW soundtrack on the plate; the identity stays (the plate's first frame) |
+
+In 22-24 the generation hears each window's own sound (H3 Frame Window Reader's `audio`).
 
 - The target word is just the SAM 3 text: any garment, prop or object can be named.
 - The task node's controls: `target`, `prompt`, `selection` / `index`, `review` / `review_pick`, `decision` /
