@@ -12,6 +12,7 @@ Design: docs/evidence/A20/phase1/DESIGN_slice6_media_conform.md in the workspace
 from __future__ import annotations
 
 import json
+import os
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -101,6 +102,10 @@ class MiniMaxH3_MediaConform(io.ComfyNode):
                 io.Int.Input("target_height", default=0, min=0, max=16384),
                 io.Int.Input("multiple_of", default=0, min=0, max=256,
                              tooltip="Round the size to a multiple (e.g. 16 or 32). 0 = off."),
+                io.Audio.Input("audio", optional=True,
+                               tooltip="Replace the soundtrack (Lip Sync): the new sound starts at the first kept frame "
+                                       "and lasts as long as the kept frames (cut or padded with silence). The video "
+                                       "is copied untouched into output/h3_media/ with it."),
             ],
             outputs=[
                 C2C_VIDEO.Output("media", tooltip="The conformed lazy handle. Feed H3 Frame Window Reader."),
@@ -112,7 +117,7 @@ class MiniMaxH3_MediaConform(io.ComfyNode):
 
     @classmethod
     def execute(cls, media, start=0, count=0, fps_policy="keep", target_fps=24.0, size_policy="keep", target_width=0,
-                target_height=0, multiple_of=0) -> io.NodeOutput:
+                target_height=0, multiple_of=0, audio=None) -> io.NodeOutput:
         if not is_handle(media):
             raise ValueError("H3 Media Conform: 'media' is not a C2C video handle - connect H3 Media Probe.")
         before = (len(media.selected_indices()), str(media.fps), int(media.width), int(media.height))
@@ -135,6 +140,9 @@ class MiniMaxH3_MediaConform(io.ComfyNode):
             h = h.cropped(*crop)
         if (ow, oh) != (int(h.width), int(h.height)):
             h = h.scaled(ow, oh)
+        sound = "re-timed when the video is written" if getattr(h, "audio", None) else "none"
+        if audio is not None:
+            h, sound = replace_sound(h, audio)
         led = L.new(list(h.selected_indices()), fps=Fraction(h.fps), path=getattr(h.source, "path", None),
                     total_source=int(media.frame_count))
         problems = L.validate(led)
@@ -146,11 +154,41 @@ class MiniMaxH3_MediaConform(io.ComfyNode):
             "colour tags carried unchanged: " + (str({k: getattr(colour, k) for k in ("primaries", "transfer", "matrix",
                                                                                      "range")}) if colour else "none")
             + " - colour / HDR conversion is a later stage",
-            "audio: " + ("re-timed when the video is written" if getattr(h, "audio", None) else "none"),
+            "audio: " + sound,
             "notes: " + ("; ".join(notes) or "none"),
             "ledger problems: " + ("; ".join(problems) or "none"),
         ])
         return io.NodeOutput(h, json.dumps(led), report, len(h.selected_indices()))
+
+
+def replace_sound(h, audio):
+    """(handle reading from a copy with ``audio`` as its sound, report line) - L9.79 Lip Sync."""
+    import hashlib
+
+    import numpy as np
+
+    from mmx_utils import soundtrack as SND
+    from mmx_utils.h3_job import fingerprint
+
+    from .segment_io import job_folder
+
+    if getattr(h.source, "kind", "") != "file":
+        raise ValueError("H3 Media Conform: a new soundtrack can replace the sound of a video FILE; this is an image "
+                         "sequence - make it a video first (e.g. Save Video), then load that.")
+    wave = audio["waveform"][0].detach().cpu().float().numpy()
+    rate = int(audio["sample_rate"])
+    sel = list(h.selected_indices())
+    table = _probe.get_index_table(h.source.stat_key, stream_index=h.stream_index)
+    start_sec = float(table.pts_of(sel[0]) * Fraction(table.time_base))
+    duration = len(sel) / float(Fraction(h.fps))
+    key = fingerprint([list(h.source.stat_key), hashlib.sha256(np.ascontiguousarray(wave).tobytes()).hexdigest(), rate,
+                       round(start_sec, 6), round(duration, 6), int(h.stream_index)])[:16]
+    out = str(job_folder("h3_media", create=True, who="H3 Media Conform") / f"soundtrack_{key}.mkv")
+    if os.path.isfile(out):
+        note = "the same soundtrack copy was reused"
+    else:
+        note = SND.remux_with_sound(h.source.path, int(h.stream_index), wave, rate, start_sec, duration, out)["note"]
+    return SND.with_sound(h, out, {}), f"REPLACED by the given sound ({duration:.3f} s from the first kept frame; {note})"
 
 
 NODE_CLASS_MAPPINGS = {"MiniMaxH3_MediaConform": MiniMaxH3_MediaConform}

@@ -92,6 +92,14 @@ file headers (OpenImageIO, else PIL), decodes a few frames for a contact sheet, 
 Its `ledger_json` names the source frame of every output frame. Colour tags pass through unchanged; colour and
 HDR conversion is a later stage.
 
+**A new soundtrack (`audio`, 2026-11-02, for lip sync).** Connect a sound and it replaces the plate's own sound.
+- It starts at the first kept frame and lasts exactly as long as the kept frames. A longer sound is cut, a shorter
+  one is padded with silence, and the report says which.
+- The video is copied packet for packet (no re-encode) into `output/h3_media/`, with the new sound beside it. Every
+  frame window and a job's final movie then carry the new sound.
+- The same plate and sound reuse the copy.
+- It works for video files only; an image sequence must become a video first.
+
 **H3 Proxy Manager** writes a smaller copy of the lazy video and hands it back as a lazy handle.
 - Sizes: 1/2, 1/4, 1/8 or custom. Codecs: h264, ProRes 10-bit or FFV1 lossless. The selection's audio can be kept.
 - It writes into `<job_dir>/proxies/` inside the output folder.
