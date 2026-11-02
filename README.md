@@ -280,7 +280,7 @@ second plate of another length and size. See the C2C workspace, evidence L9.76.
   - background colour match;
   - temporal deflicker.
 
-  The first nodes built on them are listed below. Subject selection and re-identification come next.
+  The nodes built on them are listed below.
 - The limits (seam 1.5x, the 9x5 alignment knots) are the reference's values for another model. They are
   parameters, not yet measured on H3 output.
 - **H3 Plate Restore: `register` = `mesh (experimental)`.** Instead of one shift, each frame gets a smooth warp
@@ -304,6 +304,88 @@ second plate of another length and size. See the C2C workspace, evidence L9.76.
     subject that holds still: a moving subject's next `window` frames of path would be painted into the first frames.
   - It closes a dropout where the subject was both before and after it. For a subject that crosses the frame during
     the dropout, that is the overlap of the two silhouettes, not the whole subject.
+
+### Choosing and following the person to replace (2026-11-02)
+
+Detection and tracking are ComfyUI's own SAM 3 / 3.1 (core 0.39 or newer): load the SAM 3.1 checkpoint with core
+**Load Checkpoint**, encode the text `person:20` with its CLIP, and run core **SAM3 Detect** with `individual_masks`
+on. The `:20` matters: core's SAM 3 text encoder reads `word:N` as "up to N objects", and plain `person` returns only
+the single most likely person, so there would be nothing to choose from.
+The three nodes below decide who is who. None of them changes the person silently: when the numbers do not settle
+it, they stop and show the candidates.
+
+- **H3 Multi-Subject Selector** (new). Picks the person from SAM3 Detect's candidates and gives them a stable
+  subject id.
+  - `auto` ranks the candidates by size, by colour similarity to `reference_images`, and by `position_preference`.
+  - When the best two are closer than `ambiguity_margin`, it stops. The `gallery` shows the candidates, each with
+    its `#` number; set `selection` = `index` and pick one.
+  - `subject_lock` (a `subject` from an earlier run) keeps that person and their id.
+- **H3 Subject Re-Identification** (new). Finds the person again among new detections: after a cut, an occlusion
+  or a lost track.
+  - Score = colour similarity to the subject's memory − `motion_weight` × how far they moved (a fraction of the
+    width).
+  - It stops when the score is under `min_confidence`, or a second candidate is within `margin` (two look-alikes).
+    `confirmation` = `pick index` confirms one by hand.
+  - Appearance means body and clothing colours. No face model is used.
+- **H3 Temporal Subject Tracker** (new). Tracks the person through a clip of any length, as a job.
+  - It reads `media` (H3 Media Probe) one `window` at a time, tracks with core SAM 3, and queues the next run
+    itself.
+  - **A loss is:** the mask vanishes; it shrinks under `area_ratio` (35%) of its recent size; or it jumps sideways
+    more than `jump` (15% of the width).
+  - **Optional checks:**
+    - backward tracking (`validate_backward`);
+    - a colour check every `reid_interval` frames (catches a tracker that moved to someone else).
+  - **On a loss** it re-identifies the person and goes on. Up to `max_gap` frames may pass with nobody matching
+    (occluded, off frame); those frames get an empty mask.
+  - **Otherwise the job waits for review.** Its `preview` shows the candidates. Set `review` to:
+    - `continue with candidate` and `review_pick`;
+    - `end the track here`;
+    - `track again`.
+  - State and masks are kept in `output/h3_jobs/<job>/track/`. A crash or a restart resumes where it stopped.
+  - Changing a setting starts a new track; the old one is kept.
+  - `backend` = `masks input` checks a finished track from any other tracker for the same losses.
+  - When the track is done, `matte` is the person's matte at the plate's size, as a lazy handle. Connect it to H3
+    Job Controller's `matte`; each segment reads only its own frames. While the track runs, the job waits without an
+    error. While the track waits for review, it stops with that message.
+
+### The anchor and the props (2026-11-02)
+
+The anchor is the take's first frame repainted with the new character. Every later segment is judged against it.
+Make the candidates with your own H3 image path (any number, as one batch); these nodes check and keep them.
+
+- **H3 Anchor Studio** (new). A contact sheet of the source frame and every candidate, numbered. For each candidate:
+  - the new character's mask: the person standing where the performer stands, found by core SAM 3 (or given);
+  - "NO PERSON" when there is none;
+  - colour match to the source subject and to the references;
+  - a difference map against the source.
+
+  Colour match compares clothing and body colours; it is not a face comparison.
+- **H3 Anchor Approval** (new). `decision` = `approve` or `reject` candidate `#`.
+  - The decision is kept in the H3 job (`job`).
+  - The approved anchor joins the Reference Bank as identity, so H3 Subject Memory and every segment use it.
+  - A rejected candidate is never used.
+  - On later runs, `decision` = `review` returns the approved anchor of that source frame. Until one is approved,
+    the nodes that need it wait without an error, and `status` says what to do.
+- **H3 Prop Consistency Checker** (new). Stops a take when the references, the anchor or the prompt give the new
+  character a prop (a hat, a bag, a phone) that the performer does not hold. The video model takes props from the
+  source performance, so such a prop pops in and out.
+  - A prop the performer already holds is allowed in the anchor.
+  - `locked_props` are always allowed.
+  - `policy` = `warn` only reports.
+  - Props are found by core SAM 3 from their names; it needs the SAM 3 checkpoint's MODEL and CLIP.
+
+**Task workflow 16 (`workflows/tasks/16_character_swap_job.json`)** chains all of this in front of the job engine.
+From one click it picks and tracks the person, takes the approved anchor as the new character's picture, checks the
+props, then regenerates only the tracked person, segment by segment. The plate's sound is kept. Until a step is
+done, the steps after it wait without an error.
+
+Checked on a CPU, with the real SAM 3.1 and a stand-in for the H3 stage:
+- 48 frames with a hard cut;
+- the person lost at the cut and found again;
+- the job completed in 6 automatic runs, one spoiled segment redone;
+- outside the person, the plate unchanged.
+
+The H3 stage itself has not been run on H3 weights yet.
 
 ### Fixed 2026-11-01: H3 Plate Restore did not paste the edit back
 

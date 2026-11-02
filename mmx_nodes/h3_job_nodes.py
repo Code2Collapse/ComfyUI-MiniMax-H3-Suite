@@ -1235,8 +1235,10 @@ def subject_memory(j: J.Job, bank: dict | None, seg_id: int | None, *, max_ancho
     if seg_id is not None and not scene_segs:
         notes.append(f"scene {0 if scene is None else scene + 1} has no accepted segment yet: no approved examples, no "
                      f"colour baseline (nothing is carried across a cut)")
+    anchors = [{k: a.get(k) for k in ("sha256", "source_sha256", "candidate", "path", "time", "note")}
+               for a in j.m.get("anchors") or [] if a.get("status") == "approved"]        # never a rejected one
     mem = {"c2c_contract": MEMORY, "c2c_contract_version": "1.0", "job": j.m["name"], "segment": seg_id,
-           "scene": scene, "identity": identity, "examples": examples, "baseline": baseline,
+           "scene": scene, "identity": identity, "anchors": anchors, "examples": examples, "baseline": baseline,
            "baseline_frames": sampled, "notes": notes}
     J._atomic_json(os.path.join(j.root, "memory.json"), mem)
     return mem

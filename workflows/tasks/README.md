@@ -1,6 +1,6 @@
 # MiniMax H3 task workflows
 
-Fifteen ready-to-load workflows, one per task. Drag a file onto ComfyUI. Every workflow has:
+Sixteen ready-to-load workflows, one per task. Drag a file onto ComfyUI. Every workflow has:
 
 - a guide note on the left: the models it needs, the checkpoint variants, the inputs, every control, the output and
   the limits;
@@ -32,8 +32,9 @@ H3 templates (res_multistep, simple, 20 steps, guider cfg 1). Treat quality sett
 | 13 | `13_hires_enhancement` | upscale + re-sample in tiles (H3 Split Upscale) at low denoise, source as <Video 1> | ref2va |
 | 14 | `14_latent_persistence_sampler` | locked sigma shift, schedule inspector, optional First-Block Cache; save the AV latent, then (stage B) give the saved clip a new sound with its picture kept exactly | ref2va |
 | 15 | `15_attribute_transfer_job` | blood / dirt / wounds / makeup on a whole plate as a JOB: one click, segment by segment, plate + matte decoded per window, outside the mask kept and checked, failed segments redone alone, resumable, the plate's sound restored; the GPU stage is one native subgraph | ref2va |
+| 16 | `16_character_swap_job` | replace ONE person in a whole plate as a JOB (body double): SAM 3.1 picks and tracks the person (losses re-identified or sent to review), an approved anchor is the new character's picture, props checked, then workflow 15's job engine regenerates only the tracked person; the plate's sound kept | ref2va + SAM 3.1 |
 
-Workflow 15 is the H3 job engine around workflow 06's chain; its job logic was also run end to end on the CPU with a
+Workflow 16 puts subject tracking and an approved anchor in front of workflow 15's job: its subject, track and anchor nodes were run on the real SAM 3.1 (CPU), and the whole job end to end with a CPU stand-in for the GPU stage (evidence L9.78). Workflow 15 is the H3 job engine around workflow 06's chain; its job logic was also run end to end on the CPU with a
 stand-in in place of the GPU subgraph (evidence L9.76 in the C2C workspace).
 
 ## Inputs the workflows expect

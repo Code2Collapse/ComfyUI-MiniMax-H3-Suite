@@ -201,6 +201,12 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     # owner A21 / A20 Phase 5 (L9.78): character swap / body double finishing
     (".mmx_nodes.character_swap", "MiniMaxH3_TemporalDeflicker"),
     (".mmx_nodes.character_swap", "MiniMaxH3_TemporalMatteChatterCorrector"),
+    (".mmx_nodes.subject_track", "MiniMaxH3_MultiSubjectSelector"),
+    (".mmx_nodes.subject_track", "MiniMaxH3_SubjectReIdentification"),
+    (".mmx_nodes.subject_track", "MiniMaxH3_TemporalSubjectTracker"),
+    (".mmx_nodes.anchor_studio", "MiniMaxH3_AnchorStudio"),
+    (".mmx_nodes.anchor_studio", "MiniMaxH3_AnchorApproval"),
+    (".mmx_nodes.anchor_studio", "MiniMaxH3_PropConsistencyChecker"),
 )
 
 

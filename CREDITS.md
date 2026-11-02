@@ -270,5 +270,18 @@ The decisions for every pack in both reference folders are in the work area's
   - background luma.
 
   H3 Job QC Gate's source-relative seam check uses its seam ratio.
+- **Ported 2026-11-02 (L9.78 slice 3):** `mmx_utils/subject_track.py`, from `bodydouble/runner.py` (`detect`,
+  `track`, `_reacquire`):
+  - the largest-person pick;
+  - the track-loss rule (no mask, area under 35% of the recent median, centre jump over 15% of the width);
+  - the re-acquire score (colour similarity − 0.5 × centre distance).
+
+  Changed here: a low or ambiguous score goes to review instead of being taken.
+- **Ported 2026-11-02 (L9.78 slice 4):** `mmx_utils/anchors.py`, from `bodydouble/runner.py`:
+  - from `refs()`: the anchor's person is the detection overlapping the performer;
+  - from `check_props()`: the prop rule (near the person, under a tenth of their size, mostly new pixels; source-held
+    props allowed in the anchor; prompt names count).
+
+  Added here: locked props and a warn-only policy.
 - **Not carried over, on purpose:** its SCAIL-2 / FLUX Klein graphs and its model constraints (81-frame segments,
   4n+1 padding). The 9x5 knot layout and the QC limits are kept as parameters, not as H3 rules.
