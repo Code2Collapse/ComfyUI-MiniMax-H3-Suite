@@ -400,7 +400,7 @@ Checked on a CPU, with the real SAM 3.1 and a stand-in for the H3 stage:
 
 The H3 stage itself has not been run on H3 weights yet.
 
-**Task workflows 17-24 (Task Mode, 2026-11-02).** The same chain for other targets, each shipped as ONE task node
+**Task workflows 17-25 (Task Mode, 2026-11-02).** The same chain for other targets, each shipped as ONE task node
 whose widgets are its controls. Opening the node gives the editable graph, in stage groups from media to QC.
 
 | Workflow | Task | Target word |
@@ -413,8 +413,9 @@ whose widgets are its controls. Opening the node gives the editable graph, in st
 | 22 | Face Swap | `face:20`, on workflow 11's chain (Identity Fusion, exact uncrop), anchor-approved |
 | 23 | Head Swap | `head:20` (face and hair), the same chain |
 | 24 | Lip Sync Director | `face:20`. H3 Media Conform puts the NEW soundtrack on the plate; the identity stays (the plate's first frame) |
+| 25 | Expression / Performance Transfer | `face:20`. A driving clip (`<Video 2>`), cut like the plate for every segment by the Job Controller's `driving`; the identity stays |
 
-In 22-24 the generation hears each window's own sound (H3 Frame Window Reader's `audio`).
+In 22-25 the generation hears each window's own sound (H3 Frame Window Reader's `audio`).
 
 - The target word is just the SAM 3 text: any garment, prop or object can be named.
 - The task node's controls: `target`, `prompt`, `selection` / `index`, `review` / `review_pick`, `decision` /
