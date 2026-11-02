@@ -2029,6 +2029,12 @@
         "name": "core_count",
         "type": "INT",
         "links": null
+       },
+       {
+        "localized_name": "audio",
+        "name": "audio",
+        "type": "AUDIO",
+        "links": null
        }
       ],
       "title": "Plate window",
@@ -2144,6 +2150,12 @@
         "localized_name": "core_count",
         "name": "core_count",
         "type": "INT",
+        "links": null
+       },
+       {
+        "localized_name": "audio",
+        "name": "audio",
+        "type": "AUDIO",
         "links": null
        }
       ],
@@ -2680,6 +2692,12 @@
         "localized_name": "core_count",
         "name": "core_count",
         "type": "INT",
+        "links": null
+       },
+       {
+        "localized_name": "audio",
+        "name": "audio",
+        "type": "AUDIO",
         "links": null
        }
       ],

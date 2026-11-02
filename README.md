@@ -52,6 +52,9 @@ The first media nodes of the A20 plan.
   - It checks free memory first; a window that does not fit fails in words, with the count that would.
   - `window_json` (contract `h3.frame_window` v1) gives every row's source frame and exact presentation time,
     variable frame rate included, and which rows are the window itself (`core_slice`; `core_start` / `core_count`).
+  - `audio` (2026-11-02) is the sound of exactly the frames it read, handles included. A job window's held head
+    frames get silence first. With `step` > 1 it is silence (every Nth frame has no single stretch of sound). Feed it
+    to Source AV Latent so the generation hears the plate's own sound, or, for lip sync, the new one.
 
 ```
 Load Video ──VIDEO──► H3 Media Probe ──media──► H3 Frame Window Reader ──images──► …

@@ -202,6 +202,8 @@ class MiniMaxH3_FrameWindow(io.ComfyNode):
                 io.String.Output("window_json", tooltip="Contract h3.frame_window v1: source frames, exact times, which rows are the window."),
                 io.Int.Output("core_start", tooltip="Row of the first window frame inside images."),
                 io.Int.Output("core_count", tooltip="Number of window frames inside images."),
+                io.Audio.Output("audio", tooltip="The sound of exactly these frames (handles included; held frames "
+                                                 "at the head = silence first). With step > 1: silence."),
             ],
         )
 
@@ -248,7 +250,14 @@ class MiniMaxH3_FrameWindow(io.ComfyNode):
                         "count": (int(count) - core_n) if int(count) > core_n else 0},
             "crop": list(media.crop) if getattr(media, "crop", None) else None,
         }
-        return io.NodeOutput(images, json.dumps(window), core_first, core_n)
+        from mmx_vendor.c2c_core.video.audio import LazyAudio, lazy_audio_for_handle
+        if step == 1:
+            audio = lazy_audio_for_handle(media.trimmed(before, after))      # L9.79: the generation hears the window
+            window["audio"] = "the sound of these frames"
+        else:
+            audio = LazyAudio(path=None, stream_index=0, start_sec=0.0, duration_sec=len(positions) / float(media.fps))
+            window["audio"] = "silence: every Nth frame has no single sound span"
+        return io.NodeOutput(images, json.dumps(window), core_first, core_n, audio)
 
 
 def _times(media, src_frames):
