@@ -186,6 +186,22 @@ def _mean_offset_matrix(plate_lin: torch.Tensor, gen_lin: torch.Tensor, ring: to
     return mat
 
 
+def _ridge_lstsq(aug: torch.Tensor, p: torch.Tensor, ridge: float = 1e-3) -> torch.Tensor:
+    """Least squares for the [4, 3] colour coefficients, pulled gently toward 'no colour change'. Low-chroma rings (grey
+    sets, one texture shared by the three channels) make the plain problem rank-deficient: many matrices fit the ring,
+    CPU and CUDA lstsq pick different ones and the temporal median mixed them (measured: residual 0.04-0.07 on a ring
+    the identity fits exactly). The ridge makes the solution unique and the same on every device; on a well-conditioned
+    ring it moves the fit by a negligible amount."""
+    a = aug.double()
+    ata = a.T @ a
+    lam = ridge * float(torch.diagonal(ata)[:3].mean().clamp_min(1e-12))
+    prior = torch.zeros(4, 3, dtype=a.dtype, device=a.device)
+    prior[0, 0] = prior[1, 1] = prior[2, 2] = 1.0
+    reg = torch.zeros(4, 4, dtype=a.dtype, device=a.device)
+    reg[0, 0] = reg[1, 1] = reg[2, 2] = lam                  # the offset row is not pulled
+    return torch.linalg.solve(ata + reg, a.T @ p.double() + reg @ prior).to(aug.dtype)
+
+
 def _fit_affine_3x4(plate_lin: torch.Tensor, gen_lin: torch.Tensor, ring: torch.Tensor) -> tuple[torch.Tensor, str]:
     sel = ring > 0.5
     n = int(sel.sum().item())
@@ -203,7 +219,7 @@ def _fit_affine_3x4(plate_lin: torch.Tensor, gen_lin: torch.Tensor, ring: torch.
     ones = torch.ones(g.shape[0], 1, device=g.device, dtype=g.dtype)
     aug = torch.cat([g, ones], dim=1)
     try:
-        coeffs = torch.linalg.lstsq(aug, p).solution
+        coeffs = _ridge_lstsq(aug, p)
     except RuntimeError:
         return _mean_offset_matrix(plate_lin, gen_lin, ring), "lstsq_fail"
     pred = aug @ coeffs
@@ -214,7 +230,7 @@ def _fit_affine_3x4(plate_lin: torch.Tensor, gen_lin: torch.Tensor, ring: torch.
         aug = aug[keep]
         p = p[keep]
         try:
-            coeffs = torch.linalg.lstsq(aug, p).solution
+            coeffs = _ridge_lstsq(aug, p)
         except RuntimeError:
             return _mean_offset_matrix(plate_lin, gen_lin, ring), "lstsq_trim_fail"
     a3 = coeffs[:3, :].T
@@ -289,8 +305,18 @@ def restore_frames(
     colour: str,
     temporal_lag_check: bool,
     device: torch.device | None = None,
+    *,
+    mesh_knots: tuple[int, int] = (9, 5),
+    cast_matte: bool = False,
+    cast_reach: float = 0.07,
 ) -> tuple[torch.Tensor, torch.Tensor, dict[str, Any]]:
-    """Per-frame plate restore in crop space then paste into full frames."""
+    """Per-frame plate restore in crop space then paste into full frames.
+
+    ``register`` = "mesh (experimental)" (L9.78): instead of one shift, a mesh warp per frame (knots ``mesh_knots``)
+    fitted on the background around the edit (open-source-higgsfield's alignment, mmx_utils/body_double.py), warm-started
+    from the previous frame and smoothed over time - for generations that squeeze or drift unevenly. ``cast_matte``:
+    after alignment, the composite also covers where the new cast reaches past the edit mask (where the aligned crop
+    differs from the plate, connected to the edit within ``cast_reach`` of the crop height)."""
     n = min(cropped_images.shape[0], original_images.shape[0], len(boxes))
     img_h, img_w = original_images.shape[1], original_images.shape[2]
     out_dev = original_images.device
@@ -351,7 +377,15 @@ def restore_frames(
             plate_means.append(0.0)
 
         dx, dy = 0.0, 0.0
-        if ring_ok and register != "off":
+        mesh = str(register).startswith("mesh")
+        u = None
+        if mesh:
+            from mmx_utils import body_double as BD
+            prev_u = frame_data[-1].get("u") if frame_data else None
+            u = BD.align(gen_crop[..., :3].float().cpu().numpy(), plate_crop[..., :3].float().cpu().numpy(),
+                         (em > 0.5).cpu().numpy(), u=prev_u, knots=tuple(mesh_knots))
+            rec["mesh_max_px"] = round(float(abs(u).max()), 3)
+        elif ring_ok and register != "off":
             dy, dx, peak = masked_ncc_shift(plate_luma, gen_luma, ring > 0.5, ring > 0.5)
             rec["dx"] = dx
             rec["dy"] = dy
@@ -391,10 +425,18 @@ def restore_frames(
             "dx": dx,
             "dy": dy,
         }
+        if u is not None:
+            fd_entry["u"] = u
         if not streaming:
             fd_entry.update(em=em, ring=ring, plate_crop=plate_crop, gen_crop=gen_crop)
         frame_data.append(fd_entry)
         per_frame.append(rec)
+
+    if str(register).startswith("mesh") and frame_data:
+        from mmx_utils import body_double as BD
+        smooth_u = BD.steady_warps([fd["u"] for fd in frame_data], [len(frame_data)])
+        for fd, uu in zip(frame_data, smooth_u):
+            fd["u"] = uu
 
     # Pass 2: apply corrections and composite
     for i, fd in enumerate(frame_data):
@@ -418,6 +460,10 @@ def restore_frames(
 
         if fd["ring_ok"] and rec.get("shift_applied"):
             working = inject_pixel_shift(working.unsqueeze(0), fd["dx"], fd["dy"]).squeeze(0).to(working.dtype)
+        if "u" in fd:
+            from mmx_utils import body_double as BD
+            warped = BD.warp(working.float().cpu().numpy(), fd["u"], tuple(mesh_knots))
+            working = torch.from_numpy(warped).to(device=working.device, dtype=working.dtype)
 
         if fd["ring_ok"] and colour != "off":
             mat = _median_filter_coeffs(raw_coeffs, i)
@@ -432,12 +478,22 @@ def restore_frames(
             else:
                 working = corrected_rgb.to(working.dtype)
 
+        if cast_matte:
+            from mmx_utils import body_double as BD
+            m = BD.cast_matte(working[..., :3].float().cpu().numpy(), plate_crop[..., :3].float().cpu().numpy(),
+                              (em > 0.5).cpu().numpy(), reach=float(cast_reach))
+            grown_by = torch.from_numpy(m).to(device=em.device, dtype=em.dtype)
+            rec["cast_matte_added"] = round(float((grown_by - em).clamp_min(0).mean()), 5)
+            em = torch.maximum(em, grown_by)
         border = border_ramp_alpha(h, w, x, y, img_h, img_w, feather_px, device=cd, dtype=torch.float32)
         edit_grown = _grow_mask(em, grow_px)
         alpha_crop = gaussian_blur_mask(edit_grown.unsqueeze(0).unsqueeze(0), feather_px)[0, 0]
         alpha_crop = (alpha_crop * border).clamp(0, 1)
 
-        blended = mask_confined_blend(plate_crop, working, alpha_crop, colour_match=0.0)
+        # mask_confined_blend takes a batch ([B,H,W,C] images, [B,H,W] mask). Handed one frame's [h,w] alpha it read
+        # the mask's first three COLUMNS as a per-channel alpha: square crops kept the plate where the edit should
+        # be, other crops raised a size error (L9.97)
+        blended = mask_confined_blend(plate_crop[None], working[None], alpha_crop[None], colour_match=0.0)[0]
         if streaming:
             out[i, y : y + h, x : x + w, :] = blended.to(out_dev, out_dtype)
             full_restore_mask[i, y : y + h, x : x + w] = alpha_crop.to(out_dev)

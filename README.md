@@ -283,6 +283,24 @@ second plate of another length and size. See the C2C workspace, evidence L9.76.
   The character-swap nodes built on them come next.
 - The limits (seam 1.5x, the 9x5 alignment knots) are the reference's values for another model. They are
   parameters, not yet measured on H3 output.
+- **H3 Plate Restore: `register` = `mesh (experimental)`.** Instead of one shift, each frame gets a smooth warp
+  fitted on the background around the edit, smoothed over time, for generations that squeeze or drift unevenly.
+- **H3 Plate Restore: `cast_matte`** (off by default; `cast_reach`). The composite also covers where the new
+  character reaches past the edit mask (bigger hair, a wider costume), and only next to the edit.
+
+### Fixed 2026-11-01: H3 Plate Restore did not paste the edit back
+
+H3 Plate Restore handed one frame's mask to a blend written for a batch, which read the mask's first three columns
+as the alpha.
+
+- **Square crops:** the output kept the plate where the regenerated subject should have been (measured: alpha 1.0,
+  output = the plate).
+- **Other crops:** it stopped with a size error.
+- **Affected workflows:** `h3_plate_fidelity_PRB.json` and task workflow 07 were affected. Run them again.
+
+Its colour fit was also made stable. On a low-colour ring (a grey set) the plain fit had many answers, picked
+differently on CPU and GPU. It now leans gently toward "no colour change", gives the same result on both, and leaves
+a well-coloured ring's fit as it was.
 
 ### Convert to Subgraph no longer re-wires nodes with autogrow inputs
 

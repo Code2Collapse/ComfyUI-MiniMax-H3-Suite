@@ -129,12 +129,14 @@ class MiniMaxH3_PlateRestore(io.ComfyNode):
                 ),
                 io.Combo.Input(
                     "register",
-                    options=["off", "measure", "correct"],
+                    options=["off", "measure", "correct", "mesh (experimental)"],
                     default="correct",
                     tooltip=(
                         "Spatial alignment on the preserved ring. "
                         "off: skip. measure: report shift only. correct: warp the generated "
-                        "crop when shift is within max_shift_px; larger shifts are refused."
+                        "crop when shift is within max_shift_px; larger shifts are refused. "
+                        "mesh (experimental): a smooth warp per frame fitted on the background around the "
+                        "edit, for generations that squeeze or drift unevenly (unmeasured on H3 output)."
                     ),
                 ),
                 io.Float.Input(
@@ -168,6 +170,23 @@ class MiniMaxH3_PlateRestore(io.ComfyNode):
                         "never retimes, it only warns."
                     ),
                 ),
+                io.Boolean.Input(
+                    "cast_matte",
+                    default=False,
+                    tooltip=(
+                        "Character swap: also composite where the new cast reaches past the edit mask "
+                        "(bigger hair, a wider costume) - where the aligned crop differs from the plate, "
+                        "next to the edit. Off keeps the composite inside the edit mask."
+                    ),
+                ),
+                io.Float.Input(
+                    "cast_reach",
+                    default=0.07,
+                    min=0.0,
+                    max=0.5,
+                    step=0.01,
+                    tooltip="How far past the edit mask the cast may reach, as a share of the crop height.",
+                ),
             ],
             outputs=[
                 io.Image.Output(
@@ -198,6 +217,8 @@ class MiniMaxH3_PlateRestore(io.ComfyNode):
         max_shift_px=4.0,
         colour="affine",
         temporal_lag_check=True,
+        cast_matte=False,
+        cast_reach=0.07,
     ) -> io.NodeOutput:
         n = _align_frame_counts(cropped_images, original_images, bboxes, edit_mask)
         cropped_images = cropped_images[:n]
@@ -226,6 +247,8 @@ class MiniMaxH3_PlateRestore(io.ComfyNode):
                 str(colour),
                 bool(temporal_lag_check),
                 device=d,
+                cast_matte=bool(cast_matte),
+                cast_reach=float(cast_reach),
             ),
             device=dev,
             label="MiniMaxH3_PlateRestore",
