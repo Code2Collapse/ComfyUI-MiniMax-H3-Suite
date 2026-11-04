@@ -162,6 +162,11 @@ A long H3 job is planned once and then runs by itself. You no longer queue every
 - **H3 Job Controller** opens the job (on disk under `output/h3_jobs/<job>/`) and hands each run its next segment:
   the plate window, the seed and the context frames. It also applies your actions: pause, resume, cancel, approve or
   reject a held segment, retry a segment with a new seed, roll back, generate an alternate take of an accepted segment (kept beside the chosen one), choose another take (only the segments after it are redone).
+  - Its `context_latent` comes from the previous segment only when that segment generated nothing past its accepted
+    end. With a blend tail (or grid padding), the latent's last steps would be out of step with the accepted
+    frames. In that case the pixel context is used and the status says so (2026-11-03).
+- **H3 Face Track Crop / Face Mask SAM** place the face's paste mask and SAM prompts where the face is in its crop.
+  This holds even near a frame edge, where the crop box cannot stay centred on the face (fixed 2026-11-03).
 - **H3 QC Gate** judges the segment:
   - frame count;
   - finite values;
