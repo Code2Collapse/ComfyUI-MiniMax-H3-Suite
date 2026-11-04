@@ -221,6 +221,24 @@ def _jit(a: np.ndarray) -> float:
     return float(np.abs(np.diff(a)).mean()) if len(a) > 1 else 0.0
 
 
+def subject_rects(boxes, cx, cy, face_w, face_h, canvas_width: int, canvas_height: int) -> list:
+    """The face's rect on each crop canvas: (x, y, w, h) in canvas pixels.
+
+    A22 L9.125: the face is placed where it IS inside its crop box. The box is clamped into the frame (a face near an
+    edge is not at the box centre), and the old formula put the rect at the canvas centre anyway - the face_only /
+    face_ellipse paste mask and the SAM box / point prompts were then offset from the face. For an unclamped box
+    (face centred) the result is exactly the old one."""
+    rects = []
+    for i, (bx, by, bw, bh) in enumerate(boxes):
+        bw, bh = max(float(bw), 1e-6), max(float(bh), 1e-6)
+        rw = float(face_w[i]) / bw * canvas_width
+        rh = float(face_h[i]) / bh * canvas_height
+        ccx = (float(cx[i]) - float(bx)) / bw * canvas_width
+        ccy = (float(cy[i]) - float(by)) / bh * canvas_height
+        rects.append((ccx - rw * 0.5, ccy - rh * 0.5, rw, rh))
+    return rects
+
+
 def track_face_crop(
     images: torch.Tensor,
     *,
@@ -457,15 +475,7 @@ def track_face_crop(
     longest_gap = max(runs) if runs else 0
 
     mags = [canvas_height / float(box[3]) for box in boxes]
-    subject_rect = [
-        (
-            float(canvas_width) * 0.5 - 0.5 * float(sm_fw[i]) / max(box[2], 1e-6) * canvas_width,
-            float(canvas_height) * 0.5 - 0.5 * float(sz[i]) / max(box[3], 1e-6) * canvas_height,
-            float(sm_fw[i]) / max(box[2], 1e-6) * canvas_width,
-            float(sz[i]) / max(box[3], 1e-6) * canvas_height,
-        )
-        for i, box in enumerate(boxes)
-    ]
+    subject_rect = subject_rects(boxes, cx, cy, sm_fw, sz, canvas_width, canvas_height)
 
     transform = H3Transform(
         boxes=tuple(boxes),

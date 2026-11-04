@@ -492,7 +492,10 @@ class MiniMaxH3_JobController(io.ComfyNode):
         status = (f"job {j.m['name']}: segment {sid + 1} of {len(j.m['plan'])}, attempt {att['n']}, seed {seed}"
                   + (f", shot {p['shot'] + 1} ({p['transition']})" if p.get("shot") is not None else "")
                   + (f" - alternate take '{alternate}'" if alternate else "")
-                  + (f" ({note})" if note else ""))
+                  + (f" ({note})" if note else "")
+                  + (" - context latent not handed on: the previous segment generated frames past its accepted end "
+                     "(blend), so its latent's last steps would be out of step; the pixel context is used"
+                     if _latent_runs_past_accepted_end(j, p) else ""))
         b = _blocked()
         return io.NodeOutput(win if win is not None else b, track if track is not None else b, ctx, seed,
                              int(p["model_frames"]), json.dumps(seg_json), status, text, _context_latent(j, p),
@@ -554,10 +557,23 @@ def save_latent(d: str, latent) -> str:
     return path
 
 
-def _context_latent(j: J.Job, p: dict):
-    """The chosen take's latent of the segment this one continues from; None (= not connected) when there is none."""
+def _latent_runs_past_accepted_end(j: J.Job, p: dict) -> bool:
+    """A22 L9.125: the saved latent is the whole generated window, and Motion Context pins its LAST steps. When the
+    segment this one continues from generated frames past its accepted end (a blend tail or model-grid padding), those
+    last steps are `overlap_tail + pad_tail` frames late - the context (and its sound) would be pinned out of step
+    with the accepted frames and the pixel context."""
     cf = p.get("context_from")
     if cf is None:
+        return False
+    cp = j.plan_of(int(cf))
+    return int(cp.get("overlap_tail") or 0) + int(cp.get("pad_tail") or 0) > 0
+
+
+def _context_latent(j: J.Job, p: dict):
+    """The chosen take's latent of the segment this one continues from; None (= not connected) when there is none,
+    or when that latent runs past the accepted end (the pixel context is used instead)."""
+    cf = p.get("context_from")
+    if cf is None or _latent_runs_past_accepted_end(j, p):
         return None
     s = j.seg(cf)
     path = os.path.join(_attempt_dir(j, int(cf), int(s["takes"].get(s.get("take") or "main", len(s["attempts"])))),
