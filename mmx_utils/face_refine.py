@@ -576,6 +576,11 @@ def stitch_refined_faces(
 
     cw, ch = transform.canvas
     w, h = transform.src_size
+    if (int(base_images.shape[2]), int(base_images.shape[1])) != (int(w), int(h)):
+        # A22 L9.125: this failed later with a raw tensor size error
+        raise ValueError(
+            f"Face Stitch: the images are {int(base_images.shape[2])}x{int(base_images.shape[1])} but "
+            f"transform.src_size is {int(w)}x{int(h)} - connect the plate the crops were taken from.")
     face_rects = transform.subject_rect
 
     if device is None:
@@ -592,12 +597,13 @@ def stitch_refined_faces(
         c1 = min(c0 + chunk, b)
         n = c1 - c0
 
-        if feather_scales_with_crop:
-            f_can = int(feather)
-        else:
-            bh_mid = float(boxes[(c0 + c1 - 1) // 2][3])
-            f_can = int(round(feather * (ch / max(bh_mid, 1.0))))
-            f_can = max(1, min(f_can, ch // 3))
+        # A22 L9.125: the feather width per FRAME (it came from the middle frame of each memory-sized chunk, so it
+        # jumped at chunk boundaries and depended on the resolution-driven chunk size)
+        def _f_can(i):
+            if feather_scales_with_crop:
+                return int(feather)
+            f = int(round(feather * (ch / max(float(boxes[i][3]), 1.0))))
+            return max(1, min(f, ch // 3))
 
         if masks is not None:
             mk = masks[c0:c1].to(device).float()
@@ -608,10 +614,15 @@ def stitch_refined_faces(
             if mask_dilation > 0:
                 k = 2 * int(mask_dilation) + 1
                 mk = F.max_pool2d(mk, k, stride=1, padding=k // 2)
-            mask_can = gaussian_blur_mask(mk, f_can).clamp(0, 1)
+            mask_can = torch.cat([gaussian_blur_mask(mk[j:j + 1], _f_can(i))
+                                  for j, i in enumerate(range(c0, c1))], dim=0).clamp(0, 1)
         elif paste_region == "full_crop":
-            one = feather_mask(ch, cw, f_can, device, torch.float32)
-            mask_can = one.view(1, 1, ch, cw).expand(n, 1, ch, cw)
+            cache = {}
+            for i in range(c0, c1):
+                f = _f_can(i)
+                if f not in cache:
+                    cache[f] = feather_mask(ch, cw, f, device, torch.float32).view(1, 1, ch, cw)
+            mask_can = torch.cat([cache[_f_can(i)] for i in range(c0, c1)], dim=0)
         else:
             mask_can = torch.cat(
                 [
@@ -622,7 +633,7 @@ def stitch_refined_faces(
                         if face_rects and i < len(face_rects)
                         else (cw * 0.25, ch * 0.25, cw * 0.5, ch * 0.5),
                         int(mask_dilation),
-                        f_can,
+                        _f_can(i),
                         paste_region == "face_ellipse",
                         device,
                     )

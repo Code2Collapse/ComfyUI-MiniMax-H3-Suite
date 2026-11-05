@@ -459,6 +459,15 @@ def trim_clip(images, trim_frames: int, audio=None, fps: float = 24.0, match_tai
     return out_images, out_audio, "\n".join(report_lines)
 
 
+def _check_roots(path):
+    """A22 L9.125 (D0.35): a server reachable from other machines reads only inside the C2C media roots (the vendored
+    c2c_core rule, as C2C Load Video); a local server reads any path, as before."""
+    from mmx_vendor.c2c_core import media_roots as _roots
+    msg = _roots.check_run_path(path)
+    if msg:
+        raise ValueError("MiniMaxH3 Motion Context: " + msg)
+
+
 def resolve_latent_path(path, clip_index=0):
     """Turn the loader's path input into a concrete file."""
     p = (path or "").strip().strip('"').strip("'")
@@ -466,6 +475,8 @@ def resolve_latent_path(path, clip_index=0):
         p = "h3_context"
     candidates = [p, os.path.join(folder_paths.get_output_directory(), p)]
     for c in candidates:
+        if os.path.isfile(c) or os.path.isdir(c):
+            _check_roots(c)
         if os.path.isfile(c):
             return c
         if os.path.isdir(c):

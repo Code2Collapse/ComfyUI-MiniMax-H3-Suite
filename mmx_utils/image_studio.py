@@ -691,7 +691,9 @@ def detail_tone_lock(
     if refined.shape[0] == 1 and source.shape[0] > 1:
         refined = refined.expand(source.shape[0], -1, -1, -1).clone()
     elif source.shape[0] != refined.shape[0]:
-        refined = refined[:1].expand(source.shape[0], -1, -1, -1).clone()
+        # A22 L9.125: this silently used refined frame 0 for every frame
+        raise ValueError(f"Detail Tone Lock: the source has {source.shape[0]} frames and the refined image "
+                         f"{refined.shape[0]}; give it the same number of frames, or a single refined frame.")
     if source.shape[-2:] != refined.shape[-2:]:
         refined = F.interpolate(refined, size=source.shape[-2:], mode="bicubic", align_corners=False)
     source_low = _blur(source, detail_radius)

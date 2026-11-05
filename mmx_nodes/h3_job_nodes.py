@@ -143,7 +143,7 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
                 lookahead=0, seed=0, max_retries=2, approval=APPROVAL[0], auto_continue=True, max_auto_runs=100,
                 fps=24.0, deliver_codec="prores", media=None, prompt="", references="", shot_plan=None,
                 hold_head=0) -> io.NodeOutput:
-        fps_ = Fraction(fps).limit_denominator(1001000)
+        fps_ = _fps_fraction(fps)
         fingerprints = {"prompt": _sha(prompt), "references": _sha(references)}
         media_first, media_frames = 0, None
         if media is not None:
@@ -159,7 +159,7 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
         shots = None
         if str(shot_plan or "").strip():
             sp = _json(shot_plan, SHOTS, "H3 Task Spec")
-            if Fraction(sp["fps"]) != fps_:
+            if not _same_fps(Fraction(sp["fps"]), fps_):
                 raise ValueError(f"H3 Task Spec: the shot plan was timed at {float(Fraction(sp['fps'])):g} fps and the "
                                  f"job runs at {float(fps_):g} - set the same fps on H3 Shot Planner.")
             if int(count) and int(count) != int(sp["frames"]):
@@ -1063,7 +1063,7 @@ class MiniMaxH3_ShotPlanner(io.ComfyNode):
             shots = J.parse_timeline(timeline, fps)
         except J.JobError as exc:
             raise ValueError(f"H3 Shot Planner: {exc}") from exc
-        fps_ = Fraction(fps).limit_denominator(1001000)
+        fps_ = _fps_fraction(fps)
         total = int(shots[-1]["global"][1])
         plan = {"c2c_contract": SHOTS, "c2c_contract_version": "1.0", "fps": f"{fps_.numerator}/{fps_.denominator}",
                 "frames": total, "scenes": int(shots[-1]["scene"]) + 1, "shots": shots}
@@ -1126,7 +1126,31 @@ def add_references(bank: dict | None, images: torch.Tensor, roles: list[str], fo
     return {"c2c_contract": BANK, "c2c_contract_version": "1.0", "entries": entries, "fingerprint": fp}
 
 
+_NTSC = (24, 30, 48, 60, 120)
+
+
+def _fps_fraction(fps) -> Fraction:
+    """A widget fps as an exact rate. A22 L9.125: 23.976 / 29.97 / 59.94 ... are the x/1001 NTSC rates a plate
+    reports (24000/1001); limit_denominator turned 23.976 into exactly 2997/125, which never equalled the plate."""
+    x = float(fps)
+    for n in _NTSC:
+        if abs(x - n * 1000 / 1001) < 5e-4:
+            return Fraction(n * 1000, 1001)
+    return Fraction(x).limit_denominator(1001)
+
+
+def _same_fps(a, b) -> bool:
+    """Two rates are the same within 0.01% (23.976 typed vs 24000/1001 measured)."""
+    a, b = float(a), float(b)
+    return abs(a - b) <= 1e-4 * max(abs(a), abs(b), 1e-9)
+
+
 def _load_ref(path: str, who: str) -> torch.Tensor:
+    # A22 L9.125 (D0.35): bank entries are paths in plain JSON; a reachable server reads only inside the media roots
+    from mmx_vendor.c2c_core import media_roots as _roots
+    msg = _roots.check_run_path(path)
+    if msg:
+        raise ValueError(f"{who}: {msg}")
     if not os.path.isfile(path):
         raise ValueError(f"{who}: the reference image {path} is missing - rebuild the bank (H3 Reference Bank).")
     return _read_png16(path)

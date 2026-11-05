@@ -559,6 +559,12 @@ def prepare_continuation(
     overlap_frames = _aligned_overlap_frames(
         overlap_frames, min(source_frames, frame_count)
     )
+    if overlap_frames >= frame_count:
+        # A22 L9.125: the whole new latent was pinned to the source tail - nothing new was generated
+        raise ValueError(
+            f"Continuation overlap ({overlap_frames} frames) must be shorter than the new segment "
+            f"({frame_count} frames): raise length or lower the overlap."
+        )
     overlap_video_t = video_latent_t(overlap_frames) if overlap_frames else 0
     overlap_audio_t = (
         round(overlap_frames / FPS * AUDIO_LATENT_FPS) if overlap_frames else 0

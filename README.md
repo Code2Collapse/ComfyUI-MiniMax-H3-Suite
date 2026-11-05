@@ -167,6 +167,16 @@ A long H3 job is planned once and then runs by itself. You no longer queue every
     frames. In that case the pixel context is used and the status says so (2026-11-03).
 - **H3 Face Track Crop / Face Mask SAM** place the face's paste mask and SAM prompts where the face is in its crop.
   This holds even near a frame edge, where the crop box cannot stay centred on the face (fixed 2026-11-03).
+- Fixed 2026-11-05:
+  - **H3 Task Spec / Shot Planner**: a 23.976 (29.97, 59.94 ...) shot plan matches a 23.976 plate. The planner
+    stored 2997/125 while the plate reports 24000/1001, so the plan was refused.
+  - **H3 Face Stitch**: the feather width is worked out per frame (it changed only every 32 frames or so, at
+    memory-sized chunk boundaries). A plate of another size than the crops' transform is refused with a message.
+  - **Detail Tone Lock**: a refined batch with another number of frames than the source is refused (it silently
+    used refined frame 0 everywhere). One refined frame still applies to all.
+  - **Prepare Continuation**: an overlap as long as the new segment is refused (nothing new would be generated).
+  - **Load Context Latent / H3 Reference Bank**: on a server reachable from other machines (`--listen`), files must
+    be inside the C2C media roots, as for C2C Load Video. A local server reads any path, as before.
 - **H3 QC Gate** judges the segment:
   - frame count;
   - finite values;
