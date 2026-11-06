@@ -251,6 +251,17 @@ The decisions for every pack in both reference folders are in the work area's
 - **Licence:** Apache-2.0 (`THIRD_PARTY_LICENSES/c2c_core-LICENSE.txt`).
 - **Used by:** H3 Media Probe, H3 Frame Window Reader.
 
+## WanAnimatePreprocessV2 ONNX pose stack (vendored)
+
+- **Source:** [ComfyUI-WanAnimatePreprocessV2](https://github.com/Code2Collapse/ComfyUI-WanAnimatePreprocessV2)
+  `models/onnx_models.py`, `pose_utils/pose2d_utils.py` and `pose_utils/human_visualization.py` (Alibaba Wan team;
+  modified by kijai and Code2Collapse),
+  copied byte for byte into `mmx_vendor/wap_pose/` and kept equal by a sync check (`mmx_vendor/VENDORED.md`).
+- **Licence:** Apache-2.0 (`THIRD_PARTY_LICENSES/ComfyUI-WanAnimatePreprocessV2-LICENSE.txt`); Apache-2.0 code may
+  be included in this GPL-3.0 pack.
+- **Used by:** N8 StrongestPose (YOLO person box + ViTPose wholebody keypoints). Before (ledger L9.73), N8 imported
+  these files from an installed WanAnimatePreprocessV2 and had no detector without it.
+
 ## open-source-higgsfield / Body Double (character swap finishing)
 
 - **Source:** [open-source-higgsfield](https://github.com/lucataco/open-source-higgsfield) by lucataco, commit 864c8de

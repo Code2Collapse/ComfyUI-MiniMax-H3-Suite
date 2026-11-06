@@ -84,13 +84,25 @@ def _import_wan_pose_stack() -> Any:
     Deliberately does NOT exec the pack's `__init__.py`: that registers its whole node
     list and expects a live ComfyUI. We only want two ONNX classes, and running node
     registration as a side effect of a pose call would be a nasty surprise.
+
+    L9.73 (owner A20, the Suite stands alone): the same two files are carried byte-identical in
+    mmx_vendor/wap_pose (tools/sync_vendored.py groups py-wap-onnx-models / py-wap-pose2d) and are tried
+    FIRST, so N8 works without WanAnimatePreprocessV2 installed. The sibling pack stays the fallback.
     """
-    wan_root = Path(__file__).resolve().parents[2] / "ComfyUI-WanAnimatePreprocessV2"
-    if not wan_root.is_dir():
-        return None
     import importlib
     import sys
     import types
+
+    try:
+        onnx_models = importlib.import_module("mmx_vendor.wap_pose.models.onnx_models")
+        pose2d = importlib.import_module("mmx_vendor.wap_pose.pose_utils.pose2d_utils")
+        return (onnx_models.Yolo, onnx_models.ViTPose, pose2d.bbox_from_detector, pose2d.crop)
+    except Exception as exc:  # noqa: BLE001 - fall back to an installed WanAnimatePreprocessV2
+        _LOG.warning("Vendored ViTPose stack import failed (%s); trying ComfyUI-WanAnimatePreprocessV2.", exc)
+
+    wan_root = Path(__file__).resolve().parents[2] / "ComfyUI-WanAnimatePreprocessV2"
+    if not wan_root.is_dir():
+        return None
 
     try:
         if _WAN_PKG not in sys.modules:
@@ -138,8 +150,8 @@ def detect_keypoints_plate(
     stack = _import_wan_pose_stack()
     if stack is None:
         raise VitPoseUnavailableError(
-            "ComfyUI-WanAnimatePreprocessV2 pose stack is not importable — "
-            "install the pack or use mode=passthrough."
+            "The ViTPose pose stack is not importable (mmx_vendor/wap_pose, or an installed "
+            "ComfyUI-WanAnimatePreprocessV2) - check onnxruntime and opencv-python, or use mode=passthrough."
         )
     Yolo, ViTPose, bbox_from_detector, crop = stack
 

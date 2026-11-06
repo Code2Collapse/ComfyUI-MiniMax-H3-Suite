@@ -3,6 +3,7 @@
 | Folder | Canonical source | Licence | Kept equal by |
 |---|---|---|---|
 | `c2c_core/` | [ComfyUI-CustomNodePacks](https://github.com/Code2Collapse/ComfyUI-CustomNodePacks) `c2c_core/` (same author, Code2Collapse) | Apache-2.0 (`THIRD_PARTY_LICENSES/c2c_core-LICENSE.txt`); Apache-2.0 code may be included in this GPL-3.0 pack | `tools/sync_vendored.py` group `py-core` (workspace) + the pre-push gate's `vendored_sync` check |
+| `wap_pose/models/onnx_models.py`, `wap_pose/pose_utils/pose2d_utils.py`, `wap_pose/pose_utils/human_visualization.py` | [ComfyUI-WanAnimatePreprocessV2](https://github.com/Code2Collapse/ComfyUI-WanAnimatePreprocessV2) same paths (Alibaba Wan team, kijai, Code2Collapse) | Apache-2.0 (`THIRD_PARTY_LICENSES/ComfyUI-WanAnimatePreprocessV2-LICENSE.txt`) | `tools/sync_vendored.py` groups `py-wap-onnx-models` / `py-wap-pose2d` / `py-wap-humanvis` (the `wap_pose` `__init__` files are this pack's own) |
 
 Why: owner directive A20 (2026-10-31). The MiniMax H3 Suite must finish its main workflows without CustomNodePacks or
 NukeMax installed, and shared engine code must not become two drifting implementations.
