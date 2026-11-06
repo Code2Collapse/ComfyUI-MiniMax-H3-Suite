@@ -24,7 +24,7 @@ Every node shows its stage, its run status and H3 errors in plain English. That 
 | **H3 Sigma Inspector** (P2) | Read-only σ table report (no JS plot in this slice) |
 | **H3 OCIO Bridge** (I1) | Scene-linear ↔ display via OCIO (HDR-safe, no clamp) |
 | **H3 Color Round-Trip QC** (W4) | Display round-trip error probe with HDR gate |
-| **H3 Strongest Pose** (N8) | ViTPose-H plate detect → crop warp pose hints |
+| **H3 Strongest Pose** (N8) | ViTPose-H plate detect → crop warp pose hints. The YOLO + ViTPose ONNX code ships in the pack (`mmx_vendor/wap_pose`); WanAnimatePreprocessV2 is not needed. Weights: `models/detection/vitpose_h_wholebody_model.onnx` (+ `yolov10m.onnx`) |
 | **H3 Temporal Depth** (N9) | Depth hints (passthrough default) + optional normals |
 | **H3 Drift QC** (N11) | Exterior-only RAFT drift gate |
 | **H3 Region Mask** (N10) | Depth-horizon or painted region MASK for N2 spine |
