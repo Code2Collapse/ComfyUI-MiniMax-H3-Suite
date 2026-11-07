@@ -3,3 +3,13 @@ numpy>=1.24.0
 # Face refine (optional — nodes fail with a clear message if absent):
 # ultralytics
 # insightface
+# Optional - only the features named need them; each is imported where it is used, so a missing one stops only that
+# feature. Not hard requirements on purpose: installing opencv-python / onnxruntime next to an existing
+# opencv-contrib / headless or onnxruntime-gpu build breaks those environments (A24 dependency audit, 2026-11-07).
+# opencv-python     # H3 job video I/O helpers, N8 StrongestPose (vendored ViTPose stack), mask OpenCV fast paths
+# onnxruntime       # (or onnxruntime-gpu) N8 StrongestPose
+# matplotlib        # N8 pose drawing helpers (vendored, rarely used)
+# gguf              # H3 GGUF checkpoint loading
+# mediapipe         # face landmarks
+# PyOpenColorIO OpenImageIO   # OCIO / EXR bridges
+# openai-whisper scenedetect  # audio transcript, shot cuts

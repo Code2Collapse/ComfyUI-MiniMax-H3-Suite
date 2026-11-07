@@ -296,3 +296,24 @@ The decisions for every pack in both reference folders are in the work area's
   Added here: locked props and a warn-only policy.
 - **Not carried over, on purpose:** its SCAIL-2 / FLUX Klein graphs and its model constraints (81-frame segments,
   4n+1 padding). The 9x5 knot layout and the QC limits are kept as parameters, not as H3 rules.
+
+## ComfyUI-H3-FaceRefine (face refine helpers)
+
+- **Source:** [ComfyUI-H3-FaceRefine](https://github.com/Carasibana/ComfyUI-H3-FaceRefine) by Carasibana
+- **Licence:** MIT (`THIRD_PARTY_LICENSES/ComfyUI-H3-FaceRefine-LICENSE.txt`)
+- **Ported into this pack:** `mmx_utils/face_refine.py`, `affine_transform.py`, `feather_composite.py`,
+  `keypoint_spine.py`, `per_frame_denoise.py` (helpers; each file keeps its MIT header). Attribution added 2026-11-07
+  (A24 licence audit R11).
+
+## nuke-nodes-comfyui (OCIO / DCC colour helpers)
+
+- **Source:** [nuke-nodes-comfyui](https://github.com/sumitchatterjee13/nuke-nodes-comfyui) by Sumit Chatterjee
+- **Licence:** MIT (`THIRD_PARTY_LICENSES/nuke-nodes-comfyui-LICENSE.txt`)
+- **Ported into this pack:** `mmx_utils/ocio_config.py`, `ocio_bridge.py`, `dcc_bridge.py`, `oiio_bitdepth.py`,
+  `color_roundtrip_qc.py`. Attribution added 2026-11-07 (A24 licence audit R11).
+
+## ComfyUI-MiniMaxH3-ToneCompensate (seam tone compensation)
+
+- **Source:** [ComfyUI-MiniMaxH3-ToneCompensate](https://github.com/rkfg/ComfyUI-MiniMaxH3-ToneCompensate) by rkfg
+- **Licence:** MIT (`THIRD_PARTY_LICENSES/ComfyUI-MiniMaxH3-ToneCompensate-LICENSE.txt`)
+- **Ported into this pack:** `mmx_utils/tone_compensate.py`. Attribution added 2026-11-07 (A24 licence audit R11).
