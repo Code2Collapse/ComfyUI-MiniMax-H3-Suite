@@ -59,6 +59,21 @@ def _cnp_runners():
     return None
 
 
+def _cnp_consent(runners, allow_download: bool):
+    """CustomNodePacks' own download-consent switch (owner D7.91; CNP L9.153 made its runners ask it). Without it CNP
+    downloads nothing for a call from this pack; with allow_download it may fetch the chosen depth model.
+    A runner object without a CNP package (tests, an old CNP) gets a no-op context."""
+    import contextlib
+    pkg = (getattr(runners, "__name__", "") or "").rsplit(".nodes._control_backends", 1)[0]
+    if pkg and pkg != getattr(runners, "__name__", ""):
+        try:
+            pol = importlib.import_module(pkg + ".nodes._download_policy")
+            return pol.allow_downloads(bool(allow_download))
+        except Exception:  # noqa: BLE001
+            pass
+    return contextlib.nullcontext()
+
+
 def _unavailable(backend: str, why: str) -> DepthBackendUnavailableError:
     label = MODEL_BACKENDS[backend][2]
     return DepthBackendUnavailableError(
@@ -66,7 +81,8 @@ def _unavailable(backend: str, why: str) -> DepthBackendUnavailableError:
         "'Run Depth Anything 3') and wire its depth image into passthrough_hints with backend=passthrough.")
 
 
-def run_model_backend(backend: str, image_bhwc: torch.Tensor, runners=None) -> tuple[torch.Tensor, str]:
+def run_model_backend(backend: str, image_bhwc: torch.Tensor, runners=None,
+                      allow_download: bool = False) -> tuple[torch.Tensor, str]:
     runners = runners if runners is not None else _cnp_runners()
     if runners is None:
         extra = " (DVD also needs CustomNodePacks' third_party/DVD clone + weights)" if backend == "dvd" else ""
@@ -76,7 +92,8 @@ def run_model_backend(backend: str, image_bhwc: torch.Tensor, runners=None) -> t
     fn = getattr(runners, fn_name, None)
     if fn is None:
         raise _unavailable(backend, f"this CustomNodePacks version has no {fn_name}")
-    out, note = fn(_to_bhwc(image_bhwc).float().cpu(), **kwargs)
+    with _cnp_consent(runners, allow_download):      # L7.100: CNP fetches weights only with this node's consent
+        out, note = fn(_to_bhwc(image_bhwc).float().cpu(), **kwargs)
     if out is None:
         raise _unavailable(backend, note)
     out = out.to(image_bhwc.device, torch.float32)
@@ -152,6 +169,7 @@ def run_depth_backend(
     *,
     passthrough_hints: torch.Tensor | None = None,
     runners=None,
+    allow_download: bool = False,
 ) -> tuple[torch.Tensor, str]:
     b = (backend or "passthrough").lower()
     if b == "passthrough":
@@ -161,5 +179,5 @@ def run_depth_backend(
                 "or pick a depth backend")
         return out, note
     if b in MODEL_BACKENDS:
-        return run_model_backend(b, image, runners)
+        return run_model_backend(b, image, runners, allow_download=allow_download)
     raise ValueError(f"Unknown depth backend {backend!r}")

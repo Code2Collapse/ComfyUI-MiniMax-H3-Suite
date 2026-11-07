@@ -30,9 +30,32 @@ def temporal_despeckle(mask: torch.Tensor, radius: int) -> torch.Tensor:
     return _temporal(x, int(radius), "max")
 
 
+def _dilate_cv2(mask: torch.Tensor, radius: int):
+    """CPU fast path (A24 L9.165, measured): OpenCV's float dilate with the same 3x3 cross, `radius` iterations and
+    a -inf border equals the torch loop below bit for bit, 9-15x faster at 24 x 1080p (docs/RUST_ACCELERATION_AUDIT.md).
+    None when it does not apply (GPU tensor, no OpenCV, not [B,H,W] float)."""
+    if mask.device.type != "cpu" or mask.ndim != 3 or not mask.is_floating_point():
+        return None
+    try:
+        import cv2
+        import numpy as np
+    except Exception:  # noqa: BLE001 - OpenCV is optional here: the torch path below is the reference
+        return None
+    k = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+    arr = mask.detach().to(torch.float32).contiguous().numpy()
+    out = np.empty_like(arr)
+    for i in range(arr.shape[0]):
+        out[i] = cv2.dilate(arr[i], k, iterations=int(radius), borderType=cv2.BORDER_CONSTANT,
+                            borderValue=-float("inf"))
+    return torch.from_numpy(out).to(mask.dtype)
+
+
 def spatial_dilate(mask: torch.Tensor, radius: int) -> torch.Tensor:
     if radius <= 0:
         return mask
+    fast = _dilate_cv2(mask, radius)
+    if fast is not None:
+        return fast
     x = mask.unsqueeze(1) if mask.ndim == 3 else mask
     for _ in range(int(radius)):
         x = torch.maximum(

@@ -64,6 +64,11 @@ class MiniMaxH3_TemporalDepth(io.ComfyNode):
                                tooltip="align: fit each frame's depth scale / offset to the previous `window` frames "
                                        "(removes per-frame normalisation flicker). Experimental: measured to help "
                                        "per-frame scale jitter, not a clean pan."),
+                # L7.100 (owner D7.91): appended last, default off - saved workflows keep their values
+                io.Boolean.Input("allow_download", default=False, optional=True,
+                                 tooltip="Let a model backend download its weights (some are many GB; Depth Anything "
+                                         "V2 Large and DVD are non-commercial). Off: only installed copies are used "
+                                         "and the error says what is missing."),
             ],
             outputs=[
                 io.Image.Output("hints"),
@@ -86,6 +91,7 @@ class MiniMaxH3_TemporalDepth(io.ComfyNode):
         window=17,
         emit_normals=False,
         temporal="off",
+        allow_download=False,
     ) -> io.NodeOutput:
         if images.ndim == 3:
             images = images.unsqueeze(0)
@@ -109,6 +115,7 @@ class MiniMaxH3_TemporalDepth(io.ComfyNode):
                     backend,
                     images[:b].to(device),
                     passthrough_hints=passthrough_hints.to(device) if passthrough_hints is not None else None,
+                    allow_download=bool(allow_download),
                 )
             except DepthBackendUnavailableError as exc:
                 raise ValueError(str(exc)) from exc
