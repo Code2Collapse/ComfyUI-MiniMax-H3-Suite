@@ -10,6 +10,17 @@ import torch.nn.functional as F
 def _temporal(x: torch.Tensor, frames: int, op: str) -> torch.Tensor:
     if frames <= 0 or x.shape[0] < 2:
         return x
+    if op == "max":
+        # A24 L9.165 (measured): the max over a +-frames window with the clip's end frames repeated (= the replicate
+        # pad + max-pool below), as a running elementwise max of shifted frames: identical values, without torch's
+        # slow CPU max-pool over a (B, H*W) image (4.2 s for 24 x 1080p at radius 2).
+        b = x.shape[0]
+        idx = torch.arange(b, device=x.device)
+        out = x.clone()
+        for d in range(1, int(frames) + 1):
+            torch.maximum(out, x[(idx + d).clamp(max=b - 1)], out=out)
+            torch.maximum(out, x[(idx - d).clamp(min=0)], out=out)
+        return out
     k = 2 * frames + 1
     t = x.reshape(1, 1, x.shape[0], -1)
     t = F.pad(t, (0, 0, frames, frames), mode="replicate")

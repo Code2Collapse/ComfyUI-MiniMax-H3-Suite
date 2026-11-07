@@ -125,6 +125,26 @@ def uncrop_paste_frames(
     return out
 
 
+def _rect_morph_cv2(mask: torch.Tensor, px: int, erode: bool):
+    """CPU fast path (A24 L9.165, measured): OpenCV's dilate / erode with a (2px+1) square and a -inf / +inf border
+    is the same maximum / minimum as the separable max-pool pair below, bit for bit, and far faster than torch's
+    O(kernel) CPU max-pool (2.0 s per 1080p frame at px=16). None when it does not apply (GPU, 2-D float only)."""
+    if mask.device.type != "cpu" or mask.ndim != 2 or not mask.is_floating_point():
+        return None
+    try:
+        import cv2
+        import numpy as np
+    except Exception:  # noqa: BLE001 - OpenCV is optional: the torch path is the reference
+        return None
+    k = np.ones((2 * int(px) + 1, 2 * int(px) + 1), np.uint8)
+    arr = mask.detach().to(torch.float32).contiguous().numpy()
+    if erode:
+        out = cv2.erode(arr, k, borderType=cv2.BORDER_CONSTANT, borderValue=float("inf"))
+    else:
+        out = cv2.dilate(arr, k, borderType=cv2.BORDER_CONSTANT, borderValue=-float("inf"))
+    return torch.from_numpy(out).to(mask.dtype)
+
+
 def _grow_mask(mask: torch.Tensor, px: int) -> torch.Tensor:
     """Dilate by px with a square element - ONE pooling pass.
 
@@ -134,6 +154,9 @@ def _grow_mask(mask: torch.Tensor, px: int) -> torch.Tensor:
     """
     if px <= 0:
         return mask
+    fast = _rect_morph_cv2(mask, px, erode=False)
+    if fast is not None:
+        return fast
     k = 2 * int(px) + 1
     x = mask.unsqueeze(0).unsqueeze(0)
     x = F.max_pool2d(x, kernel_size=(1, k), stride=1, padding=(0, px))
@@ -144,6 +167,9 @@ def _grow_mask(mask: torch.Tensor, px: int) -> torch.Tensor:
 def _erode_mask(mask: torch.Tensor, px: int) -> torch.Tensor:
     if px <= 0:
         return mask
+    fast = _rect_morph_cv2(mask, px, erode=True)
+    if fast is not None:
+        return fast
     # One separable pass; identical to px iterated 3x3 erosions (see _grow_mask).
     k = 2 * int(px) + 1
     x = -mask.unsqueeze(0).unsqueeze(0)
