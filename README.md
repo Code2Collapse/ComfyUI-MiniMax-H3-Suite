@@ -763,6 +763,11 @@ in the workspace's `docs/research/l9178_minimax_hdr_rnd.md`. Shipped so far:
   - `to_view` encodes ACEScg scene-linear into the chosen log code.
   - `to_scene` decodes generated log frames back to ACEScg, and flags fake HDR (pixels below the curve's black code).
   - Save Video (C2C) writes the result as 16-bit LogC3 DPX or half-float EXR.
+- **`tools/h3_hdr_dataset.py`** builds the training set from Poly Haven HDRIs (CC0) and your ACEScg EXR plates:
+  - Track B targets: log-coded 17n+5 clips, dithered 8-bit FFV1;
+  - Track C inputs: degraded SDR renderings, with a held-out tone curve;
+  - a parent-disjoint split and `manifest.json`.
+  Training config: `docs/research/l9178_h3_hdr_log_lora.yaml` (workspace, ai-toolkit).
 - The curves and camera gamuts are NukeMax's (vendored, `mmx_vendor/hdr_curves`). They match OpenColorIO's ACES
   configs, including CAT02 for ARRI / Sony gamuts.
 
