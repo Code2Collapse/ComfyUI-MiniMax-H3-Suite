@@ -1,3 +1,5 @@
+# PORTED FROM: https://github.com/BigStationW/ComfyUi-MiniMax-H3-Image-And-Reference-To-Video (no licence
+# declared upstream - see CREDITS.md; licence question open with the owner, ledger L8.15)
 """H3 Image + Reference to Video — keyframes and references in one node.
 
 Ported from ComfyUi-MiniMax-H3-Image-And-Reference-To-Video.

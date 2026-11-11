@@ -335,3 +335,35 @@ The decisions for every pack in both reference folders are in the work area's
 - **Licence:** BSD-3-Clause, (c) 2021 Graphics and Displays group, University of Cambridge
   (`THIRD_PARTY_LICENSES/pu21-LICENSE.txt`).
 - **Used by:** the HDR quality numbers of `tools/h3_vae_log_probe.py` (PU21-PSNR).
+
+## ComfyUI-AV-Handles (frame-grid helpers)
+
+- **Source:** [pizurny/ComfyUI-AV-Handles](https://github.com/pizurny/ComfyUI-AV-Handles) `utils/wan_utils.py`, by Adam Pizurny.
+- **Licence:** MIT (`THIRD_PARTY_LICENSES/ComfyUI-AV-Handles-LICENSE.txt`, copied from the upstream repository; the
+  workspace clone lacked the file its pyproject names).
+- **Ported into this pack:** `mmx_utils/wan_ltx_grid.py` (WAN / LTX-2 frame-grid padding), used by the frame-handle
+  logic in `mmx_utils/frame_handles.py`.
+
+## ComfyUI_MiniMax_H3_Extender (tail from latent)
+
+- **Source:** [tritant/ComfyUI_MiniMax_H3_Extender](https://github.com/tritant/ComfyUI_MiniMax_H3_Extender).
+- **Licence:** Apache-2.0 (`THIRD_PARTY_LICENSES/ComfyUI_MiniMax_H3_Extender-LICENSE.txt`), which may be included in
+  this GPL-3.0 pack.
+- **Ported into this pack:** `mmx_nodes/tail_from_latent.py` (H3 Tail From Latent). Changed here: the audio length is
+  derived from the final, grid-aligned frame count.
+
+## ComfyUi-MiniMax-H3-Image-And-Reference-To-Video (keyframes + references)
+
+- **Source:** [BigStationW/ComfyUi-MiniMax-H3-Image-And-Reference-To-Video](https://github.com/BigStationW/ComfyUi-MiniMax-H3-Image-And-Reference-To-Video).
+- **Licence:** **none declared.** The repository has no licence file, and its pyproject names a LICENSE file that
+  does not exist (checked 2026-11-11). Without a licence, copying is not granted, so this port is an open question
+  for the pack owner (ledger L8.15): ask the author for a licence or permission, or rewrite the node clean-room on
+  the stock `comfy_extras.nodes_minimax_h3` helpers.
+- **Ported into this pack:** `mmx_nodes/image_and_reference.py` (H3 Image + Reference to Video). Our own additions:
+  the arithmetic in `mmx_utils/reference_prep.py` (17k+5 snapping, soundtrack pairing by number, reference-order
+  check).
+
+## Code2Collapse's own packs
+
+`# PORTED FROM:` headers that name ComfyUI-WanNodeExperiments or ComfyUI-CustomNodePacks point at the same
+owner's packs. That code needs no third-party credit. Shared CNP code is carried as the vendored C2C core (above).

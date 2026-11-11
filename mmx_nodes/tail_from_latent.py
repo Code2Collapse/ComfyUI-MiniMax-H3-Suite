@@ -1,3 +1,4 @@
+# PORTED FROM: https://github.com/tritant/ComfyUI_MiniMax_H3_Extender (Apache-2.0)
 """H3 Tail From Latent — the end of one clip, ready to start the next.
 
 Ported from ComfyUI_MiniMax_H3_Extender (Apache-2.0), which uses it inside its

@@ -1,6 +1,6 @@
 # MIT License — ComfyUI-AV-Handles
 # Copyright (c) 2025 Adam Pizurny
-# PORTED FROM: ComfyUI-AV-Handles :: utils/wan_utils.py @ HEAD
+# PORTED FROM: https://github.com/pizurny/ComfyUI-AV-Handles :: utils/wan_utils.py @ HEAD (MIT)
 """WAN / LTX2 frame-grid helpers (padding modes for N7)."""
 
 from __future__ import annotations
