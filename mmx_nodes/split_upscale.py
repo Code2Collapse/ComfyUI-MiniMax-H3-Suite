@@ -435,6 +435,17 @@ class MiniMaxH3_SpatialSplitParams(io.ComfyNode):
         return io.NodeOutput(param, report)
 
 
+def _has_fun_controlnet(patcher) -> bool:
+    """L9.39 row 6: core's MiniMaxH3FunControlNetApply registers MiniMaxH3FunControlBlockPatch objects as dit
+    double_block replacements (comfy_extras/nodes_minimax_h3.py register())."""
+    try:
+        reps = (getattr(patcher, "model_options", {}) or {}).get("transformer_options", {}).get(
+            "patches_replace", {}).get("dit", {})
+        return any("FunControl" in type(p).__name__ for p in reps.values())
+    except Exception:  # noqa: BLE001 - an unknown patcher shape: nothing to refuse
+        return False
+
+
 class MiniMaxH3_SplitUpscale(io.ComfyNode):
     @classmethod
     def define_schema(cls):
@@ -443,9 +454,13 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
             display_name="H3 Split Upscale",
             category=CATEGORY,
             description=(
-                "Upscale a MiniMax H3 AV latent by tiling it in time and/or "
-                "space, sampling each tile with frozen overlap bands, colour "
-                "matching and optional seam repolish.\n\n"
+                "Re-sample a MiniMax H3 AV latent tile by tile, in time and/or "
+                "space, with frozen overlap bands, colour matching and optional "
+                "seam repolish. It does NOT change the resolution: feed it a "
+                "latent that is already at the target size (an upscaled video "
+                "VAE-encoded, or a latent upscale) and it refines it in tiles "
+                "that fit in memory. A Fun ControlNet on the model is refused "
+                "when it tiles (its control video is not cropped per tile).\n\n"
                 "Prevention: pre-fill overlap from neighbours + triple temporal "
                 "anchors. Correction: spatial/temporal DC match + per-chunk grade "
                 "pin. Anti-fork: seam_denoise cap on the freeze mask."
@@ -536,6 +551,12 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
         steps = max(int(sigmas.shape[-1]) - 1, 1)
         n_tiles = len(bounds) * nrows * ncols
         patcher = model.model_patcher if hasattr(model, "model_patcher") else model
+        if n_tiles > 1 and _has_fun_controlnet(patcher):
+            raise ValueError(
+                "H3 Split Upscale: the model carries a Fun ControlNet, and this run splits the clip into "
+                f"{n_tiles} tiles / chunks. The ControlNet's control video is the WHOLE frame and clip, so every tile "
+                "would get the wrong part of it. Remove the ControlNet for the split pass, or set the split params "
+                "so the latent is one tile and one chunk.")
         for_tile = make_tile_progress(patcher, steps, n_tiles)
 
         source = video
