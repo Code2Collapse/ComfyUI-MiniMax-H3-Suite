@@ -1,0 +1,4399 @@
+{
+ "id": "7c5f9db0-8ce4-4394-83b3-261c9396d90f",
+ "revision": 0,
+ "last_node_id": 22,
+ "last_link_id": 25,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "UNETLoader",
+   "pos": [
+    60,
+    90
+   ],
+   "size": [
+    270,
+    82
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "unet_name",
+     "locked": null,
+     "name": "unet_name",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "unet_name"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "weight_dtype",
+     "locked": null,
+     "name": "weight_dtype",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "weight_dtype"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "MODEL",
+     "locked": null,
+     "name": "MODEL",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MODEL",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      3
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "UNETLoader"
+   },
+   "widgets_values": [
+    "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+    "default"
+   ],
+   "widgets_values_named": {
+    "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+    "weight_dtype": "default"
+   }
+  },
+  {
+   "id": 2,
+   "type": "CLIPLoader",
+   "pos": [
+    60,
+    262
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "clip_name",
+     "locked": null,
+     "name": "clip_name",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "clip_name"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "type",
+     "locked": null,
+     "name": "type",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "type"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "device",
+     "locked": null,
+     "name": "device",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "device"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "CLIP",
+     "locked": null,
+     "name": "CLIP",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "CLIP",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      4
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPLoader"
+   },
+   "widgets_values": [
+    "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "minimax",
+    "default"
+   ],
+   "widgets_values_named": {
+    "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "type": "minimax",
+    "device": "default"
+   }
+  },
+  {
+   "id": 3,
+   "type": "VAELoader",
+   "pos": [
+    60,
+    458
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "vae_name",
+     "locked": null,
+     "name": "vae_name",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "vae_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "VAE",
+     "locked": null,
+     "name": "VAE",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "VAE",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      5,
+      6,
+      20
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "minimax_h3_video_vae_fp16.safetensors"
+   ],
+   "widgets_values_named": {
+    "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+   }
+  },
+  {
+   "id": 4,
+   "type": "RandomNoise",
+   "pos": [
+    60,
+    606
+   ],
+   "size": [
+    270,
+    82
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "noise_seed",
+     "locked": null,
+     "name": "noise_seed",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "noise_seed"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "NOISE",
+     "locked": null,
+     "name": "NOISE",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "NOISE",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      8
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "RandomNoise"
+   },
+   "widgets_values": [
+    1,
+    "randomize"
+   ],
+   "widgets_values_named": {
+    "noise_seed": 1,
+    "control_after_generate": "randomize"
+   }
+  },
+  {
+   "id": 5,
+   "type": "KSamplerSelect",
+   "pos": [
+    60,
+    778
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "sampler_name",
+     "locked": null,
+     "name": "sampler_name",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "SAMPLER",
+     "locked": null,
+     "name": "SAMPLER",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "SAMPLER",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      10
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSamplerSelect"
+   },
+   "widgets_values": [
+    "res_multistep"
+   ],
+   "widgets_values_named": {
+    "sampler_name": "res_multistep"
+   }
+  },
+  {
+   "id": 6,
+   "type": "BasicScheduler",
+   "pos": [
+    979,
+    90
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "model",
+     "locked": null,
+     "name": "model",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MODEL",
+     "pos": null,
+     "link": 2
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "scheduler",
+     "locked": null,
+     "name": "scheduler",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "steps",
+     "locked": null,
+     "name": "steps",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "denoise",
+     "locked": null,
+     "name": "denoise",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "SIGMAS",
+     "locked": null,
+     "name": "SIGMAS",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "SIGMAS",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      11
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicScheduler"
+   },
+   "widgets_values": [
+    "simple",
+    20,
+    1
+   ],
+   "widgets_values_named": {
+    "scheduler": "simple",
+    "steps": 20,
+    "denoise": 1
+   }
+  },
+  {
+   "id": 7,
+   "type": "BasicGuider",
+   "pos": [
+    979,
+    286
+   ],
+   "size": [
+    159.568359375,
+    46
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "model",
+     "locked": null,
+     "name": "model",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MODEL",
+     "pos": null,
+     "link": 1
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "conditioning",
+     "locked": null,
+     "name": "conditioning",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "CONDITIONING",
+     "pos": null,
+     "link": 7
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "GUIDER",
+     "locked": null,
+     "name": "GUIDER",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "GUIDER",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      9
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BasicGuider"
+   }
+  },
+  {
+   "id": 8,
+   "type": "SamplerCustomAdvanced",
+   "pos": [
+    1689,
+    90
+   ],
+   "size": [
+    212.3638671875,
+    106
+   ],
+   "flags": {},
+   "order": 17,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "noise",
+     "locked": null,
+     "name": "noise",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "NOISE",
+     "pos": null,
+     "link": 8
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "guider",
+     "locked": null,
+     "name": "guider",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "GUIDER",
+     "pos": null,
+     "link": 9
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "sampler",
+     "locked": null,
+     "name": "sampler",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "SAMPLER",
+     "pos": null,
+     "link": 10
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "sigmas",
+     "locked": null,
+     "name": "sigmas",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "SIGMAS",
+     "pos": null,
+     "link": 11
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "latent_image",
+     "locked": null,
+     "name": "latent_image",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "LATENT",
+     "pos": null,
+     "link": 22
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "output",
+     "locked": null,
+     "name": "output",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "LATENT",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      12
+     ]
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "denoised_output",
+     "locked": null,
+     "name": "denoised_output",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "LATENT",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SamplerCustomAdvanced"
+   }
+  },
+  {
+   "id": 9,
+   "type": "VAEDecode",
+   "pos": [
+    1961.3638671875,
+    90
+   ],
+   "size": [
+    140,
+    46
+   ],
+   "flags": {},
+   "order": 18,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "samples",
+     "locked": null,
+     "name": "samples",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "LATENT",
+     "pos": null,
+     "link": 12
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "vae",
+     "locked": null,
+     "name": "vae",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "VAE",
+     "pos": null,
+     "link": 6
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "IMAGE",
+     "locked": null,
+     "name": "IMAGE",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      23
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   }
+  },
+  {
+   "id": 10,
+   "type": "MiniMaxH3_HDRRoundtrip",
+   "pos": [
+    2503.079296875,
+    90
+   ],
+   "size": [
+    270,
+    240
+   ],
+   "flags": {},
+   "order": 20,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "image",
+     "locked": null,
+     "name": "image",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE",
+     "pos": null,
+     "link": 24
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "direction",
+     "locked": null,
+     "name": "direction",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "direction"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "colorspace",
+     "locked": null,
+     "name": "colorspace",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "colorspace"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "display",
+     "locked": null,
+     "name": "display",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "display"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "view",
+     "locked": null,
+     "name": "view",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "view"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "tag",
+     "locked": null,
+     "name": "tag",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "tag"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "code_space",
+     "locked": null,
+     "name": "code_space",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "code_space"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "image",
+     "locked": null,
+     "name": "image",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      25
+     ]
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "tag_out",
+     "locked": null,
+     "name": "tag_out",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "report",
+     "locked": null,
+     "name": "report",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_HDRRoundtrip"
+   },
+   "widgets_values": [
+    "to_scene",
+    "ACEScg",
+    "sRGB - Display",
+    "ACES 2.0 - SDR 100 nits (Rec.709)",
+    "HDR",
+    "ACEScct"
+   ],
+   "widgets_values_named": {
+    "direction": "to_scene",
+    "colorspace": "ACEScg",
+    "display": "sRGB - Display",
+    "view": "ACES 2.0 - SDR 100 nits (Rec.709)",
+    "tag": "HDR",
+    "code_space": "ACEScct"
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 11,
+   "type": "SaveVideoC2C",
+   "pos": [
+    2833.079296875,
+    90
+   ],
+   "size": [
+    420,
+    614
+   ],
+   "flags": {},
+   "order": 21,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "images",
+     "locked": null,
+     "name": "images",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "IMAGE",
+     "pos": null,
+     "link": 25
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "audio",
+     "locked": null,
+     "name": "audio",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "AUDIO",
+     "pos": null,
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "video_info",
+     "locked": null,
+     "name": "video_info",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "VHS_VIDEOINFO",
+     "pos": null,
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "latent",
+     "locked": null,
+     "name": "latent",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "LATENT",
+     "pos": null,
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "vae",
+     "locked": null,
+     "name": "vae",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "VAE",
+     "pos": null,
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "format",
+     "locked": null,
+     "name": "format",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "format"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "fps",
+     "locked": null,
+     "name": "fps",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "FLOAT",
+     "widget": {
+      "name": "fps"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "filename_prefix",
+     "locked": null,
+     "name": "filename_prefix",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "quality",
+     "locked": null,
+     "name": "quality",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "quality"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "colorspace_in",
+     "locked": null,
+     "name": "colorspace_in",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "colorspace_in"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "colorspace_out",
+     "locked": null,
+     "name": "colorspace_out",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "colorspace_out"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "naming",
+     "locked": null,
+     "name": "naming",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "naming"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "naming_resolved",
+     "locked": null,
+     "name": "naming_resolved",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "naming_resolved"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "subfolder",
+     "locked": null,
+     "name": "subfolder",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "subfolder"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "save_output",
+     "locked": null,
+     "name": "save_output",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "save_output"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "tile_mode",
+     "locked": null,
+     "name": "tile_mode",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "tile_mode"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "tile_size",
+     "locked": null,
+     "name": "tile_size",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "tile_size"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "save_metadata",
+     "locked": null,
+     "name": "save_metadata",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "save_metadata"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "container",
+     "locked": null,
+     "name": "container",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "container"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "codec",
+     "locked": null,
+     "name": "codec",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "codec"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "profile",
+     "locked": null,
+     "name": "profile",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "profile"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "bit_depth",
+     "locked": null,
+     "name": "bit_depth",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "bit_depth"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "chroma",
+     "locked": null,
+     "name": "chroma",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "chroma"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "color_primaries",
+     "locked": null,
+     "name": "color_primaries",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "color_primaries"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "color_transfer",
+     "locked": null,
+     "name": "color_transfer",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "color_transfer"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "color_range",
+     "locked": null,
+     "name": "color_range",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "color_range"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "handles_trim",
+     "locked": null,
+     "name": "handles_trim",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "handles_trim"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "trim_frames",
+     "locked": null,
+     "name": "trim_frames",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "trim_frames"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "trim_side",
+     "locked": null,
+     "name": "trim_side",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "trim_side"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "range_in",
+     "locked": null,
+     "name": "range_in",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "range_in"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "range_out",
+     "locked": null,
+     "name": "range_out",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "range_out"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "write_mode",
+     "locked": null,
+     "name": "write_mode",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "write_mode"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "write_token",
+     "locked": null,
+     "name": "write_token",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "write_token"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "format_family",
+     "locked": null,
+     "name": "format_family",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "format_family"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "subformat",
+     "locked": null,
+     "name": "subformat",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "subformat"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "encoder_preset",
+     "locked": null,
+     "name": "encoder_preset",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "encoder_preset"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "gop",
+     "locked": null,
+     "name": "gop",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "gop"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "bitrate_kbps",
+     "locked": null,
+     "name": "bitrate_kbps",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "bitrate_kbps"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "channels",
+     "locked": null,
+     "name": "channels",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "channels"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "png_compression",
+     "locked": null,
+     "name": "png_compression",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "png_compression"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "follow_load",
+     "locked": null,
+     "name": "follow_load",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "follow_load"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "review_copy",
+     "locked": null,
+     "name": "review_copy",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "review_copy"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "burn_in",
+     "locked": null,
+     "name": "burn_in",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "burn_in"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "burn_in_template",
+     "locked": null,
+     "name": "burn_in_template",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "burn_in_template"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "burn_in_artist",
+     "locked": null,
+     "name": "burn_in_artist",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "burn_in_artist"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "filenames",
+     "locked": null,
+     "name": "filenames",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "preview",
+     "locked": null,
+     "name": "preview",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SaveVideoC2C",
+    "c2c_subformat_memory": {
+     "H.264 / MP4": {
+      "container": "Image sequence",
+      "codec": "DPX",
+      "profile": "RGB",
+      "bit_depth": "16",
+      "chroma": "RGB",
+      "quality": 80,
+      "encoder_preset": "default",
+      "gop": 0,
+      "bitrate_kbps": 0,
+      "channels": "auto",
+      "png_compression": -1
+     }
+    }
+   },
+   "widgets_values": [
+    "custom (container / codec)",
+    24,
+    "auto (from Load)",
+    80,
+    "ACEScg",
+    "ARRI LogC3 (EI800)",
+    "default",
+    "Folder Version Incrementer",
+    "",
+    true,
+    "auto",
+    512,
+    true,
+    "Image sequence",
+    "DPX",
+    "RGB",
+    "16",
+    "RGB",
+    "auto",
+    "auto",
+    "auto",
+    "auto",
+    8,
+    "head",
+    0,
+    0,
+    "write",
+    "",
+    "Video",
+    "H.264 / MP4",
+    "default",
+    0,
+    0,
+    "auto",
+    -1,
+    "auto",
+    false,
+    "standard",
+    "{shot} {version}|{frame}  {tc}|{colour}|{date}",
+    "",
+    ""
+   ],
+   "widgets_values_named": {
+    "format": "custom (container / codec)",
+    "format_family": "Video",
+    "subformat": "H.264 / MP4",
+    "container": "Image sequence",
+    "codec": "DPX",
+    "profile": "RGB",
+    "bit_depth": "16",
+    "chroma": "RGB",
+    "quality": 80,
+    "encoder_preset": "default",
+    "gop": 0,
+    "bitrate_kbps": 0,
+    "channels": "auto",
+    "png_compression": -1,
+    "color_primaries": "auto",
+    "color_transfer": "auto",
+    "color_range": "auto",
+    "fps": 24,
+    "filename_prefix": "auto (from Load)",
+    "colorspace_in": "ACEScg",
+    "colorspace_out": "ARRI LogC3 (EI800)",
+    "naming": "default",
+    "naming_resolved": "Folder Version Incrementer",
+    "subfolder": "",
+    "save_output": true,
+    "tile_mode": "auto",
+    "tile_size": 512,
+    "save_metadata": true,
+    "handles_trim": "auto",
+    "trim_frames": 8,
+    "trim_side": "head",
+    "range_in": 0,
+    "range_out": 0,
+    "write_mode": "write",
+    "write_token": "",
+    "follow_load": "auto",
+    "review_copy": false,
+    "burn_in": "standard",
+    "burn_in_template": "{shot} {version}|{frame}  {tc}|{colour}|{date}",
+    "burn_in_artist": "",
+    "c2c_preview": ""
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 12,
+   "type": "LoraLoaderModelOnly",
+   "pos": [
+    519,
+    90
+   ],
+   "size": [
+    270,
+    82
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "model",
+     "locked": null,
+     "name": "model",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MODEL",
+     "pos": null,
+     "link": 3
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "lora_name",
+     "locked": null,
+     "name": "lora_name",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "lora_name"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "strength_model",
+     "locked": null,
+     "name": "strength_model",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "FLOAT",
+     "widget": {
+      "name": "strength_model"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "MODEL",
+     "locked": null,
+     "name": "MODEL",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MODEL",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      1,
+      2
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoraLoaderModelOnly"
+   },
+   "widgets_values": [
+    "h3_hdr_trackc_icl_acescct_v1.safetensors",
+    1
+   ],
+   "widgets_values_named": {
+    "lora_name": "h3_hdr_trackc_icl_acescct_v1.safetensors",
+    "strength_model": 1
+   }
+  },
+  {
+   "id": 13,
+   "type": "LoadVideoC2C",
+   "pos": [
+    60,
+    926
+   ],
+   "size": [
+    399,
+    1167
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "vae",
+     "locked": null,
+     "name": "vae",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "VAE",
+     "pos": null,
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "video",
+     "locked": null,
+     "name": "video",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "video"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "force_rate",
+     "locked": null,
+     "name": "force_rate",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "FLOAT",
+     "widget": {
+      "name": "force_rate"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "custom_width",
+     "locked": null,
+     "name": "custom_width",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "custom_width"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "custom_height",
+     "locked": null,
+     "name": "custom_height",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "custom_height"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "frame_load_cap",
+     "locked": null,
+     "name": "frame_load_cap",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "frame_load_cap"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "skip_first_frames",
+     "locked": null,
+     "name": "skip_first_frames",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "skip_first_frames"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "select_every_nth",
+     "locked": null,
+     "name": "select_every_nth",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "select_every_nth"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "format",
+     "locked": null,
+     "name": "format",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "format"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "crop_x",
+     "locked": null,
+     "name": "crop_x",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "FLOAT",
+     "widget": {
+      "name": "crop_x"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "crop_y",
+     "locked": null,
+     "name": "crop_y",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "FLOAT",
+     "widget": {
+      "name": "crop_y"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "crop_w",
+     "locked": null,
+     "name": "crop_w",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "FLOAT",
+     "widget": {
+      "name": "crop_w"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "crop_h",
+     "locked": null,
+     "name": "crop_h",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "FLOAT",
+     "widget": {
+      "name": "crop_h"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "decoder",
+     "locked": null,
+     "name": "decoder",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "decoder"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "seconds_cap",
+     "locked": null,
+     "name": "seconds_cap",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "FLOAT",
+     "widget": {
+      "name": "seconds_cap"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "resolution",
+     "locked": null,
+     "name": "resolution",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "resolution"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "divisible_by",
+     "locked": null,
+     "name": "divisible_by",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "divisible_by"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "audio_when_missing",
+     "locked": null,
+     "name": "audio_when_missing",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "audio_when_missing"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "handles",
+     "locked": null,
+     "name": "handles",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "handles"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "handle_frames",
+     "locked": null,
+     "name": "handle_frames",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "handle_frames"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "handle_target",
+     "locked": null,
+     "name": "handle_target",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "handle_target"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "handle_side",
+     "locked": null,
+     "name": "handle_side",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "handle_side"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "handle_grid",
+     "locked": null,
+     "name": "handle_grid",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "handle_grid"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "handle_custom_step",
+     "locked": null,
+     "name": "handle_custom_step",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "handle_custom_step"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "handle_custom_plus",
+     "locked": null,
+     "name": "handle_custom_plus",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "handle_custom_plus"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "colorspace_in",
+     "locked": null,
+     "name": "colorspace_in",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "colorspace_in"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "working_space",
+     "locked": null,
+     "name": "working_space",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "working_space"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "name_prefix",
+     "locked": null,
+     "name": "name_prefix",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "name_prefix"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "name_suffix",
+     "locked": null,
+     "name": "name_suffix",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "name_suffix"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "extra_handles",
+     "locked": null,
+     "name": "extra_handles",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "extra_handles"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "location",
+     "locked": null,
+     "name": "location",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "location"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "path",
+     "locked": null,
+     "name": "path",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "path"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "source_mode",
+     "locked": null,
+     "name": "source_mode",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "source_mode"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "sequence_fps",
+     "locked": null,
+     "name": "sequence_fps",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "FLOAT",
+     "widget": {
+      "name": "sequence_fps"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "frame_range",
+     "locked": null,
+     "name": "frame_range",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "frame_range"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "reverse",
+     "locked": null,
+     "name": "reverse",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "reverse"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "frame_offset",
+     "locked": null,
+     "name": "frame_offset",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "frame_offset"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "missing_frames",
+     "locked": null,
+     "name": "missing_frames",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "missing_frames"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "edge_policy",
+     "locked": null,
+     "name": "edge_policy",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "edge_policy"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "exr_layer",
+     "locked": null,
+     "name": "exr_layer",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "exr_layer"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "IMAGE",
+     "locked": null,
+     "name": "IMAGE",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE,LATENT",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      13,
+      14
+     ]
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "frame_count",
+     "locked": null,
+     "name": "frame_count",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "audio",
+     "locked": null,
+     "name": "audio",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "AUDIO",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "video_info",
+     "locked": null,
+     "name": "video_info",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "VHS_VIDEOINFO",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "video",
+     "locked": null,
+     "name": "video",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "C2C_VIDEO",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "mask",
+     "locked": null,
+     "name": "mask",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "info",
+     "locked": null,
+     "name": "info",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "frame_map",
+     "locked": null,
+     "name": "frame_map",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "exr_passes",
+     "locked": null,
+     "name": "exr_passes",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "C2C_EXR_PASSES",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "metadata",
+     "locked": null,
+     "name": "metadata",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadVideoC2C"
+   },
+   "widgets_values": [
+    "SC_67_SH_2130 (2)/SC_67_SH_2130.####.png",
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    "None",
+    0,
+    0,
+    1,
+    1,
+    "auto",
+    0,
+    "custom",
+    1,
+    "silence",
+    "off",
+    8,
+    0,
+    "head",
+    "from format",
+    4,
+    1,
+    "auto (detect)",
+    "sRGB display (keep Rec.709 / sRGB)",
+    "",
+    "",
+    0,
+    "input folder",
+    "",
+    "auto",
+    0,
+    "",
+    false,
+    0,
+    "error",
+    "hold",
+    "auto",
+    ""
+   ],
+   "widgets_values_named": {
+    "video": "SC_67_SH_2130 (2)/SC_67_SH_2130.####.png",
+    "force_rate": 0,
+    "custom_width": 0,
+    "custom_height": 0,
+    "frame_load_cap": 0,
+    "skip_first_frames": 0,
+    "select_every_nth": 1,
+    "format": "None",
+    "crop_x": 0,
+    "crop_y": 0,
+    "crop_w": 1,
+    "crop_h": 1,
+    "decoder": "auto",
+    "seconds_cap": 0,
+    "resolution": "custom",
+    "divisible_by": 1,
+    "audio_when_missing": "silence",
+    "handles": "off",
+    "handle_frames": 8,
+    "handle_target": 0,
+    "handle_side": "head",
+    "handle_grid": "from format",
+    "handle_custom_step": 4,
+    "handle_custom_plus": 1,
+    "colorspace_in": "auto (detect)",
+    "working_space": "sRGB display (keep Rec.709 / sRGB)",
+    "name_prefix": "",
+    "name_suffix": "",
+    "extra_handles": 0,
+    "location": "input folder",
+    "path": "",
+    "source_mode": "auto",
+    "sequence_fps": 0,
+    "frame_range": "",
+    "reverse": false,
+    "frame_offset": 0,
+    "missing_frames": "error",
+    "edge_policy": "hold",
+    "exr_layer": "auto",
+    "c2c_preview": ""
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 14,
+   "type": "ImageStitch",
+   "pos": [
+    519,
+    572
+   ],
+   "size": [
+    270,
+    150
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "image1",
+     "locked": null,
+     "name": "image1",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE",
+     "pos": null,
+     "link": 13
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "image2",
+     "locked": null,
+     "name": "image2",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "IMAGE",
+     "pos": null,
+     "link": 14
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "direction",
+     "locked": null,
+     "name": "direction",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "direction"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "match_image_size",
+     "locked": null,
+     "name": "match_image_size",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "match_image_size"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "spacing_width",
+     "locked": null,
+     "name": "spacing_width",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "spacing_width"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "spacing_color",
+     "locked": null,
+     "name": "spacing_color",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "spacing_color"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "IMAGE",
+     "locked": null,
+     "name": "IMAGE",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      19
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ImageStitch"
+   },
+   "widgets_values": [
+    "right",
+    true,
+    0,
+    "white"
+   ],
+   "widgets_values_named": {
+    "direction": "right",
+    "match_image_size": true,
+    "spacing_width": 0,
+    "spacing_color": "white"
+   }
+  },
+  {
+   "id": 15,
+   "type": "MiniMaxH3ImageToVideo",
+   "pos": [
+    519,
+    262
+   ],
+   "size": [
+    400,
+    220
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "clip",
+     "locked": null,
+     "name": "clip",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "CLIP",
+     "pos": null,
+     "link": 4
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "vae",
+     "locked": null,
+     "name": "vae",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "VAE",
+     "pos": null,
+     "link": 5
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "first_frame",
+     "locked": null,
+     "name": "first_frame",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "IMAGE",
+     "pos": null,
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "last_frame",
+     "locked": null,
+     "name": "last_frame",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "IMAGE",
+     "pos": null,
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "prompt",
+     "locked": null,
+     "name": "prompt",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "widget": {
+      "name": "prompt"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "width",
+     "locked": null,
+     "name": "width",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "height",
+     "locked": null,
+     "name": "height",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "length",
+     "locked": null,
+     "name": "length",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "length"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "positive",
+     "locked": null,
+     "name": "positive",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "CONDITIONING",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      7
+     ]
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "LATENT",
+     "locked": null,
+     "name": "LATENT",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "LATENT",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      18
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3ImageToVideo"
+   },
+   "widgets_values": [
+    "[HDRPAIR] left: an SDR video; right: the same shot as ACEScct HDR log footage, frame for frame.",
+    1664,
+    480,
+    73
+   ],
+   "widgets_values_named": {
+    "prompt": "[HDRPAIR] left: an SDR video; right: the same shot as ACEScct HDR log footage, frame for frame.",
+    "width": 1664,
+    "height": 480,
+    "length": 73
+   }
+  },
+  {
+   "id": 16,
+   "type": "SolidMask",
+   "pos": [
+    60,
+    2183
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "value",
+     "locked": null,
+     "name": "value",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "FLOAT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "width",
+     "locked": null,
+     "name": "width",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "height",
+     "locked": null,
+     "name": "height",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "MASK",
+     "locked": null,
+     "name": "MASK",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      15
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SolidMask"
+   },
+   "widgets_values": [
+    1,
+    1664,
+    480
+   ],
+   "widgets_values_named": {
+    "value": 1,
+    "width": 1664,
+    "height": 480
+   }
+  },
+  {
+   "id": 17,
+   "type": "SolidMask",
+   "pos": [
+    60,
+    2379
+   ],
+   "size": [
+    270,
+    106
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "value",
+     "locked": null,
+     "name": "value",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "FLOAT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "width",
+     "locked": null,
+     "name": "width",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "height",
+     "locked": null,
+     "name": "height",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "MASK",
+     "locked": null,
+     "name": "MASK",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      16
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SolidMask"
+   },
+   "widgets_values": [
+    0,
+    832,
+    480
+   ],
+   "widgets_values_named": {
+    "value": 0,
+    "width": 832,
+    "height": 480
+   }
+  },
+  {
+   "id": 18,
+   "type": "MaskComposite",
+   "pos": [
+    519,
+    812
+   ],
+   "size": [
+    270,
+    126
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "destination",
+     "locked": null,
+     "name": "destination",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "link": 15
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "source",
+     "locked": null,
+     "name": "source",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "link": 16
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "x",
+     "locked": null,
+     "name": "x",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "x"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "y",
+     "locked": null,
+     "name": "y",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "y"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "operation",
+     "locked": null,
+     "name": "operation",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "COMBO",
+     "widget": {
+      "name": "operation"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "MASK",
+     "locked": null,
+     "name": "MASK",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      17
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MaskComposite"
+   },
+   "widgets_values": [
+    0,
+    0,
+    "multiply"
+   ],
+   "widgets_values_named": {
+    "x": 0,
+    "y": 0,
+    "operation": "multiply"
+   }
+  },
+  {
+   "id": 19,
+   "type": "MiniMaxH3_MaskPrep",
+   "pos": [
+    979,
+    422
+   ],
+   "size": [
+    380,
+    416
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "mask",
+     "locked": null,
+     "name": "mask",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "link": 17
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "width",
+     "locked": null,
+     "name": "width",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "height",
+     "locked": null,
+     "name": "height",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "frame_count",
+     "locked": null,
+     "name": "frame_count",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "frame_count"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "denoise_strength",
+     "locked": null,
+     "name": "denoise_strength",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise_strength"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "temporal_clean",
+     "locked": null,
+     "name": "temporal_clean",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "temporal_clean"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "spatial_dilate",
+     "locked": null,
+     "name": "spatial_dilate",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "spatial_dilate"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "quantize_soft",
+     "locked": null,
+     "name": "quantize_soft",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "quantize_soft"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "latent_mask",
+     "locked": null,
+     "name": "latent_mask",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      21
+     ]
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "token_preview",
+     "locked": null,
+     "name": "token_preview",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "report",
+     "locked": null,
+     "name": "report",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_MaskPrep"
+   },
+   "widgets_values": [
+    1664,
+    480,
+    73,
+    1,
+    0,
+    0,
+    true,
+    ""
+   ],
+   "widgets_values_named": {
+    "width": 1664,
+    "height": 480,
+    "frame_count": 73,
+    "denoise_strength": 1,
+    "temporal_clean": 0,
+    "spatial_dilate": 0,
+    "quantize_soft": true,
+    "mmx_token_grid": ""
+   },
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 20,
+   "type": "MiniMaxH3_MaskedReplace",
+   "pos": [
+    1419,
+    90
+   ],
+   "size": [
+    210,
+    156
+   ],
+   "flags": {},
+   "order": 16,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "av_latent",
+     "locked": null,
+     "name": "av_latent",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "LATENT",
+     "pos": null,
+     "link": 18
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "crops",
+     "locked": null,
+     "name": "crops",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE",
+     "pos": null,
+     "link": 19
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "vae",
+     "locked": null,
+     "name": "vae",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "VAE",
+     "pos": null,
+     "link": 20
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "video_latent_mask",
+     "locked": null,
+     "name": "video_latent_mask",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "MASK",
+     "pos": null,
+     "link": 21
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "audio",
+     "locked": null,
+     "name": "audio",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "AUDIO",
+     "pos": null,
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "audio_vae",
+     "locked": null,
+     "name": "audio_vae",
+     "nameLocked": null,
+     "removable": null,
+     "shape": 7,
+     "type": "VAE",
+     "pos": null,
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "av_latent",
+     "locked": null,
+     "name": "av_latent",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "LATENT",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      22
+     ]
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "report",
+     "locked": null,
+     "name": "report",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "STRING",
+     "pos": null,
+     "slot_index": null,
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_MaskedReplace"
+   },
+   "widgets_values": [],
+   "widgets_values_named": {},
+   "color": "#12132f",
+   "bgcolor": "#0c0d23"
+  },
+  {
+   "id": 21,
+   "type": "ImageCrop",
+   "pos": [
+    2161.3638671875,
+    90
+   ],
+   "size": [
+    281.7154296875,
+    130
+   ],
+   "flags": {},
+   "order": 19,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "image",
+     "locked": null,
+     "name": "image",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE",
+     "pos": null,
+     "link": 23
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "width",
+     "locked": null,
+     "name": "width",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "height",
+     "locked": null,
+     "name": "height",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "x",
+     "locked": null,
+     "name": "x",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "x"
+     },
+     "link": null
+    },
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "y",
+     "locked": null,
+     "name": "y",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "INT",
+     "widget": {
+      "name": "y"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "color_off": null,
+     "color_on": null,
+     "dir": null,
+     "label": null,
+     "localized_name": "IMAGE",
+     "locked": null,
+     "name": "IMAGE",
+     "nameLocked": null,
+     "removable": null,
+     "shape": null,
+     "type": "IMAGE",
+     "pos": null,
+     "slot_index": null,
+     "links": [
+      24
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ImageCrop"
+   },
+   "widgets_values": [
+    832,
+    480,
+    832,
+    0
+   ],
+   "widgets_values_named": {
+    "width": 832,
+    "height": 480,
+    "x": 832,
+    "y": 0
+   }
+  },
+  {
+   "id": 22,
+   "type": "MarkdownNote",
+   "pos": [
+    60,
+    -30
+   ],
+   "size": [
+    140,
+    60
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "showAdvanced": null,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "## Track C: any SDR clip -> real HDR (In-Context LoRA)\n\n1. **Load Video (C2C)**: the SDR clip at 832 x 480, 73 frames (17n+5). Use the clip's own frame count on the H3 node and on H3 Mask Prep.\n2. **Image Stitch** puts it side by side; the mask (left 0 = keep, right 1 = generate) goes through **H3 Mask Prep** into **H3 Masked Replace**, so H3 regenerates only the right half - with the Track C LoRA (trained with docs/research/l9178_h3_hdr_trackc_iclora.yaml, data from `tools/h3_hdr_dataset.py --trackc`).\n3. **Image Crop** keeps the right half; **H3 HDR Roundtrip** decodes ACEScct to ACEScg; **Save Video (C2C)** writes LogC3 16-bit DPX.\n\nCore's H3 graph copied from the official blueprint. Experimental: not run on a GPU yet (ledger L9.184)."
+   ],
+   "widgets_values_named": {
+    "text": "## Track C: any SDR clip -> real HDR (In-Context LoRA)\n\n1. **Load Video (C2C)**: the SDR clip at 832 x 480, 73 frames (17n+5). Use the clip's own frame count on the H3 node and on H3 Mask Prep.\n2. **Image Stitch** puts it side by side; the mask (left 0 = keep, right 1 = generate) goes through **H3 Mask Prep** into **H3 Masked Replace**, so H3 regenerates only the right half - with the Track C LoRA (trained with docs/research/l9178_h3_hdr_trackc_iclora.yaml, data from `tools/h3_hdr_dataset.py --trackc`).\n3. **Image Crop** keeps the right half; **H3 HDR Roundtrip** decodes ACEScct to ACEScg; **Save Video (C2C)** writes LogC3 16-bit DPX.\n\nCore's H3 graph copied from the official blueprint. Experimental: not run on a GPU yet (ledger L9.184)."
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  }
+ ],
+ "links": [
+  [
+   1,
+   12,
+   0,
+   7,
+   0,
+   "MODEL"
+  ],
+  [
+   2,
+   12,
+   0,
+   6,
+   0,
+   "MODEL"
+  ],
+  [
+   3,
+   1,
+   0,
+   12,
+   0,
+   "MODEL"
+  ],
+  [
+   4,
+   2,
+   0,
+   15,
+   0,
+   "CLIP"
+  ],
+  [
+   5,
+   3,
+   0,
+   15,
+   1,
+   "VAE"
+  ],
+  [
+   6,
+   3,
+   0,
+   9,
+   1,
+   "VAE"
+  ],
+  [
+   7,
+   15,
+   0,
+   7,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   8,
+   4,
+   0,
+   8,
+   0,
+   "NOISE"
+  ],
+  [
+   9,
+   7,
+   0,
+   8,
+   1,
+   "GUIDER"
+  ],
+  [
+   10,
+   5,
+   0,
+   8,
+   2,
+   "SAMPLER"
+  ],
+  [
+   11,
+   6,
+   0,
+   8,
+   3,
+   "SIGMAS"
+  ],
+  [
+   12,
+   8,
+   0,
+   9,
+   0,
+   "LATENT"
+  ],
+  [
+   13,
+   13,
+   0,
+   14,
+   0,
+   "IMAGE"
+  ],
+  [
+   14,
+   13,
+   0,
+   14,
+   1,
+   "IMAGE"
+  ],
+  [
+   15,
+   16,
+   0,
+   18,
+   0,
+   "MASK"
+  ],
+  [
+   16,
+   17,
+   0,
+   18,
+   1,
+   "MASK"
+  ],
+  [
+   17,
+   18,
+   0,
+   19,
+   0,
+   "MASK"
+  ],
+  [
+   18,
+   15,
+   1,
+   20,
+   0,
+   "LATENT"
+  ],
+  [
+   19,
+   14,
+   0,
+   20,
+   1,
+   "IMAGE"
+  ],
+  [
+   20,
+   3,
+   0,
+   20,
+   2,
+   "VAE"
+  ],
+  [
+   21,
+   19,
+   0,
+   20,
+   3,
+   "MASK"
+  ],
+  [
+   22,
+   20,
+   0,
+   8,
+   4,
+   "LATENT"
+  ],
+  [
+   23,
+   9,
+   0,
+   21,
+   0,
+   "IMAGE"
+  ],
+  [
+   24,
+   21,
+   0,
+   10,
+   0,
+   "IMAGE"
+  ],
+  [
+   25,
+   10,
+   0,
+   11,
+   0,
+   "IMAGE"
+  ]
+ ],
+ "floatingLinks": null,
+ "groups": [],
+ "definitions": null,
+ "config": {},
+ "extra": {
+  "c2c": {
+   "bookmarks": {}
+  },
+  "ds": {
+   "scale": 0.5,
+   "offset": [
+    60,
+    420
+   ]
+  },
+  "reroutes": null
+ },
+ "version": 0.4
+}

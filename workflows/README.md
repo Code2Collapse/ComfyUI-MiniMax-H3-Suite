@@ -156,3 +156,21 @@ ARRI LogC3 (EI800) 16-bit DPX, beside the ACEScg half EXR.
 
 Needs LTX-Enhanced, ComfyUI-LTXVideo, CustomNodePacks, and the gated LTX-2.5 HDR IC-LoRA (LTX-2.x Community License).
 Built and saved in the real frontend (core 0.39.0 + frontend 1.53.10). Not run on a GPU yet.
+
+## h3_hdr_trackB_log_lora.json (experimental, 2026-11-11)
+
+Track B of the HDR plan: H3 with the log-native HDR LoRA (`h3_hdr_log_acescct_v1`) generates ACEScct log video. H3 HDR
+Roundtrip (to_scene, code_space ACEScct) decodes it to ACEScg and checks for fake HDR. Save Video (C2C) writes ARRI LogC3
+(EI800) 16-bit DPX. The H3 part is core 0.39's official "Image to Video (MiniMax H3)" blueprint graph; leave
+first_frame empty for text-to-video. Not run on a GPU yet.
+
+## h3_hdr_trackC_ic_lora.json (experimental, 2026-11-11)
+
+Track C: any SDR clip to real HDR with the side-by-side In-Context LoRA (`h3_hdr_trackc_icl_acescct_v1`):
+1. Load Video (C2C) and Image Stitch put the SDR clip side by side.
+2. Solid Mask + Mask Composite make a right-half mask, which H3 Mask Prep and H3 Masked Replace use so H3
+   regenerates only the right half.
+3. Image Crop keeps that half; H3 HDR Roundtrip decodes it; Save Video (C2C) writes LogC3 16-bit DPX.
+
+Both graphs were built and serialized in the real frontend (core 0.39.0 + frontend 1.53.10): every widget was set by
+name and read back, and every required input is linked. Not run on a GPU yet.
