@@ -317,3 +317,21 @@ The decisions for every pack in both reference folders are in the work area's
 - **Source:** [ComfyUI-MiniMaxH3-ToneCompensate](https://github.com/rkfg/ComfyUI-MiniMaxH3-ToneCompensate) by rkfg
 - **Licence:** MIT (`THIRD_PARTY_LICENSES/ComfyUI-MiniMaxH3-ToneCompensate-LICENSE.txt`)
 - **Ported into this pack:** `mmx_utils/tone_compensate.py`. Attribution added 2026-11-07 (A24 licence audit R11).
+
+## NukeMax log curves and camera gamuts (vendored, HDR)
+
+- **Source:** ComfyUI-NukeMaxNodes `nukemax/nodes/ocio_color/_curves.py` and `_primaries.py` (Code2Collapse, same
+  author; `_curves.py` itself ported from [ComfyUI-OCIO](https://github.com/SlavaSexton/ComfyUI-OCIO) by Slava Sexton,
+  Apache-2.0 per its GitHub LICENSE), copied byte for byte into `mmx_vendor/hdr_curves/` and kept equal by a sync check
+  (`mmx_vendor/VENDORED.md`).
+- **Licence:** GPL-3.0 (NukeMax, same as this pack); the ComfyUI-OCIO part Apache-2.0, which may be included.
+- **Used by:** `mmx_utils/hdr_log.py`: H3 HDR Roundtrip `code_space` mode and `tools/h3_vae_log_probe.py` (L9.178).
+
+## PU21 perceptual encoding (constants)
+
+- **Source:** [gfxdisp/pu21](https://github.com/gfxdisp/pu21) `matlab/pu21_encoder.m` (Mantiuk & Azimi, 2021): the
+  'banding_glare' parameters, the 0.005-10000 cd/m2 range and the PSNR peak of 256, re-implemented in NumPy in
+  `mmx_utils/hdr_log.py`.
+- **Licence:** BSD-3-Clause, (c) 2021 Graphics and Displays group, University of Cambridge
+  (`THIRD_PARTY_LICENSES/pu21-LICENSE.txt`).
+- **Used by:** the HDR quality numbers of `tools/h3_vae_log_probe.py` (PU21-PSNR).

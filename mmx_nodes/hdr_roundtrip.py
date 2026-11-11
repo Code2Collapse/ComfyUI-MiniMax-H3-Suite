@@ -24,6 +24,49 @@ except Exception:  # not just ImportError: the comfy_kitchen skew raises Attribu
     mm = None
 
 
+CODE_OFF = "off (OCIO view)"
+# the log codes an H3 HDR LoRA can generate in (docs/research/l9178_minimax_hdr_rnd.md section 4); curves with no
+# footroom (ACEScc, DaVinci Intermediate) are left out: their output could never be checked for fake HDR
+CODE_CHOICES = ["ACEScct", "ARRI LogC3", "ARRI LogC4", "Sony S-Log3", "Panasonic V-Log", "RED Log3G10", "Cineon"]
+CODE_TIP = ("HDR for H3 (experimental): to_view encodes ACEScg scene-linear into this log code (what an H3 HDR LoRA "
+            "sees and generates; values the VAE cannot hold - below 0 / above 1 - are counted in the report); "
+            "to_scene decodes generated log frames back to ACEScg scene-linear and checks them for fake HDR "
+            "(pixels below the curve's black code = negative light = an SDR picture pushed through a log curve). "
+            "off: the OCIO view round trip as before. Save Video (C2C) writes the result as 16-bit LogC3 / EXR.")
+
+
+def _code_space(image: torch.Tensor, direction: str, colorspace: str, code: str) -> tuple[torch.Tensor, str, str]:
+    """(image, tag_out, report) for the log code-space mode. Works in ACEScg only - no silent gamut guess."""
+    import numpy as np
+
+    from mmx_utils import hdr_log as H
+    if colorspace != "ACEScg":
+        raise ValueError(f"H3 HDR Roundtrip: code_space works in ACEScg scene-linear; colorspace is {colorspace!r}. "
+                         "Set colorspace to ACEScg (convert the plate to ACEScg first if it is in another space).")
+    x = image[..., :3].detach().float().cpu().numpy()
+    if (direction or "to_view").lower() == "to_view":
+        codes = H.encode(x, code)
+        hi, lo = float((codes > 1.0).mean()), float((codes < 0.0).mean())
+        report = (f"HDR code space: ACEScg scene-linear -> {code} (gamut {H.code_gamut(code)}).\n"
+                  f"input: {H.stops_above_white(x):+.2f} stops above white (99.9th pct); "
+                  f"{H.ceiling(code):.1f}x white is the brightest value a [0, 1] VAE input carries.\n"
+                  f"outside [0, 1] (the VAE clips these): above {hi:.4%}, below {lo:.4%}.")
+        out, tag_out = codes, f"{code} code"
+    else:
+        lin = H.decode(x, code)
+        foot = H.footroom_fraction(x, code)
+        verdict = ("FAKE HDR: these frames are display-referred pixels pushed through a log curve - the highlights "
+                   "were clipped before decoding" if foot is not None and foot > 0.01 else "footroom check passed")
+        report = (f"HDR code space: {code} -> ACEScg scene-linear.\n"
+                  f"output: {H.stops_above_white(lin):+.2f} stops above white (99.9th pct); peak {float(lin.max()):.3g}.\n"
+                  f"footroom: {'n/a' if foot is None else f'{foot:.3%}'} of values below the black code "
+                  f"{H.code_of_black(code):.4f} -> {verdict}.")
+        out, tag_out = lin, "ACEScg"
+    if image.shape[-1] > 3:                                        # alpha rides along untouched
+        out = np.concatenate([out, image[..., 3:].detach().float().cpu().numpy()], axis=-1)
+    return torch.from_numpy(np.ascontiguousarray(out, dtype=np.float32)), tag_out, report
+
+
 def _schema_lists() -> tuple[list[str], list[str], list[str]]:
     colorspaces = list_colorspaces()
     displays = list_displays()
@@ -54,6 +97,9 @@ class MiniMaxH3_HDRRoundtrip(io.ComfyNode):
                 io.Combo.Input("display", options=displays, default=default_display),
                 io.Combo.Input("view", options=views, default=default_view),
                 io.Combo.Input("tag", options=["HDR", "Rec709", "ACEScg"], default="HDR"),
+                # L9.181 (owner 2026-11-10, HDR in MiniMax): appended last, default off = the node as it always was
+                io.Combo.Input("code_space", options=[CODE_OFF, *CODE_CHOICES], default=CODE_OFF,
+                               optional=True, tooltip=CODE_TIP),
             ],
             outputs=[
                 io.Image.Output("image"),
@@ -71,7 +117,13 @@ class MiniMaxH3_HDRRoundtrip(io.ComfyNode):
         display="sRGB - Display",
         view="ACES 2.0 - SDR 100 nits (Rec.709)",
         tag="HDR",
+        code_space=CODE_OFF,
     ) -> io.NodeOutput:
+        if code_space and code_space != CODE_OFF:
+            if image.ndim == 3:
+                image = image.unsqueeze(0)
+            out, tag_out, report = _code_space(image, direction, colorspace, code_space)
+            return io.NodeOutput(out.to(device=output_device(), dtype=image.dtype), tag_out, report)
         try:
             check_view(display, view)
         except ValueError as exc:
