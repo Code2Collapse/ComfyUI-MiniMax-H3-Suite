@@ -26,6 +26,9 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
+from mmx_utils.fun_control_tiles import (  # noqa: E402
+    FunControlNotSplittable, fun_control_patches, retile_model, tile_window_fn,
+)
 from mmx_utils.h3_grid import (  # noqa: E402
     audio_range,
     compute_h3_segments_adaptive,
@@ -459,8 +462,9 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                 "seam repolish. It does NOT change the resolution: feed it a "
                 "latent that is already at the target size (an upscaled video "
                 "VAE-encoded, or a latent upscale) and it refines it in tiles "
-                "that fit in memory. A Fun ControlNet on the model is refused "
-                "when it tiles (its control video is not cropped per tile).\n\n"
+                "that fit in memory. A Fun ControlNet on the model (Apply MiniMax "
+                "H3 Fun ControlNet) follows the tiles: each tile and chunk gets "
+                "only its own part of the control video, mask and source.\n\n"
                 "Prevention: pre-fill overlap from neighbours + triple temporal "
                 "anchors. Correction: spatial/temporal DC match + per-chunk grade "
                 "pin. Anti-fork: seam_denoise cap on the freeze mask."
@@ -551,12 +555,22 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
         steps = max(int(sigmas.shape[-1]) - 1, 1)
         n_tiles = len(bounds) * nrows * ncols
         patcher = model.model_patcher if hasattr(model, "model_patcher") else model
-        if n_tiles > 1 and _has_fun_controlnet(patcher):
+        # L9.197: a Fun ControlNet's control video is the WHOLE frame and clip; per tile / chunk the model is cloned
+        # with patches that carry only that window (mmx_utils/fun_control_tiles.py)
+        try:
+            fun_cps = fun_control_patches(patcher) if n_tiles > 1 else []
+        except FunControlNotSplittable as exc:
             raise ValueError(
-                "H3 Split Upscale: the model carries a Fun ControlNet, and this run splits the clip into "
-                f"{n_tiles} tiles / chunks. The ControlNet's control video is the WHOLE frame and clip, so every tile "
-                "would get the wrong part of it. Remove the ControlNet for the split pass, or set the split params "
-                "so the latent is one tile and one chunk.")
+                f"H3 Split Upscale splits this run into {n_tiles} tiles / chunks, but {exc} - or set the split "
+                "params so the latent is one tile and one chunk.") from None
+        if fun_cps:
+            _LOG.info("Split Upscale: %d Fun ControlNet patch(es) cropped per tile / chunk", len(fun_cps))
+
+        def fun_model(base, f0_, f1_, box, padded):
+            if not fun_cps:
+                return base
+            return retile_model(base, fun_cps, tile_window_fn(f0=f0_, f1=f1_, full_hw=(h, w), box=box,
+                                                              padded_hw=padded))
         for_tile = make_tile_progress(patcher, steps, n_tiles)
 
         source = video
@@ -635,13 +649,13 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                     ))
 
                     cond_tile = pad_keyframes(crop_keyframes_to_tile(cond_i, h, w, r0, c0, tr, tc))
-                    tile_model = model
+                    tile_model = fun_model(model, f0, f1, (r0, c0, tr, tc), (tr_s, tc_s))
                     dyn = dynamic_fade_function(
                         fade_mode, tr, tc, tr_s, tc_s, ovh, ovw, ri > 0, cj > 0, fh, fw, fade_min, seam_cap,
                         masked_noise, int(tile[0].numel()),
                     )
                     if dyn is not None:
-                        tile_model = model.clone()
+                        tile_model = model.clone() if tile_model is model else tile_model
                         tile_model.set_model_denoise_mask_function(dyn)
                     guider = build_guider(tile_model, cond_tile, negative, cfg)
                     out = sample_piece(
@@ -735,7 +749,9 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                     tn = NestedTensor((pad_even(noise_v[nsl].contiguous()), noise_ac.contiguous()))
 
                     cond_p = pad_keyframes(crop_keyframes_to_tile(cond_i, h, w, r0c, c0c, trc, tcc))
-                    g = build_guider(model, cond_p, negative, cfg)
+                    wp = pad_even(win).shape[-2:]
+                    g = build_guider(fun_model(model, f0, f1, (r0c, c0c, trc, tcc), (wp[0], wp[1])),
+                                     cond_p, negative, cfg)
 
                     def _cb(step, x0, x, ts, _pi=pi):
                         pbar2.update_absolute(_pi * steps + step + 1, steps * len(chunk_polish))
@@ -779,6 +795,9 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
             polish_count=polish_count,
             color_match=color_match,
         )
+        if fun_cps:
+            report += (f"\nFun ControlNet: {len(fun_cps)} patch(es); each of the {n_tiles} tiles / chunks got its own "
+                       "window of the control video")
         return io.NodeOutput(
             {"samples": NestedTensor((acc_v, acc_a))},
             report,

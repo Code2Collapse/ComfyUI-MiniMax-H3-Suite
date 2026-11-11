@@ -212,6 +212,11 @@ The decisions for every pack in both reference folders are in the work area's
 - **Also ported (L8.51), into H3 Split Upscale / H3 Spatial Split Params:** the even-size sampling of odd edge tiles
   (here the pad repeats the edge instead of zeros, and tile starts are kept even too), the per-step dynamic fade, the
   per-frame brightness match, equal tiles (on the 2-cell grid), the overlap blend shape and masked-area noise.
+- **Also ported (L9.197), into H3 Split Upscale:** the per-tile / per-chunk Fun ControlNet idea (`_chunk_fun_control`,
+  `_tile_fun_control`, `_build_fun_net`), rewritten in `mmx_utils/fun_control_tiles.py` for core's model-patch
+  ControlNet: each tile and chunk samples on a model clone whose core Fun control patch carries only its window of the
+  control video, mask and source (pixels mapped through core's own centre-crop fit). Subclassed patches (the
+  Mask-Aware ControlNet) are refused, not rebuilt.
 
 ### ComfyUI-MiniMaxH3-Context-Loop: ethanfel (NikoDemon80) (L8.48)
 
