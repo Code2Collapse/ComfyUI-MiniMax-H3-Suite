@@ -746,6 +746,28 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
   the key in the request URL, where a connection error could carry it into the error text and the log). Any
   error text it returns is cleaned of the key.
 
+## Real HDR from H3 (experimental, 2026-11-11)
+
+H3 was trained on SDR video, so it emits SDR. Pushing that through an inverse log curve gives a valid 16-bit file
+with the highlights still clipped. The proven route to real HDR is a LoRA that teaches the model to work in a log
+code (Lightricks' LumiVid / LTX SDR-to-HDR IC-LoRA). The plan, the research and the owner / developer work split are
+in the workspace's `docs/research/l9178_minimax_hdr_rnd.md`. Shipped so far:
+
+- **`tools/h3_vae_log_probe.py`.** Measures which log code (ACEScct, ARRI LogC3, LogC4) the H3 video VAE carries
+  best, on your own HDR footage. Reports PU21-PSNR, colour drift down to -8 EV, per-stop error and fake-HDR
+  footroom. Run it on the GPU box:
+
+      python tools/h3_vae_log_probe.py --comfy <ComfyUI> --vae <h3 vae .safetensors> --input shot.####.exr --out p.json
+
+- **H3 HDR Roundtrip `code_space`** (appended input, default off = unchanged).
+  - `to_view` encodes ACEScg scene-linear into the chosen log code.
+  - `to_scene` decodes generated log frames back to ACEScg, and flags fake HDR (pixels below the curve's black code).
+  - Save Video (C2C) writes the result as 16-bit LogC3 DPX or half-float EXR.
+- The curves and camera gamuts are NukeMax's (vendored, `mmx_vendor/hdr_curves`). They match OpenColorIO's ACES
+  configs, including CAT02 for ARRI / Sony gamuts.
+
+Not run on H3 weights or a GPU yet: NOT VERIFIED.
+
 ## H3 Hybrid HDR (Singularity colour without FL2VA damage)
 
 Method: for matched checkpoints, `D = FL−Ref`, `Δ = Sing−Ref`, `a = clamp(⟨Δ,D⟩/⟨D,D⟩,0,1)`, `H = Δ−a·D`; compress `H` per layer to rank‑r LoRA.
