@@ -31,7 +31,7 @@ Every node shows its stage, its run status and H3 errors in plain English. That 
 | **H3 Family Presets** (N12) | Six-section prompt (#14) + style DNA (#16) |
 | **H3 Edit Validator** (N13) | Pre-flight gate (#8) — mask_required, grid, drift |
 | **H3 DCC Bridge** (N14) | External EXR sim ingest (no solver) |
-| **H3 Pose Puppeteer** (N15) | Driving pose → motion hints (Union blocked) |
+| **H3 Pose Puppeteer** (N15) | Driving pose → motion hints; rig_type pose_only = clean pose for Apply MiniMax H3 Fun ControlNet (other rigs blend the pose over the character plate, no retarget) |
 | **H3 HDR Roundtrip** (N16) | OCIO view↔scene with HDR tag propagation |
 | **H3 Hybrid HDR LoRA** | Apply extracted HDR LoRA to Ref2VA (constant strength) |
 | **H3 Hybrid HDR Extract** | Extract LoRA from Ref2VA/FL2VA/Singularity triple on GPU box |
