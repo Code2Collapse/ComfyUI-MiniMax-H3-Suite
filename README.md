@@ -893,6 +893,9 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
   - New options on H3 Spatial Split Params (advanced, off by default, so saved workflows behave as before):
     `brightness_match` (per frame), `dynamic_fade` (narrowing / widening over the steps), `overlap_blend`
     (linear / smoothstep / midpoint), `masked_area_noise`, and equal tiles with `grid_rows` / `grid_cols`.
+  - A Fun ControlNet on the model (core's Apply MiniMax H3 Fun ControlNet) now follows the split: each tile and chunk
+    gets only its own part of the control video, mask and source video. It used to be refused whenever the run was
+    split. The H3 Mask-Aware ControlNet is still refused for split runs (its gate is built for the whole frame).
 
 ## Sigma Presets (official templates)
 
