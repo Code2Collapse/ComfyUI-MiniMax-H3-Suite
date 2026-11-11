@@ -147,3 +147,12 @@ HybridHDR applies **constant** LoRA strength. For “Ref2VA early, HDR late”:
 2. Continue steps `N … end` with **MiniMaxH3_HybridHDR** patched MODEL.
 
 Use **KSamplerAdvanced** (`start_at_step` / `end_at_step`) or **SamplerCustomAdvanced** — **never SplitSigmas** on H3.
+
+## h3_hdr_trackA_ltx_to_logc3_dpx16.json (experimental, 2026-11-11)
+
+Track A of the HDR plan (workspace docs/research/l9178_minimax_hdr_rnd.md): an H3 render, saved losslessly, goes through
+the LTX-2.5 SDR-to-HDR IC-LoRA (LTX-Enhanced's SDR_to_HDR_Pro graph). Save Video (C2C) then writes the ACEScg delivery as
+ARRI LogC3 (EI800) 16-bit DPX, beside the ACEScg half EXR.
+
+Needs LTX-Enhanced, ComfyUI-LTXVideo, CustomNodePacks, and the gated LTX-2.5 HDR IC-LoRA (LTX-2.x Community License).
+Built and saved in the real frontend (core 0.39.0 + frontend 1.53.10). Not run on a GPU yet.
