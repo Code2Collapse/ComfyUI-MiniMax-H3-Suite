@@ -31,15 +31,20 @@ class MiniMaxH3_PosePuppeteer(io.ComfyNode):
             display_name="H3 Pose Puppeteer",
             category="MiniMax H3/Control",
             description=(
-                "Package N8 driving pose as conditioning-ready motion_hints + motion_text (#61). "
-                "Union is blocked (D1) — hints only; no Union apply path exists today. "
+                "Package N8 driving pose as motion_hints + motion_text (#61), sized to the character plate. "
+                "rig_type pose_only gives the clean pose (plus a skeleton drawn from keypoints_json): wire it into "
+                "control_video of Apply MiniMax H3 Fun ControlNet. The other rig types blend the pose over the "
+                "character plate (a preview); none retargets bones to the character. "
                 "Does not drive generation by itself."
             ),
             inputs=[
                 io.Image.Input("driving_pose", tooltip="Pose hints IMAGE from N8 StrongestPose."),
                 io.String.Input("keypoints_json", optional=True, multiline=True),
-                io.Image.Input("character_ref"),
-                io.Combo.Input("rig_type", options=list(RIG_TYPES), default="human_to_creature"),
+                io.Image.Input("character_ref", tooltip="Sets the output size; blended under the pose except with pose_only."),
+                io.Combo.Input("rig_type", options=list(RIG_TYPES), default="human_to_creature",
+                               tooltip="pose_only = the clean pose, for a pose ControlNet. human_to_creature / "
+                                       "stick_figure / mocap_data = the pose blended over character_ref (a "
+                                       "preview), not a retarget."),
             ],
             outputs=[
                 io.Image.Output("motion_hints"),

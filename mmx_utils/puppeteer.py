@@ -10,7 +10,16 @@ import torch.nn.functional as F
 
 from .keypoint_spine import render_pose_hints
 
-RIG_TYPES = ("human_to_creature", "stick_figure", "mocap_data")
+# L9.39 row 8: the first three are BLENDS of the driving pose over the character plate (a look-at preview, no
+# retargeting: bones keep the driver's proportions). pose_only is the clean pose on its own - what a pose control
+# (Apply MiniMax H3 Fun ControlNet's control_video) expects; a character plate under the skeleton reads as clutter.
+RIG_TYPES = ("human_to_creature", "stick_figure", "mocap_data", "pose_only")
+_BLEND_NOTE = {
+    "human_to_creature": "55% character plate + 45% driving pose",
+    "stick_figure": "driving-pose edges painted over the character plate",
+    "mocap_data": "35% character plate + 65% driving pose",
+    "pose_only": "driving pose only, no character plate (use this as control_video)",
+}
 
 
 def _resize_batch(img: torch.Tensor, h: int, w: int) -> torch.Tensor:
@@ -83,8 +92,8 @@ def build_motion_text(
         f"Camera: static plate; motion transferred from driving pose\n"
         f"Frames: {int(frame_count)}\n"
         f"Keypoints: {kp_note}\n"
-        f"Union: blocked (D1) — conditioning hints only, no Union apply path\n"
-        f"Use: wire motion_hints as control conditioning; do not expect Union injection."
+        f"Hints: {_BLEND_NOTE.get(rig, rig)}; no retargeting (bones keep the driver's proportions)\n"
+        f"Use: rig_type=pose_only -> control_video of Apply MiniMax H3 Fun ControlNet (or H3 Mask-Aware ControlNet)."
     )
 
 
@@ -113,7 +122,9 @@ def render_motion_hints(
     ref = _resize_batch(ref[:t], h, w)
 
     rig = (rig_type or "human_to_creature").lower()
-    if rig == "stick_figure":
+    if rig == "pose_only":
+        hints = pose[..., :3].clamp(0, 1)
+    elif rig == "stick_figure":
         hints = _stick_overlay(ref, pose, alpha=0.75)
     elif rig == "mocap_data":
         hints = (0.35 * ref + 0.65 * pose).clamp(0, 1)
