@@ -768,6 +768,12 @@ in the workspace's `docs/research/l9178_minimax_hdr_rnd.md`. Shipped so far:
   - Track C inputs: degraded SDR renderings, with a held-out tone curve;
   - a parent-disjoint split and `manifest.json`.
   Training config: `docs/research/l9178_h3_hdr_log_lora.yaml` (workspace, ai-toolkit).
+- **`tools/h3_hdr_qc.py`** is the checkpoint report. It checks:
+  - the fake-HDR footroom;
+  - stops above white;
+  - exposure and highlight flicker;
+  - against a reference: PU21-PSNR, per-stop error and shadow colour drift.
+  It prints PASS / CHECK lines against the acceptance targets.
 - The curves and camera gamuts are NukeMax's (vendored, `mmx_vendor/hdr_curves`). They match OpenColorIO's ACES
   configs, including CAT02 for ARRI / Sony gamuts.
 
