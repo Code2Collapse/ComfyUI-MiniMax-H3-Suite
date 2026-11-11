@@ -10,6 +10,9 @@ Output (--out DIR), laid out for ai-toolkit (docs/research/l9178_h3_hdr_log_lora
   train/clipNNNN.mkv + .txt   Track B target: the log code (ACEScct by default), dithered 8-bit RGB, FFV1 lossless
   val/clipNNNN.mkv + .txt     held-out parents (no source in both halves)
   sdr/<split>/clipNNNN_vK.mp4 Track C inputs: degraded SDR renderings (H.264); val also gets the held-out tone curve
+  trackc/<split>/clipNNNN_vK.mkv + .txt   with --trackc: Track C pairs, ONE clip twice as wide - left the SDR
+                              rendering as encoded (H.264 decoded back), right the same frames in the log code
+                              (In-Context LoRA, arXiv 2410.23775; train as plain t2v). Use 832 x 480 panels.
   manifest.json               every clip's parent, exposure scale, clipping, stops above white and SDR recipes
 
     python tools/h3_hdr_dataset.py --hdri D:/hdri --sequence "D:/plates/sh010/sh010.####.exr" --out D:/h3_hdr_set
@@ -98,6 +101,21 @@ def write_ffv1(path: str, frames_u8: np.ndarray) -> None:
                 c.mux(pkt)
         for pkt in s.encode(None):
             c.mux(pkt)
+
+
+def read_rgb_u8(path: str) -> np.ndarray:
+    """[T, H, W, 3] uint8 of a video file (the SDR as a model will really see it, compression included)."""
+    import av  # type: ignore[import-not-found]
+    with av.open(path) as c:
+        return np.stack([fr.to_ndarray(format="rgb24") for fr in c.decode(video=0)])
+
+
+TRACKC_TAG = "[HDRPAIR]"
+
+
+def trackc_caption(caption: str, code: str) -> str:
+    return (f"{TRACKC_TAG} left: an SDR video; right: the same shot as {code} HDR log footage, frame for frame. "
+            f"{caption}")
 
 
 def write_h264(path: str, frames01: np.ndarray, crf: int) -> None:
@@ -203,7 +221,17 @@ def build(a) -> dict:
                                 highlight_blur_sigma=r["highlight_blur_sigma"], shadow_soften=r["shadow_soften"])
             name = f"{cid}_v{k}.mp4"
             write_h264(str(sdir / name), sdr, r["crf"])
-            rec["sdr"].append({"file": f"sdr/{part}/{name}", **r})
+            entry = {"file": f"sdr/{part}/{name}", **r}
+            if a.trackc:
+                left = read_rgb_u8(str(sdir / name))[: codes.shape[0]]
+                if left.shape != codes.shape:
+                    raise SystemExit(f"{cid}: the decoded SDR {left.shape} does not match the codes {codes.shape}")
+                cdir = out / "trackc" / part
+                cdir.mkdir(parents=True, exist_ok=True)
+                write_ffv1(str(cdir / f"{cid}_v{k}.mkv"), np.concatenate([left, codes], axis=2))
+                (cdir / f"{cid}_v{k}.txt").write_text(trackc_caption(src["caption"], a.code), encoding="utf-8")
+                entry["trackc"] = f"trackc/{part}/{cid}_v{k}.mkv"
+            rec["sdr"].append(entry)
         manifest["clips"].append(rec)
         print(f"{cid} {part:5s} {src['kind']:10s} {rec['stops_above_white']:+.2f} stops, clipped>1 "
               f"{rec['clipped_above_1']:.3%}, {len(rec['sdr'])} SDR", flush=True)
@@ -227,6 +255,8 @@ def main(argv=None) -> int:
     ap.add_argument("--plate-exposure", default="none", choices=D.EXPOSURE_MODES, help="for your plates")
     ap.add_argument("--sdr-variants", type=int, default=3, help="Track C SDR renderings per clip (0 = none)")
     ap.add_argument("--held-out-curve", default="hable", choices=D.TONE_CURVES)
+    ap.add_argument("--trackc", action="store_true",
+                    help="also write Track C side-by-side [SDR | log] clips (needs --sdr-variants > 0)")
     ap.add_argument("--val-fraction", type=float, default=0.08)
     ap.add_argument("--caption", default="real HDR camera footage")
     ap.add_argument("--seed", type=int, default=0)
