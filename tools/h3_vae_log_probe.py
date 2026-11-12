@@ -13,8 +13,16 @@ Run it on the GPU box, from the ComfyUI folder's Python (the one with torch):
     # a LogC3 ProRes straight from the camera / Nuke (the file holds LogC3 code values, AWG3):
     python tools/h3_vae_log_probe.py --comfy ... --vae ... --input A001C003.mov --input-space "ARRI LogC3" --out p.json
 
-Run it on 3-5 different shots (night with lamps, sky, faces, fire) and send the JSON files back. Nothing is written
-except the JSON. ``--fake-vae`` replaces the VAE by 8-bit quantisation + a small blur, to check the tool itself on
+Add ``--model /path/to/h3_checkpoint.safetensors --full-hash`` so the report records which H3 checkpoint and VAE were
+measured, and ``--fps`` for an image sequence. Run it on 3-5 different shots (night with lamps, sky, faces, fire) and
+send the JSON files back. Nothing is written except the JSON.
+
+Report (version 2, A26 3.2): identity (H3 model, VAE, ComfyUI version), input colour space / gamut / peak / frame count
+/ frame rate, alpha status (the H3 VAE has 3 channels: alpha never survives it), and per code space and exposure:
+value ranges in and out, clipping before (codes outside 0..1) and after (saturated codes), values below black code,
+below / above diffuse white with the error in each, per-stop error, colour drift in shadows and highlights,
+frame-to-frame flicker, a transform-only baseline (what the curve alone loses, so the VAE's share is visible), and a
+PASS / FAIL / NOT VERIFIED verdict against provisional thresholds (recorded in the report). ``--fake-vae`` replaces the VAE by 8-bit quantisation + a small blur, to check the tool itself on
 any machine (its numbers mean nothing about H3).
 """
 from __future__ import annotations
@@ -66,7 +74,13 @@ def _read_still(path: str) -> np.ndarray:
         px = px[..., None]
     if px.shape[-1] == 1:
         px = np.repeat(px, 3, axis=-1)
+    alpha = buf.spec().alpha_channel
+    if px.shape[-1] >= 4 and 0 <= alpha:                     # keep the alpha channel as a 4th plane
+        return np.concatenate([px[..., :3], px[..., alpha:alpha + 1]], -1)
     return px[..., :3]
+
+
+_MOVIE_FPS: dict[str, float] = {}
 
 
 def _read_movie(path: str, frames: int) -> np.ndarray:
@@ -76,6 +90,9 @@ def _read_movie(path: str, frames: int) -> np.ndarray:
         raise SystemExit("Reading a movie needs PyAV (pip install av).") from exc
     out = []
     with av.open(path) as c:
+        rate = c.streams.video[0].average_rate
+        if rate:
+            _MOVIE_FPS[path] = float(rate)
         for f in c.decode(video=0):
             out.append(f.to_ndarray(format="rgb48le").astype(np.float32) / 65535.0)
             if len(out) >= frames:
@@ -93,7 +110,10 @@ def read_frames(path: str, frames: int) -> np.ndarray:
     files = _sequence_files(path) if not os.path.isfile(path) else [path]
     if not files:
         raise SystemExit(f"no image files match {path}")
-    return np.stack([_read_still(f) for f in files[:frames]])
+    stills = [_read_still(f) for f in files[:frames]]
+    if len({s.shape[-1] for s in stills}) > 1:                # some frames with alpha, some without: drop it
+        stills = [s[..., :3] for s in stills]
+    return np.stack(stills)
 
 
 def to_acescg(values: np.ndarray, input_space: str) -> np.ndarray:
@@ -133,6 +153,39 @@ def fake_vae():
         b[:, 1:-1] = (q[:, :-2] + 2 * q[:, 1:-1] + q[:, 2:]) / 4.0
         return b.astype(np.float32)
     return rt, {"vae": "fake (8-bit + blur)"}
+
+
+def file_identity(path: str | None, full: bool) -> dict | None:
+    """Name, size and SHA-256 (whole file with ``full``, else the first MiB) of a checkpoint."""
+    if not path:
+        return None
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        if full:
+            for chunk in iter(lambda: fh.read(1 << 24), b""):
+                h.update(chunk)
+        else:
+            h.update(fh.read(1 << 20))
+    return {"file": os.path.basename(path), "bytes": os.path.getsize(path),
+            ("sha256" if full else "sha256_first_mib"): h.hexdigest()}
+
+
+def comfy_version(comfy_root: str) -> str | None:
+    try:
+        txt = Path(comfy_root, "comfyui_version.py").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r"__version__\s*=\s*[\"']([^\"']+)", txt)
+    return m.group(1) if m else None
+
+
+def input_gamut(input_space: str) -> str:
+    s = input_space.strip()
+    if s == "ACEScg":
+        return H.WORKING_GAMUT
+    if s.startswith("linear:"):
+        return s.split(":", 1)[1].strip()
+    return H.code_gamut(s)
 
 
 def comfy_vae(comfy_root: str, vae_path: str, device: str | None):
@@ -184,28 +237,69 @@ def main(argv=None) -> int:
     ap.add_argument("--width", type=int, default=960)
     ap.add_argument("--height", type=int, default=544)
     ap.add_argument("--white-nits", type=float, default=100.0, help="scene-linear 1.0 in cd/m2 for PU21")
+    ap.add_argument("--model", help="the H3 diffusion checkpoint this VAE belongs to (identity only; not loaded)")
+    ap.add_argument("--full-hash", action="store_true", help="hash whole checkpoint files (slow on large files)")
+    ap.add_argument("--fps", type=float, default=None, help="frame rate of an image sequence (movies report their own)")
+    ap.add_argument("--synthetic", action="store_true", help="the input is a test pattern, not real footage")
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if not a.fake_vae and not a.vae:
         ap.error("--vae is required (or --fake-vae to test the tool)")
 
     raw = read_frames(a.input, max(a.frames, 22))
-    lin = conform(to_acescg(raw, a.input_space), a.frames, a.width, a.height)
+    alpha = raw[..., 3] if raw.shape[-1] == 4 else None
+    lin = conform(to_acescg(raw[..., :3], a.input_space), a.frames, a.width, a.height)
     rt, info = fake_vae() if a.fake_vae else comfy_vae(a.comfy, a.vae, a.device)
-    report = {"tool": "h3_vae_log_probe", "version": 1, "input": os.path.basename(a.input),
+    exposures = [float(e) for e in a.exposures.split(",")]
+    y = H.luminance(lin)
+    fps = a.fps or _MOVIE_FPS.get(a.input)
+    report = {"tool": "h3_vae_log_probe", "version": 2, "input": os.path.basename(a.input),
               "input_space": a.input_space, "frames": int(lin.shape[0]), "size": [int(lin.shape[2]), int(lin.shape[1])],
               "input_stops_above_white": H.stops_above_white(lin), "machine": platform.platform(), **info,
+              # A26 3.2 report header
+              "identity": {"h3_model": file_identity(a.model, a.full_hash),
+                           "vae": ({"file": "fake (8-bit + blur)"} if a.fake_vae else file_identity(a.vae, a.full_hash)),
+                           "comfyui_version": None if a.fake_vae else comfy_version(a.comfy)},
+              "input_info": {"colour_space": a.input_space, "gamut": input_gamut(a.input_space),
+                             "frame_count": int(lin.shape[0]), "frame_rate": fps, "synthetic": bool(a.synthetic),
+                             "peak": {"max_linear": float(lin.max()), "max_luminance": float(y.max()),
+                                      "stops_above_white_p99_9": H.stops_above_white(lin),
+                                      "stops_above_white_max": float(np.log2(max(float(y.max()), 1e-6))),
+                                      "share_above_white": float((y >= 1.0).mean())}},
+              "alpha": ({"input_has_alpha": False, "status": "no alpha in the input"} if alpha is None else
+                        {"input_has_alpha": True, "status": "NOT CARRIED BY THE VAE: the H3 video VAE has 3 channels; "
+                         "alpha must travel around it (mask / separate plate) and be re-attached after decode",
+                         "alpha_range": H.value_range(alpha)}),
+              "thresholds": dict(H.PROBE_THRESHOLDS, provisional=True),
               "codes": []}
+
+    def identity(c):                                       # the maths-only baseline: what the transform alone loses
+        return c
     for code in [c.strip() for c in a.codes.split(",") if c.strip()]:
         t0 = time.time()
-        rep = H.roundtrip_report(lin, rt, code, exposures=[float(e) for e in a.exposures.split(",")],
-                                 white_nits=a.white_nits)
+        rep = H.roundtrip_report(lin, rt, code, exposures=exposures, white_nits=a.white_nits)
         rep["seconds"] = round(time.time() - t0, 2)
+        base = H.roundtrip_report(lin, identity, code, exposures=exposures, white_nits=a.white_nits)
+        rep["transform_only"] = {k: {m: v.get(m) for m in ("pu21_psnr", "highlight_error_stops", "clipped_pixels",
+                                                          "delta_uv_shadows")} for k, v in base["exposures"].items()}
+        v = H.verdict(rep)
+        if a.fake_vae or a.synthetic:
+            v = dict(v, measured=v["verdict"], verdict="NOT VERIFIED",
+                     why=v["why"] + ["fake VAE or synthetic input: says nothing about H3"])
+        rep["verdict"] = v
         report["codes"].append(rep)
         e0 = rep["exposures"].get("+0", {})
         print(f"{code:12s} PU21-PSNR {e0.get('pu21_psnr', float('nan')):6.2f} dB  "
-              f"du'v' {e0.get('delta_uv_mean') or 0:.4f}  ({rep['seconds']} s)")
+              f"du'v' {e0.get('delta_uv_mean') or 0:.4f}  highlights {e0.get('highlight_error_stops') or 0:.3f} st  "
+              f"{v['verdict']}  ({rep['seconds']} s)")
+    passing = [c for c in report["codes"] if c["verdict"]["verdict"] == "PASS"]
+    failing = any(c["verdict"]["verdict"] == "FAIL" for c in report["codes"])
+    report["final"] = {"verdict": "PASS" if passing else ("FAIL" if failing else "NOT VERIFIED"),
+                       "recommended_code": max(passing, key=lambda c: c["exposures"]["+0"]["pu21_psnr"])["code"]
+                       if passing else None}
     Path(a.out).write_text(json.dumps(report, indent=1, default=float), encoding="utf-8")
+    rec = report["final"]["recommended_code"]
+    print(f"final: {report['final']['verdict']}" + (f" (recommended code {rec})" if rec else ""))
     print(f"wrote {a.out}")
     return 0
 

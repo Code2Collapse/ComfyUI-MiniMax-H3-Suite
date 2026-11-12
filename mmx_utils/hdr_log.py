@@ -134,6 +134,83 @@ def per_stop_error(test_lin: np.ndarray, ref_lin: np.ndarray, lo: int = -8, hi: 
     return out
 
 
+def value_range(x: np.ndarray) -> dict[str, float]:
+    x = np.asarray(x, np.float32)
+    return {"min": float(x.min()), "p0.1": float(np.percentile(x, 0.1)), "p99.9": float(np.percentile(x, 99.9)),
+            "max": float(x.max())}
+
+
+def region_error(test_lin: np.ndarray, ref_lin: np.ndarray, lo: float, hi: float) -> float | None:
+    """Mean |log2(test Y / ref Y)| (stops) over reference pixels with lo <= Y < hi; None when fewer than 16 pixels."""
+    yt, yr = luminance(test_lin), luminance(ref_lin)
+    m = (yr >= lo) & (yr < hi)
+    if m.sum() < 16:
+        return None
+    return float(np.abs(np.log2(np.maximum(yt[m], 1e-6) / np.maximum(yr[m], 1e-6))).mean())
+
+
+def delta_uv_in(test_lin: np.ndarray, ref_lin: np.ndarray, lo: float, hi: float) -> float | None:
+    """Mean Δu'v' over reference pixels with lo <= Y < hi (colour drift in one brightness band)."""
+    yr = luminance(ref_lin)
+    m = (yr >= lo) & (yr < hi)
+    if m.sum() < 16:
+        return None
+    return float(np.linalg.norm(uv_prime(test_lin) - uv_prime(ref_lin), axis=-1)[m].mean())
+
+
+def temporal_consistency(test_lin: np.ndarray, ref_lin: np.ndarray) -> dict | None:
+    """Frame-to-frame behaviour of a round trip on VIDEO [T, H, W, 3] (T >= 2), in stops:
+    ``mean_luma_flicker`` = mean |Δ_t log2 mean-Y(out) - Δ_t log2 mean-Y(ref)| (exposure pumping / flicker added);
+    ``pixel_temporal_error`` = mean over pixels (ref Y >= 1e-3) of |Δ_t log2 Y(out) - Δ_t log2 Y(ref)| (shimmer)."""
+    if test_lin.ndim != 4 or test_lin.shape[0] < 2:
+        return None
+    yt, yr = luminance(test_lin).astype(np.float64), luminance(ref_lin).astype(np.float64)
+    mt = np.log2(np.maximum(yt.reshape(yt.shape[0], -1).mean(1), 1e-9))
+    mr = np.log2(np.maximum(yr.reshape(yr.shape[0], -1).mean(1), 1e-9))
+    lt, lr = np.log2(np.maximum(yt, 1e-6)), np.log2(np.maximum(yr, 1e-6))
+    m = (yr[1:] >= 1e-3) & (yr[:-1] >= 1e-3)
+    d = np.abs(np.diff(lt, axis=0) - np.diff(lr, axis=0))
+    return {"mean_luma_flicker": float(np.abs(np.diff(mt) - np.diff(mr)).mean()),
+            "max_luma_flicker": float(np.abs(np.diff(mt) - np.diff(mr)).max()),
+            "pixel_temporal_error": float(d[m].mean()) if m.any() else None}
+
+
+# provisional acceptance values (A26 3.2): the final ones are chosen from real H3 probe runs and recorded with them
+PROBE_THRESHOLDS = {"pu21_psnr_min": 35.0, "highlight_error_max_stops": 0.25, "shadow_delta_uv_max": 0.02,
+                    "footroom_violations_max": 0.001, "luma_flicker_max_stops": 0.05, "clipped_pixels_max": 0.001}
+
+
+def verdict(rep: dict, th: dict | None = None) -> dict:
+    """PASS / FAIL / NOT VERIFIED for one code space of a ``roundtrip_report``. NOT VERIFIED when the input has no
+    highlights above diffuse white (nothing would prove the code carries HDR) or a metric could not be measured."""
+    th = dict(PROBE_THRESHOLDS, **(th or {}))
+    e0 = rep["exposures"].get("+0")
+    if not e0:
+        return {"verdict": "NOT VERIFIED", "why": ["no +0 exposure measured"], "thresholds": th}
+    low = rep["exposures"][min(rep["exposures"], key=float)]
+    why, unknown = [], []
+
+    def check(name, value, ok):
+        if value is None:
+            unknown.append(f"{name}: not measurable on this input")
+        elif not ok(value):
+            why.append(f"{name} = {value:.4g}")
+    check("pu21_psnr", e0["pu21_psnr"], lambda v: v >= th["pu21_psnr_min"])
+    check("highlight_error_stops", e0.get("highlight_error_stops"), lambda v: v <= th["highlight_error_max_stops"])
+    check("shadow_delta_uv (lowest exposure)", low.get("delta_uv_shadows"), lambda v: v <= th["shadow_delta_uv_max"])
+    if e0.get("footroom_violations_out") is not None:
+        check("footroom_violations_out", e0["footroom_violations_out"], lambda v: v <= th["footroom_violations_max"])
+    check("clipped_pixels", e0.get("clipped_pixels"), lambda v: v <= th["clipped_pixels_max"])
+    t = e0.get("temporal")
+    if t is not None:
+        check("mean_luma_flicker", t["mean_luma_flicker"], lambda v: v <= th["luma_flicker_max_stops"])
+    if why:
+        return {"verdict": "FAIL", "why": why + unknown, "thresholds": th}
+    if unknown:
+        return {"verdict": "NOT VERIFIED", "why": unknown, "thresholds": th}
+    return {"verdict": "PASS", "why": [], "thresholds": th}
+
+
 def roundtrip_report(ref_lin: np.ndarray, roundtrip, code: str, *, exposures=(0.0, -6.0, -8.0),
                      white_nits: float = 100.0) -> dict:
     """Push ACEScg scene-linear frames [T, H, W, 3] through ``roundtrip`` (codes in [0, 1] -> codes, e.g. a VAE encode +
@@ -146,10 +223,12 @@ def roundtrip_report(ref_lin: np.ndarray, roundtrip, code: str, *, exposures=(0.
                  "ceiling_linear": ceiling(code), "white_nits": white_nits, "exposures": {}}
     for ev in exposures:
         ref = ref_lin * np.float32(2.0 ** ev)
-        c_in = encode(ref, code)
-        clipped_hi = float((c_in > 1.0).mean())
-        clipped_lo = float((c_in < 0.0).mean())
-        c_in = np.clip(c_in, 0.0, 1.0)
+        c_raw = encode(ref, code)
+        clipped_hi = float((c_raw > 1.0).mean())
+        clipped_lo = float((c_raw < 0.0).mean())
+        clipped_px = float(((c_raw > 1.0) | (c_raw < 0.0)).any(axis=-1).mean())
+        black = code_of_black(code)
+        c_in = np.clip(c_raw, 0.0, 1.0)
         c_out = np.asarray(roundtrip(c_in), np.float32)
         if c_out.shape != c_in.shape:
             raise ValueError(f"the round trip changed the shape {c_in.shape} -> {c_out.shape}")
@@ -170,5 +249,17 @@ def roundtrip_report(ref_lin: np.ndarray, roundtrip, code: str, *, exposures=(0.
             "footroom_violations_out": footroom_fraction(c_out, code),
             "stops_above_white_ref": stops_above_white(ref_c),
             "stops_above_white_out": stops_above_white(out),
+            # A26 3.2 additions
+            "range_linear_in": value_range(ref), "range_linear_out": value_range(out),
+            "range_codes_in": value_range(c_raw), "range_codes_out": value_range(c_out),
+            "clipped_pixels": clipped_px,
+            "below_black_in": float((c_raw < black).mean()) if black > 0 else None,
+            "saturated_out_hi": float((c_out >= 0.999).mean()), "saturated_out_lo": float((c_out <= 0.001).mean()),
+            "share_below_white_ref": float((y < 1.0).mean()), "share_above_white_ref": float((y >= 1.0).mean()),
+            "error_below_white_stops": region_error(out, ref_c, 1e-3, 1.0),
+            "highlight_error_stops": region_error(out, ref_c, 1.0, np.inf),
+            "delta_uv_shadows": delta_uv_in(out, ref_c, 1e-3, 0.18 / 8),
+            "delta_uv_highlights": delta_uv_in(out, ref_c, 1.0, np.inf),
+            "temporal": temporal_consistency(out, ref_c),
         }
     return rep
