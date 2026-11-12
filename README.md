@@ -754,10 +754,16 @@ code (Lightricks' LumiVid / LTX SDR-to-HDR IC-LoRA). The plan, the research and 
 in the workspace's `docs/research/l9178_minimax_hdr_rnd.md`. Shipped so far:
 
 - **`tools/h3_vae_log_probe.py`.** Measures which log code (ACEScct, ARRI LogC3, LogC4) the H3 video VAE carries
-  best, on your own HDR footage. Reports PU21-PSNR, colour drift down to -8 EV, per-stop error and fake-HDR
-  footroom. Run it on the GPU box:
+  best, on your own HDR footage. For each code it reports clipping before and after the VAE, the error below and
+  above diffuse white (how much highlight detail comes back), per-stop error, colour drift in shadows and highlights,
+  frame-to-frame flicker and fake-HDR footroom, next to what the colour curve alone would lose. It ends with PASS,
+  FAIL or NOT VERIFIED per code (the thresholds are provisional until real runs set them). The report also names the
+  H3 checkpoint, VAE and ComfyUI version, and says whether the input had alpha (the H3 VAE cannot carry it). Run it
+  on the GPU box:
 
-      python tools/h3_vae_log_probe.py --comfy <ComfyUI> --vae <h3 vae .safetensors> --input shot.####.exr --out p.json
+      python tools/h3_vae_log_probe.py --comfy <ComfyUI> --vae <h3 vae .safetensors> --model <h3 checkpoint>           --full-hash --input shot.####.exr --fps 24 --out p.json
+
+  Not run on real H3 weights yet: no curve is chosen until it is.
 
 - **H3 HDR Roundtrip `code_space`** (appended input, default off = unchanged).
   - `to_view` encodes ACEScg scene-linear into the chosen log code.
