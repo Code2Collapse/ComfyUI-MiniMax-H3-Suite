@@ -7,7 +7,9 @@ Building blocks of tools/h3_hdr_dataset.py, all numpy float32, scene-linear in A
 - ``to_training_codes``: the log code (ACEScct by default) as dithered 8-bit, because ai-toolkit reads video as 8-bit;
 - ``sdr_variant``: a degraded display-referred SDR rendering for Track C (tone curve, contrast, highlight blur, shadow
   softening, exposure shift; H.264 is applied by the writer), after LumiVid appendix E and Dark Matters section 4;
-- ``split_by_parent``: a parent-disjoint train / val split (no crop of one source in both).
+- ``split_by_parent``: a parent-disjoint train / val / test split (no crop of one source in two partitions);
+- ``quantize_codes`` / ``precision_audit``: what each conversion of the target path loses (A26 3.3), in stops;
+- ``check_integrity``: the finished set's partitions, frame grid and pair alignment.
 """
 from __future__ import annotations
 
@@ -107,6 +109,86 @@ def normalise_exposure(clip: np.ndarray, mode: str = "p99_to_1") -> tuple[np.nda
 
 # ---- the training codes ----------------------------------------------------------------------------------------------
 
+def quantize_codes(codes01: np.ndarray, bits: int, *, seed: int = 0, dither: bool = True) -> np.ndarray:
+    """Codes in [0, 1] -> integer levels of ``bits`` (uint8 for 8, uint16 above), TPDF-dithered by default."""
+    top = float((1 << bits) - 1)
+    x = np.clip(codes01, 0.0, 1.0).astype(np.float32) * np.float32(top)
+    if dither:
+        rng = np.random.default_rng(seed)
+        x = x + (rng.random(x.shape, dtype=np.float32) - rng.random(x.shape, dtype=np.float32))
+    q = np.clip(np.round(x), 0, top)
+    return q.astype(np.uint8 if bits <= 8 else np.uint16)
+
+
+def _stops_error(test_lin: np.ndarray, ref_lin: np.ndarray) -> dict:
+    yt, yr = H.luminance(test_lin), H.luminance(ref_lin)
+    m = yr >= 1e-3
+    if not m.any():
+        return {"rms_stops": None, "p99_stops": None, "max_stops": None}
+    e = np.abs(np.log2(np.maximum(yt[m], 1e-6) / np.maximum(yr[m], 1e-6)))
+    return {"rms_stops": float(np.sqrt(np.mean(e ** 2))), "p99_stops": float(np.percentile(e, 99)),
+            "max_stops": float(e.max())}
+
+
+def precision_audit(clip: np.ndarray, code: str = "ACEScct", *, bits=(8, 10, 12, 16), seed: int = 0) -> dict:
+    """What every conversion of the training-target path loses (A26 3.3), measured on this clip in stops of luminance:
+
+    1. ``log_encode``: ACEScg -> log code -> back (float32; only curve maths);
+    2. ``clip_0_1``: codes outside the VAE's [0, 1] input (share clipped, stops lost above the code's ceiling);
+    3. ``quantize_<b>bit``: TPDF-dithered integer codes at each bit depth (8 = the FFV1 / ai-toolkit path).
+    The container (FFV1) is lossless and is checked on the written file by the tool, not here."""
+    lin = np.asarray(clip, np.float32)
+    c = H.encode(lin, code)
+    out = {"code": code, "stages": {}}
+    out["stages"]["log_encode"] = _stops_error(H.decode(c, code), lin)
+    cc = np.clip(c, 0.0, 1.0)
+    ref = H.decode(cc, code)                                  # the best a [0, 1] code can carry
+    y, yc = H.luminance(lin), H.luminance(ref)
+    over = y > yc * 1.0001
+    out["stages"]["clip_0_1"] = {"clipped_above_1": float((c > 1.0).mean()), "clipped_below_0": float((c < 0.0).mean()),
+                                 "ceiling_linear": H.ceiling(code),
+                                 "max_stops_lost": float(np.log2(np.maximum(y[over], 1e-6) / np.maximum(yc[over], 1e-6))
+                                                         .max()) if over.any() else 0.0, **_stops_error(ref, lin)}
+    # stops per code unit at 18 % grey (the log segment; the toe of some curves is linear and must not count)
+    g = H.encode(np.full((1, 3), 0.18, np.float32), code)[0, 1]
+    d = np.float32(1e-3)
+    y1 = H.decode(np.full((1, 3), g + d, np.float32), code)[0, 1]
+    y0 = H.decode(np.full((1, 3), g - d, np.float32), code)[0, 1]
+    stops_per_code = float(np.log2(max(float(y1), 1e-9) / max(float(y0), 1e-9)) / (2 * d))
+    for b in bits:
+        q = quantize_codes(cc, b, seed=seed)
+        back = H.decode(q.astype(np.float32) / np.float32((1 << b) - 1), code)
+        rec = _stops_error(back, ref)
+        rec["per_stop"] = H.per_stop_error(back, ref)
+        rec["stops_per_level_at_grey"] = stops_per_code / ((1 << b) - 1)
+        out["stages"][f"quantize_{b}bit"] = rec
+    return out
+
+
+def precision_decision(audit: dict, vae_probe: dict | None = None, ratio: float = 0.25) -> dict:
+    """Is the 8-bit target path precise enough? Only the H3 VAE probe can say (A26 3.3): 8-bit is acceptable when its
+    p99 error is at most ``ratio`` of the error the real H3 VAE adds for the same code at +0 EV. Without a probe
+    report: 'keep the 16-bit intermediate' (NOT VERIFIED)."""
+    q8 = audit["stages"]["quantize_8bit"]
+    if not vae_probe:
+        return {"decision": "keep 16-bit intermediate", "status": "NOT VERIFIED",
+                "why": "no H3 VAE probe report given (tools/h3_vae_log_probe.py --out probe.json, then --vae-probe)"}
+    codes = {c["code"]: c for c in vae_probe.get("codes", [])}
+    c = codes.get(audit["code"])
+    if not c or "+0" not in c.get("exposures", {}):
+        return {"decision": "keep 16-bit intermediate", "status": "NOT VERIFIED",
+                "why": f"the probe report has no +0 EV result for {audit['code']}"}
+    vae_err = c["exposures"]["+0"].get("error_below_white_stops")
+    real = "fake" not in str((vae_probe.get("identity") or {}).get("vae", {}).get("file", vae_probe.get("vae", "")))
+    if vae_err is None:
+        return {"decision": "keep 16-bit intermediate", "status": "NOT VERIFIED",
+                "why": "the probe report lacks error_below_white_stops (probe version 2 needed)"}
+    ok = q8["p99_stops"] is not None and q8["p99_stops"] <= ratio * vae_err
+    return {"decision": "8-bit acceptable" if ok else "keep 16-bit intermediate",
+            "status": "MEASURED" if real else "NOT VERIFIED (fake VAE probe)",
+            "quantize_8bit_p99_stops": q8["p99_stops"], "vae_error_stops": vae_err, "ratio": ratio}
+
+
 def to_training_codes(clip: np.ndarray, code: str = "ACEScct", *, seed: int = 0) -> tuple[np.ndarray, dict]:
     """(uint8 [T, H, W, 3], stats): ACEScg -> log code, clipped to [0, 1] (what the VAE can hold), TPDF-dithered to 8 bits
     so the model does not learn banding. Stats report what was clipped."""
@@ -187,12 +269,48 @@ def random_sdr_recipe(rng: np.random.Generator, curves=("aces2_sdr", "reinhard_w
 
 # ---- split -------------------------------------------------------------------------------------------------------------
 
-def split_by_parent(parents: list[str], val_fraction: float = 0.08) -> dict[str, str]:
-    """parent -> 'train' | 'val', deterministic by name hash, so crops of one source never straddle the split."""
+def split_by_parent(parents: list[str], val_fraction: float = 0.08, test_fraction: float = 0.0,
+                    force_test=()) -> dict[str, str]:
+    """parent -> 'train' | 'val' | 'test', deterministic by name hash, so crops, windows and exposure versions of one
+    source never straddle partitions. ``force_test``: substrings (a camera, a shot name) whose parents are held out
+    as test conditions. test_fraction 0 and no force_test = the original train / val split."""
     out = {}
     for p in sorted(set(parents)):
         h = int(hashlib.sha1(p.encode("utf-8")).hexdigest()[:8], 16) / 0xFFFFFFFF
-        out[p] = "val" if h < val_fraction else "train"
-    if len(out) > 1 and "val" not in out.values():                  # a tiny set still gets one val parent
-        out[sorted(out)[0]] = "val"
+        if any(s and s in p for s in force_test):
+            out[p] = "test"
+        elif h < test_fraction:
+            out[p] = "test"
+        elif h < test_fraction + val_fraction:
+            out[p] = "val"
+        else:
+            out[p] = "train"
+    free = sorted(p for p, v in out.items() if v == "train")
+    if len(out) > 1 and "val" not in out.values() and free:          # a tiny set still gets one val parent
+        out[free[0]] = "val"
+        free = free[1:]
+    if test_fraction > 0 and "test" not in out.values() and len(free) > 1:
+        out[free[0]] = "test"
     return out
+
+
+def check_integrity(manifest: dict) -> dict:
+    """A finished set's guarantees: every parent in exactly one partition, every clip on the 17k+5 grid with the
+    manifest's size, Track C pairs as long and as tall as their target. Returns {"ok", "problems", counts}."""
+    problems, where = [], {}
+    for c in manifest.get("clips", []):
+        where.setdefault(c["parent"], set()).add(c["split"])
+        n = c.get("frame_count", manifest.get("frames"))
+        if n is None or n < 22 or (n - 5) % 17:
+            problems.append(f"{c['id']}: {n} frames is not 17k+5")
+        for s in c.get("sdr", []):
+            if s.get("frames") is not None and s["frames"] != n:
+                problems.append(f"{c['id']}: SDR {s['file']} has {s['frames']} frames, the target {n}")
+    for p, parts in where.items():
+        if len(parts) > 1:
+            problems.append(f"parent {p} is in {sorted(parts)}")
+    counts = {}
+    for c in manifest.get("clips", []):
+        counts[c["split"]] = counts.get(c["split"], 0) + 1
+    return {"ok": not problems, "problems": problems, "clips_per_split": counts,
+            "parents_per_split": {k: sum(1 for v in where.values() if k in v) for k in counts}}

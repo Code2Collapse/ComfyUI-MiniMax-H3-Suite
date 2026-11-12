@@ -772,7 +772,12 @@ in the workspace's `docs/research/l9178_minimax_hdr_rnd.md`. Shipped so far:
 - **`tools/h3_hdr_dataset.py`** builds the training set from Poly Haven HDRIs (CC0) and your ACEScg EXR plates:
   - Track B targets: log-coded 17n+5 clips, dithered 8-bit FFV1;
   - Track C inputs: degraded SDR renderings, with a held-out tone curve;
-  - a parent-disjoint split and `manifest.json`.
+  - a parent-disjoint train / val / test split (`--test-parents` holds out whole cameras or shots), checked when the
+    build ends, and `manifest.json` with each clip's source and target identity, frame range, frame rate, colour
+    spaces, exposure, precision and provenance (`--teacher-sequence` marks LTX-generated reference footage);
+  - a precision audit of the target path. An 8-bit level is about 0.07 stops (about 5 %) at mid grey in ACEScct or
+    LogC4, so a 16-bit lossless copy of every target is kept by default until `--vae-probe` (a probe report from
+    the real H3 VAE) shows that 8-bit is precise enough.
   Training config: `docs/research/l9178_h3_hdr_log_lora.yaml` (workspace, ai-toolkit).
 - **`tools/h3_hdr_qc.py`** is the checkpoint report. It checks:
   - the fake-HDR footroom;

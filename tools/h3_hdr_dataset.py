@@ -13,7 +13,12 @@ Output (--out DIR), laid out for ai-toolkit (docs/research/l9178_h3_hdr_log_lora
   trackc/<split>/clipNNNN_vK.mkv + .txt   with --trackc: Track C pairs, ONE clip twice as wide - left the SDR
                               rendering as encoded (H.264 decoded back), right the same frames in the log code
                               (In-Context LoRA, arXiv 2410.23775; train as plain t2v). Use 832 x 480 panels.
-  manifest.json               every clip's parent, exposure scale, clipping, stops above white and SDR recipes
+  test/clipNNNN.mkv + .txt    held-out test parents (--test-fraction, --test-parents for held-out cameras / shots)
+  train16/<split>/clipNNNN.mkv  with --keep-16bit: the same codes TPDF-dithered to 16 bits (FFV1 gbrp16le, lossless):
+                              the higher-precision intermediate kept until the VAE probe proves 8-bit enough
+  manifest.json               per clip: source / target identity, frame range, frame rate, size, source and target
+                              colour space, exposure, curve, gamut, precision (incl. the A26 precision audit), split,
+                              provenance; plus the set's integrity check and the 8-bit precision decision
 
     python tools/h3_hdr_dataset.py --hdri D:/hdri --sequence "D:/plates/sh010/sh010.####.exr" --out D:/h3_hdr_set
 
@@ -90,17 +95,41 @@ def fit(frame: np.ndarray, width: int, height: int) -> np.ndarray:
 # ---- writing ---------------------------------------------------------------------------------------------------------
 
 def write_ffv1(path: str, frames_u8: np.ndarray) -> None:
+    """8-bit RGB (bgr0) or, for uint16 frames, 16-bit RGB (gbrp16le) - both lossless."""
     import av  # type: ignore[import-not-found]
+    deep = frames_u8.dtype == np.uint16
     with av.open(path, mode="w") as c:
         s = c.add_stream("ffv1", rate=Fraction(FPS, 1))
-        s.width, s.height, s.pix_fmt = frames_u8.shape[2], frames_u8.shape[1], "bgr0"
+        s.width, s.height, s.pix_fmt = frames_u8.shape[2], frames_u8.shape[1], "gbrp16le" if deep else "bgr0"
         for i, fr in enumerate(frames_u8):
-            vf = av.VideoFrame.from_ndarray(np.ascontiguousarray(fr), format="rgb24").reformat(format="bgr0")
+            vf = av.VideoFrame.from_ndarray(np.ascontiguousarray(fr), format="rgb48le" if deep else "rgb24") \
+                .reformat(format="gbrp16le" if deep else "bgr0")
             vf.pts = i
             for pkt in s.encode(vf):
                 c.mux(pkt)
         for pkt in s.encode(None):
             c.mux(pkt)
+
+
+def read_ffv1(path: str) -> np.ndarray:
+    """The frames of a file written by write_ffv1, at its own depth (uint8 or uint16)."""
+    import av  # type: ignore[import-not-found]
+    with av.open(path) as c:
+        st = c.streams.video[0]
+        deep = "16" in (st.codec_context.pix_fmt or "")
+        return np.stack([fr.to_ndarray(format="rgb48le" if deep else "rgb24") for fr in c.decode(video=0)])
+
+
+def sha256_file(path: str, limit: int | None = None) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        if limit:
+            h.update(fh.read(limit))
+        else:
+            for chunk in iter(lambda: fh.read(1 << 22), b""):
+                h.update(chunk)
+    return h.hexdigest()
 
 
 def read_rgb_u8(path: str) -> np.ndarray:
@@ -149,13 +178,15 @@ def clip_sources(a) -> list[dict]:
                         "caption": f"{words}, real HDR environment, camera pan",
                         "orbit": {"yaw0_deg": float(rng.uniform(0, 360)), "yaw_span_deg": float(rng.uniform(15, 50)),
                                   "pitch_deg": float(rng.uniform(-10, 20)), "fov_deg": float(rng.uniform(45, 80))}})
-    for pat in a.sequence or []:
+    teachers = set(a.teacher_sequence or [])
+    for pat in list(a.sequence or []) + list(a.teacher_sequence or []):
         files = sequence_files(pat)
         stem = re.sub(r"[._]?(#+|%0?\d*d|\*)\.\w+$", "", pat)
         cap_file = stem + ".txt"
         caption = Path(cap_file).read_text(encoding="utf-8").strip() if os.path.isfile(cap_file) else a.caption
+        kind = "teacher" if pat in teachers else "plate"
         for w0 in range(0, len(files) - a.frames + 1, a.frames):
-            out.append({"parent": f"seq:{stem}", "kind": "plate", "source": pat, "caption": caption,
+            out.append({"parent": f"seq:{stem}", "kind": kind, "source": pat, "caption": caption,
                         "files": files[w0:w0 + a.frames], "first": w0})
     if not out:
         raise SystemExit("nothing to build: give --hdri and / or --sequence")
@@ -191,11 +222,18 @@ def build(a) -> dict:
     a.frames, a.width, a.height = D.snap_frames(a.frames), D.snap_side(a.width), D.snap_side(a.height)
     out = Path(a.out)
     sources = clip_sources(a)
-    split = D.split_by_parent([s["parent"] for s in sources], a.val_fraction)
+    split = D.split_by_parent([s["parent"] for s in sources], a.val_fraction, a.test_fraction,
+                              force_test=tuple(a.test_parents or ()))
     rng = np.random.default_rng(a.seed + 1)
     train_curves = tuple(c for c in D.TONE_CURVES if c != a.held_out_curve)
-    manifest = {"tool": "h3_hdr_dataset", "version": 1, "code": a.code, "frames": a.frames, "fps": FPS,
-                "size": [a.width, a.height], "held_out_curve": a.held_out_curve, "clips": []}
+    probe = json.loads(Path(a.vae_probe).read_text(encoding="utf-8")) if a.vae_probe else None
+    manifest = {"tool": "h3_hdr_dataset", "version": 2, "code": a.code, "frames": a.frames, "fps": FPS,
+                "size": [a.width, a.height], "held_out_curve": a.held_out_curve,
+                "target_colour_space": {"code": a.code, "gamut": H.code_gamut(a.code), "range": "[0, 1] code values"},
+                "precision": {"target": "8-bit RGB, TPDF dither, FFV1 lossless", "intermediate":
+                              "16-bit RGB, TPDF dither, FFV1 gbrp16le lossless" if a.keep_16bit else None},
+                "licence": a.licence, "clips": []}
+    audits = []
     eq_cache: dict = {}
     for n, src in enumerate(sources, start=1):
         part = split[src["parent"]]
@@ -203,16 +241,49 @@ def build(a) -> dict:
         (out / part).mkdir(parents=True, exist_ok=True)
         lin, scale = make_frames(src, a, eq_cache)
         codes, stats = D.to_training_codes(lin, a.code, seed=a.seed + n)
-        write_ffv1(str(out / part / f"{cid}.mkv"), codes)
+        target = out / part / f"{cid}.mkv"
+        write_ffv1(str(target), codes)
+        lossless = bool(np.array_equal(read_ffv1(str(target)), codes))   # the container is checked, not assumed
         (out / part / f"{cid}.txt").write_text(src["caption"], encoding="utf-8")
+        audit = D.precision_audit(lin, a.code, seed=a.seed + n)
+        audits.append(audit)
         rec = {"id": cid, "split": part, "parent": src["parent"], "kind": src["kind"], "source": src["source"],
-               "caption": src["caption"], "exposure_scale": scale, **stats, "sdr": []}
-        if src["kind"] == "plate":
+               "caption": src["caption"], "exposure_scale": scale, **stats, "sdr": [],
+               # A26 3.3 per-item manifest
+               "frame_count": int(codes.shape[0]), "frame_rate": FPS, "size": [int(codes.shape[2]), int(codes.shape[1])],
+               "source_colour_space": "linear Rec.709 (HDRI) -> ACEScg" if src["kind"] == "hdri_orbit"
+               else a.plate_space,
+               "target": {"file": f"{part}/{cid}.mkv", "sha256": sha256_file(str(target)), "code": a.code,
+                          "gamut": H.code_gamut(a.code), "bits": 8, "container_lossless_verified": lossless},
+               "exposure": {"mode": a.exposure if src["kind"] == "hdri_orbit" else a.plate_exposure,
+                            "scale": scale},
+               "precision_audit": audit["stages"],
+               "provenance": {"kind": src["kind"], "licence": a.licence,
+                              "note": "LTX-generated teacher/reference, not camera footage" if src["kind"] == "teacher"
+                              else None},
+               "goal": "A (HDR appearance; orbit pairs are not source-conditioned video)"
+               if src["kind"] == "hdri_orbit" else "A + B (frame-aligned SDR renderings of the target)"}
+        if src["kind"] in ("plate", "teacher"):
             rec["first_frame_index"] = src["first"]
+            rec["frame_range"] = [src["first"], src["first"] + int(codes.shape[0]) - 1]
+            rec["source_identity"] = {"first": os.path.basename(src["files"][0]),
+                                      "last": os.path.basename(src["files"][-1]),
+                                      "sha256_first_frame_mib": sha256_file(src["files"][0], 1 << 20)}
+        else:
+            rec["source_identity"] = {"file": os.path.basename(src["source"]),
+                                      "sha256_first_mib": sha256_file(src["source"], 1 << 20)}
+        if a.keep_16bit:
+            d16 = out / "train16" / part
+            d16.mkdir(parents=True, exist_ok=True)
+            q16 = D.quantize_codes(np.clip(H.encode(lin, a.code), 0.0, 1.0), 16, seed=a.seed + n)
+            write_ffv1(str(d16 / f"{cid}.mkv"), q16)
+            rec["intermediate_16bit"] = {"file": f"train16/{part}/{cid}.mkv", "bits": 16,
+                                         "container_lossless_verified": bool(np.array_equal(
+                                             read_ffv1(str(d16 / f"{cid}.mkv")), q16))}
         if src["kind"] == "hdri_orbit":
             rec["orbit"] = src["orbit"]
         recipes = [D.random_sdr_recipe(rng, train_curves) for _ in range(a.sdr_variants)]
-        if part == "val" and a.sdr_variants and a.held_out_curve:
+        if part in ("val", "test") and a.sdr_variants and a.held_out_curve:
             recipes.append({**D.random_sdr_recipe(rng, (a.held_out_curve,)), "held_out": True})
         for k, r in enumerate(recipes):
             sdir = out / "sdr" / part
@@ -221,7 +292,7 @@ def build(a) -> dict:
                                 highlight_blur_sigma=r["highlight_blur_sigma"], shadow_soften=r["shadow_soften"])
             name = f"{cid}_v{k}.mp4"
             write_h264(str(sdir / name), sdr, r["crf"])
-            entry = {"file": f"sdr/{part}/{name}", **r}
+            entry = {"file": f"sdr/{part}/{name}", **r, "frames": int(read_rgb_u8(str(sdir / name)).shape[0])}
             if a.trackc:
                 left = read_rgb_u8(str(sdir / name))[: codes.shape[0]]
                 if left.shape != codes.shape:
@@ -236,7 +307,12 @@ def build(a) -> dict:
         print(f"{cid} {part:5s} {src['kind']:10s} {rec['stops_above_white']:+.2f} stops, clipped>1 "
               f"{rec['clipped_above_1']:.3%}, {len(rec['sdr'])} SDR", flush=True)
         del lin, codes
+    worst = max(audits, key=lambda x: x["stages"]["quantize_8bit"]["p99_stops"] or 0.0) if audits else None
+    manifest["precision"]["decision"] = D.precision_decision(worst, probe) if worst else None
+    manifest["integrity"] = D.check_integrity(manifest)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+    if not manifest["integrity"]["ok"]:
+        raise SystemExit("integrity check failed: " + "; ".join(manifest["integrity"]["problems"][:5]))
     return manifest
 
 
@@ -257,7 +333,17 @@ def main(argv=None) -> int:
     ap.add_argument("--held-out-curve", default="hable", choices=D.TONE_CURVES)
     ap.add_argument("--trackc", action="store_true",
                     help="also write Track C side-by-side [SDR | log] clips (needs --sdr-variants > 0)")
+    ap.add_argument("--teacher-sequence", action="append",
+                    help="LTX-generated HDR (ACEScg EXR) as a teacher / reference source; marked as such (repeatable)")
     ap.add_argument("--val-fraction", type=float, default=0.08)
+    ap.add_argument("--test-fraction", type=float, default=0.08, help="parents held out for testing")
+    ap.add_argument("--test-parents", action="append",
+                    help="substring of a source (camera, shot name) always held out as test (repeatable)")
+    ap.add_argument("--keep-16bit", action=argparse.BooleanOptionalAction, default=True,
+                    help="also keep the codes as 16-bit FFV1, the higher-precision intermediate (default on until an "
+                         "H3 VAE probe proves 8-bit enough; --no-keep-16bit to skip)")
+    ap.add_argument("--vae-probe", help="an h3_vae_log_probe report: decides whether 8-bit targets are precise enough")
+    ap.add_argument("--licence", default="not recorded", help="licence of the sources (e.g. 'Poly Haven CC0')")
     ap.add_argument("--caption", default="real HDR camera footage")
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args(argv)
