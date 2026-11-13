@@ -1,0 +1,95 @@
+# Goal A (A26 3.1): H3 generates video in a validated LOG code (default ACEScct), so its output decodes to
+# scene-linear HDR. ai-toolkit (github.com/ostris/ai-toolkit, MIT) PINNED at 4a7f28532ed6fe81d9f8c00718878bb3b8739015
+# (2026-11-10). Every key below exists in the pinned code (toolkit/config_modules.py, extensions_built_in/
+# diffusion_models/minimax_h3/minimax_h3.py). Check before training:
+#
+#   python tools/h3_train.py check --toolkit <ai-toolkit> --config <this file> --dataset <h3_hdr_dataset output>
+#
+# What is optimised: ai-toolkit's flow-matching loss (train.loss_type mse = MSE between the predicted and target
+# velocity of the VIDEO latents; H3's own scheduler, video shift 12). No audio loss (datasets[].do_audio false: audio
+# rides along as silence and contributes nothing). No temporal or pixel loss is used (the pinned trainer has no temporal
+# loss; 'pixelspace' exists but is not used here). Fill in the paths marked <...>.
+---
+job: extension
+meta:
+  c2c_goal: "A"
+  c2c_dataset_code: "ACEScct"          # must match the dataset builder's --code and the probe's chosen code
+config:
+  name: "h3_hdr_log_acescct_v1"
+  process:
+    - type: "sd_trainer"
+      training_folder: "output"        # tools/h3_train.py launch replaces it with <run>/output
+      device: cuda:0
+      network:
+        type: "lora"
+        linear: 128                    # rank (LumiVid / Lightricks HDR LoRA); 64 if VRAM is short
+        linear_alpha: 128
+        transformer_only: true         # the 50 DiT blocks only
+        network_kwargs:
+          # adapted: blocks.N.attn.qkv_proj / attn.out_proj / mlp.fc1 / mlp.fc2 (shared by all rows).
+          # never adapted: audio-only modules, the per-modality AdaLN table, refiner, embeddings, output heads.
+          ignore_if_contains: ["audio", "adaln_proj", "token_refiner", "time_embedder", "condition_proj",
+                               "patch_proj", "final_layer"]
+      save:
+        dtype: float16
+        save_every: 500                # checkpoint interval; QC every save (README: validation protocol)
+        max_step_saves_to_keep: 10
+      datasets:
+        - folder_path: "<dataset>/train"        # the TRAIN split only; val / test stay held out
+          caption_ext: "txt"
+          caption_dropout_rate: 0.05
+          num_frames: 39               # 17k+5 (the dataset's --frames)
+          auto_frame_count: true       # snap any clip down to the 17k+5 grid
+          resolution: [ 768 ]          # area cap 768x768: 960x544 clips train at full size (bucket 960x544)
+          do_audio: false
+          cache_latents_to_disk: true
+      train:
+        batch_size: 1
+        steps: 5000
+        gradient_accumulation: 1
+        train_unet: true
+        train_text_encoder: false
+        gradient_checkpointing: true
+        noise_scheduler: "flowmatch"   # H3 uses its own flow-match scheduler (shift 12) whatever is set here
+        timestep_type: "linear"
+        loss_type: "mse"
+        optimizer: "adamw8bit"
+        lr: 1e-4
+        lr_scheduler: "constant"
+        optimizer_params:
+          weight_decay: 1e-4
+        max_grad_norm: 1.0
+        dtype: bf16
+        cache_text_embeddings: true
+        # image-based loss tracker on the val split's first frames (tools/h3_train.py val-items):
+        # validation_config:
+        #   validate_every_n_steps: 250
+        #   validation_items: [ { image_path: "<val_items>/clip0007_f0.png", prompt: "<its caption>" } ]
+      model:
+        name_or_path: "Comfy-Org/MiniMax-H3"   # resolved to local comfy-layout files; point at the ComfyUI files
+        arch: "minimax_h3"
+        low_vram: true
+        model_kwargs:
+          partition: "fl2va"           # fl2va | fl2va_pruned (less VRAM); the pinned default is fl2va_pruned
+          sample_audio: false
+          # the same files ComfyUI uses (no re-download):
+          # dit_fl2va_path: "<ComfyUI>/models/diffusion_models/minimax_h3_fl2va_int8_convrot.safetensors"
+          # text_encoder_path: "<ComfyUI>/models/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
+          # video_vae_path: "<ComfyUI>/models/vae/minimax_h3_video_vae_fp16.safetensors"
+          # audio_vae_path: "<ComfyUI>/models/vae/minimax_h3_audio_vae_fp32.safetensors"
+      sample:
+        sampler: "flowmatch"
+        sample_every: 500
+        width: 960
+        height: 544
+        num_frames: 39
+        fps: 24
+        seed: 42
+        # samples are LOG pictures (flat, grey): judge them only after H3 HDR Roundtrip (to_scene) + tools/h3_hdr_qc.py
+        prompts:
+          - "night city street after rain, sodium street lamps and neon signs reflecting on wet asphalt, slow dolly"
+          - "sunset over the ocean, the sun just above the horizon, backlit waves, handheld"
+          - "interior kitchen at noon, bright window behind a woman cooking, steam rising"
+          - "campfire in a dark forest, sparks rising, faces lit by the fire"
+          - "chrome motorcycle in a showroom, hard specular highlights, slow orbit"
+        neg: ""

@@ -778,7 +778,18 @@ in the workspace's `docs/research/l9178_minimax_hdr_rnd.md`. Shipped so far:
   - a precision audit of the target path. An 8-bit level is about 0.07 stops (about 5 %) at mid grey in ACEScct or
     LogC4, so a 16-bit lossless copy of every target is kept by default until `--vae-probe` (a probe report from
     the real H3 VAE) shows that 8-bit is precise enough.
-  Training config: `docs/research/l9178_h3_hdr_log_lora.yaml` (workspace, ai-toolkit).
+- **Training ([docs/training/h3_hdr/](docs/training/h3_hdr/README.md)).** ai-toolkit (MIT) pinned to one commit,
+  with two configs:
+  - Goal A: H3 generates in a log code.
+  - Goal B: SDR-conditioned reconstruction, from side-by-side SDR / log pairs.
+
+  `tools/h3_train.py` does the rest:
+  - checks a config against the pinned trainer (only the video-path block layers are adapted; no audio, no invented
+    losses, H3's frame grid, train split only);
+  - launches the training with a seed and a run manifest (commit, config / dataset / model hashes, pip freeze);
+  - checks the exported LoRA.
+
+  No adapter has been trained yet: that needs the GPU box.
 - **`tools/h3_hdr_qc.py`** is the checkpoint report. It checks:
   - the fake-HDR footroom;
   - stops above white;

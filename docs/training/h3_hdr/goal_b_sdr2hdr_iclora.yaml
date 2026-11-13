@@ -1,0 +1,82 @@
+# Goal B (A26 3.1): SDR-conditioned HDR reconstruction. The SOURCE SDR video is part of every training sample: each
+# clip is one frame-aligned pair side by side, [degraded SDR rendering | the same frames in the log code], written by
+# tools/h3_hdr_dataset.py --trackc (In-Context LoRA, arXiv 2410.23775; LumiVid's dual canvas). The model learns to
+# draw the right half from the left. At inference the SDR clip is the left half and H3 Masked Replace keeps it
+# (denoise mask 0) while regenerating the right half; the right half is cropped and decoded (H3 HDR Roundtrip,
+# to_scene). ai-toolkit PINNED at 4a7f28532ed6fe81d9f8c00718878bb3b8739015; trained as plain text-to-video.
+#
+# What is optimised: the same flow-matching velocity MSE as Goal A, over the WHOLE side-by-side clip (the SDR half
+# included: ai-toolkit at the pin has no per-region loss mask for video). No audio, temporal or pixel loss.
+# Source preservation at inference is by masking (the left half is never regenerated); alignment of the right half to
+# the left is learned, and is measured on the test split before any conversion claim (A26 3.8 point 6).
+---
+job: extension
+meta:
+  c2c_goal: "B"
+  c2c_dataset_code: "ACEScct"
+config:
+  name: "h3_hdr_sdr2hdr_iclora_acescct_v1"
+  process:
+    - type: "sd_trainer"
+      training_folder: "output"
+      device: cuda:0
+      network:
+        type: "lora"
+        linear: 128
+        linear_alpha: 128
+        transformer_only: true
+        network_kwargs:
+          ignore_if_contains: ["audio", "adaln_proj", "token_refiner", "time_embedder", "condition_proj",
+                               "patch_proj", "final_layer"]
+      save:
+        dtype: float16
+        save_every: 500
+        max_step_saves_to_keep: 10
+      datasets:
+        - folder_path: "<dataset>/trackc/train"   # side-by-side pairs of the TRAIN split
+          caption_ext: "txt"                     # captions start with [HDRPAIR] (the builder writes them)
+          caption_dropout_rate: 0.0              # the task tag must always be present
+          num_frames: 39
+          auto_frame_count: true
+          resolution: [ 896 ]                    # area cap 896x896: 1664x480 pairs (832x480 panels) train full size
+          do_audio: false
+          cache_latents_to_disk: true
+      train:
+        batch_size: 1
+        steps: 5000
+        gradient_accumulation: 1
+        train_unet: true
+        train_text_encoder: false
+        gradient_checkpointing: true
+        noise_scheduler: "flowmatch"
+        timestep_type: "linear"
+        loss_type: "mse"
+        optimizer: "adamw8bit"
+        lr: 1e-4
+        lr_scheduler: "constant"
+        optimizer_params:
+          weight_decay: 1e-4
+        max_grad_norm: 1.0
+        dtype: bf16
+        cache_text_embeddings: true
+      model:
+        name_or_path: "Comfy-Org/MiniMax-H3"
+        arch: "minimax_h3"
+        low_vram: true
+        model_kwargs:
+          partition: "fl2va"
+          sample_audio: false
+      sample:
+        sampler: "flowmatch"
+        sample_every: 500
+        width: 1664
+        height: 480
+        num_frames: 39
+        fps: 24
+        seed: 42
+        # text-only samples show whether the pair format was learned; real conversion quality is measured with the
+        # masked-replace workflow on the test split (README: validation protocol)
+        prompts:
+          - "[HDRPAIR] left: an SDR video; right: the same shot as ACEScct HDR log footage, frame for frame. night street, sodium lamps"
+          - "[HDRPAIR] left: an SDR video; right: the same shot as ACEScct HDR log footage, frame for frame. sunset over the sea"
+        neg: ""
