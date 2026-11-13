@@ -805,6 +805,26 @@ Not run on H3 weights or a GPU yet: NOT VERIFIED.
 
 Method: for matched checkpoints, `D = FL−Ref`, `Δ = Sing−Ref`, `a = clamp(⟨Δ,D⟩/⟨D,D⟩,0,1)`, `H = Δ−a·D`; compress `H` per layer to rank‑r LoRA.
 
+This is a **checkpoint-delta experiment**. `H` keeps whatever else differs between the checkpoints (training,
+pruning), so it is not proof that H3 learned HDR.
+
+Safeguards:
+- **Same variant:** the three checkpoints must be the same H3 variant (block count, hidden size, pruned or full).
+  At apply time the LoRA is checked against the model the same way, and refused when under 90 % of its layers match.
+- **Global layers are a visible switch:** layers outside every block (`include_global_parameters`, CLI
+  `--exclude-global`) are applied or skipped by choice; the report counts matched, global, skipped and applied
+  layers.
+- **Safe output:** the file is written only when every factor is finite, and atomically (a failed run leaves an
+  older file untouched). It carries its provenance (source hashes, variant, rank, blocks) inside, plus a
+  `.report.json` beside it with per-layer SVD figures.
+
+**Memory:** the source weights are read one at a time, but the extracted factors stay in RAM until the file is
+written:
+- up to about 0.6 / 1.2 / 2.4 GB at rank 64 / 128 / 256 on full H3;
+- plus about 5.5 GB while the largest layer is processed.
+
+These figures were measured at 1/8 and 1/4 scale and extrapolated to full size.
+
 **Extract** (once, on GPU box):
 
 ```bash

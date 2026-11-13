@@ -83,8 +83,12 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
             display_name="H3 Hybrid HDR Extract",
             category="MiniMax H3/Sampling",
             description=(
-                "Extract Hybrid HDR LoRA from matched Ref2VA / FL2VA / Singularity checkpoints. "
-                "Streams one tensor at a time — safe on the GPU box. Saves into the loras folder."
+                "Extract the Hybrid HDR LoRA from matched Ref2VA / FL2VA / Singularity checkpoints (a "
+                "checkpoint-delta experiment: the residual is not proven to be HDR-only). The source weights are "
+                "read one at a time, but the extracted factors stay in memory until the file is written: up to "
+                "about 2.4 GB at rank 256 on full H3, plus about 5.5 GB while the largest layer is processed "
+                "(measured at reduced scale, extrapolated). All three checkpoints must be the same H3 variant. "
+                "Saves into the loras folder with a .report.json beside it."
             ),
             inputs=[
                 io.Combo.Input("ref_name", options=ckpt_names, default=ckpt_names[0]),
@@ -126,6 +130,20 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
                     default="h3_hybrid_hdr.safetensors",
                     tooltip="Filename written into the first loras folder.",
                 ),
+                io.Boolean.Input(
+                    "include_global_parameters",
+                    default=True,
+                    optional=True,
+                    tooltip="Also extract weights that belong to no DiT block (embeddings, refiner, output heads). "
+                            "On = the previous behaviour: the block range never filtered them.",
+                ),
+                io.Boolean.Input(
+                    "full_hash",
+                    default=False,
+                    optional=True,
+                    tooltip="Hash the whole source checkpoints for the provenance report (slow on 30+ GB files). "
+                            "Off: the first MiB is hashed.",
+                ),
             ],
             outputs=[
                 io.String.Output("lora_name"),
@@ -149,6 +167,9 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
         edge_margin=1.1,
         device="auto",
         output_name="h3_hybrid_hdr.safetensors",
+        include_global_parameters=True,
+        full_hash=False,
+        **_ignored,
     ) -> io.NodeOutput:
         if int(block_start) > int(block_end):
             raise ValueError("block_start must be <= block_end")
@@ -195,5 +216,7 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
             progress_cb=progress_cb,
             progress_init=progress_init,
             interrupt_check=interrupt_check,
+            include_global_parameters=bool(include_global_parameters),
+            full_hash=bool(full_hash),
         )
         return io.NodeOutput(out_name, summary["markdown"])

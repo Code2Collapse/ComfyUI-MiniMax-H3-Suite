@@ -27,6 +27,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--edge-margin", type=float, default=1.1, help="MP noise edge multiplier when floor is known")
     p.add_argument("--device", default="cpu")
     p.add_argument("--report", default=None, help="Report stem (.json + .md written)")
+    p.add_argument("--exclude-global", action="store_true",
+                   help="only weights inside the block range (default: weights in no block are extracted too)")
+    p.add_argument("--full-hash", action="store_true", help="hash whole source checkpoints in the provenance report")
     args = p.parse_args(argv)
 
     block_start = block_end = None
@@ -45,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
         edge_margin=args.edge_margin,
         device=args.device,
         report_stem=args.report,
+        include_global_parameters=not args.exclude_global,
+        full_hash=args.full_hash,
     )
     print(summary["markdown"])
     return 0

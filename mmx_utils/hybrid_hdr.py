@@ -13,8 +13,11 @@ Block filtering is explicit (A26 3.6): keys inside [block_start, block_end] are 
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
+
+MIN_COVERAGE = 0.90          # applied / kept LoRA layers below this = the LoRA does not belong to this model
 
 from mmx_utils.h3_hybrid import key_in_block_range, parse_block_index
 
@@ -42,6 +45,48 @@ def _filter_patches_by_block(loaded: dict, block_start: int, block_end: int) -> 
     return split_by_block(loaded, block_start, block_end, True)[0]
 
 
+class VariantMismatch(ValueError):
+    """The LoRA was extracted from another H3 variant than the model it is applied to."""
+
+
+def model_fingerprint(new_model) -> dict:
+    dm = new_model.model.diffusion_model
+    blocks = getattr(dm, "blocks", None)
+    hidden, gate = None, False
+    try:
+        hidden = int(blocks[0].attn.out_proj.weight.shape[0])
+        gate = getattr(blocks[0].attn, "to_gate_compress", None) is not None
+    except Exception:  # noqa: BLE001 - reported as unknown
+        pass
+    return {"class": type(dm).__name__, "n_blocks": len(blocks) if blocks is not None else 0, "hidden_size": hidden,
+            "pruned_adaln_curves": bool(getattr(dm, "use_adaln_curves", False)), "gate_compress": gate}
+
+
+def check_model_variant(fp: dict, meta: dict | None, raw_keys) -> str:
+    """Refuse a LoRA that cannot belong to this model; return a one-line provenance note for the report."""
+    if fp["class"] != "MiniMaxH3Model":
+        raise VariantMismatch(f"This MODEL is not MiniMax H3 (its diffusion model is {fp['class']}). Load the Ref2VA "
+                              "checkpoint the LoRA was extracted for.")
+    v = (meta or {}).get("variant")
+    if v:                                                 # the recorded variant gives the clearest message: first
+        diffs = [f"{k}: LoRA {v.get(k)} vs model {fp[k]}" for k in ("n_blocks", "hidden_size", "pruned_adaln_curves",
+                                                                    "gate_compress")
+                 if v.get(k) is not None and fp[k] is not None and v.get(k) != fp[k]]
+        if diffs:
+            raise VariantMismatch("The LoRA was extracted from a different H3 variant (" + "; ".join(diffs) + "). "
+                                  "Use the Ref2VA build of the same variant (pruned with pruned, full with full).")
+    # the RAW file keys: load_lora drops keys the model lacks, so blocks beyond the model never reach `loaded`
+    top = max((b for b in (parse_block_index(k) for k in raw_keys) if b is not None), default=-1)
+    if top >= fp["n_blocks"]:
+        raise VariantMismatch(f"The LoRA patches block {top}, but this H3 model has {fp['n_blocks']} blocks.")
+    if not v:
+        return "provenance: none recorded (LoRA extracted before L9.211) - variant not verified"
+    src = (meta.get("sources") or {}).get("ref", {})
+    return (f"provenance: extractor v{meta.get('extractor_version')}, ref {src.get('file')} "
+            f"({(src.get('sha256') or src.get('sha256_first_mib') or '')[:12]}), rank {meta.get('rank')}, "
+            f"blocks {meta.get('block_start')}-{meta.get('block_end')}; variant matches")
+
+
 def _load(model, lora_path: str):
     try:
         import comfy.lora
@@ -50,10 +95,26 @@ def _load(model, lora_path: str):
         raise RuntimeError("MiniMaxH3_HybridHDR needs ComfyUI (comfy.lora, comfy.utils).") from exc
     if not lora_path or not os.path.isfile(lora_path):
         raise FileNotFoundError(f"Hybrid HDR LoRA not found: {lora_path!r}")
-    lora = comfy.utils.load_torch_file(lora_path, safe_load=True)
+    lora, metadata = comfy.utils.load_torch_file(lora_path, safe_load=True, return_metadata=True)
+    meta = None
+    try:
+        meta = json.loads((metadata or {}).get("c2c_hybrid") or "null")
+    except ValueError:
+        meta = None
     new_model = model.clone()
     key_map = comfy.lora.model_lora_keys_unet(new_model.model, {})
-    return new_model, comfy.lora.load_lora(lora, key_map, log_missing=False)
+    loaded = comfy.lora.load_lora(lora, key_map, log_missing=False)
+    note = check_model_variant(model_fingerprint(new_model), meta, lora.keys())
+    return new_model, loaded, note
+
+
+def _check_coverage(applied: int, kept: dict, new_model, lora_path) -> None:
+    if kept and applied < MIN_COVERAGE * len(kept):
+        sd = set(new_model.model.state_dict().keys())
+        miss = [k for k in kept if k not in sd][:3]
+        raise VariantMismatch(f"Only {applied} of {len(kept)} LoRA layers in {os.path.basename(lora_path)!r} exist in "
+                              f"this model (needs {MIN_COVERAGE:.0%}); e.g. {miss}. The LoRA belongs to another "
+                              "H3 variant.")
 
 
 def _no_match(loaded, lora_path, block_start, block_end):
@@ -80,16 +141,17 @@ def apply_hybrid_hdr_lora(
     include_global_parameters: bool = True,
 ) -> tuple[Any, str]:
     """Merge Hybrid HDR LoRA patches at constant strength (no hook keyframes)."""
-    new_model, loaded = _load(model, lora_path)
+    new_model, loaded, note = _load(model, lora_path)
     filtered, counts = split_by_block(loaded, int(block_start), int(block_end), include_global_parameters)
     n = len(new_model.add_patches(filtered, float(strength)))
     if loaded and n == 0:
         # Silent no-op otherwise: the render would simply look unchanged.
         raise _no_match(loaded, lora_path, block_start, block_end)
+    _check_coverage(n, filtered, new_model, lora_path)
     report = (
         f"Hybrid HDR LoRA applied: {os.path.basename(lora_path)!r} "
         f"strength={strength} blocks={block_start}-{block_end} "
-        f"patches={n}/{len(loaded)}\n" + _counts_text(counts, n, len(loaded))
+        f"patches={n}/{len(loaded)}\n" + _counts_text(counts, n, len(loaded)) + "\n" + note
     )
     return new_model, report
 
@@ -107,7 +169,7 @@ def apply_hybrid_hdr_scheduled(
     from mmx_utils import h3_scheduled_adapter as S
     from mmx_utils.turbo_lora import _int8_fused_fc2
 
-    new_model, loaded = _load(model, lora_path)
+    new_model, loaded, note = _load(model, lora_path)
     filtered, counts = split_by_block(loaded, int(block_start), int(block_end), include_global_parameters)
     dm = new_model.model.diffusion_model
     mods = sorted({k[len("diffusion_model."):-len(".weight")] for k in filtered if k.startswith("diffusion_model.")
@@ -117,6 +179,7 @@ def apply_hybrid_hdr_scheduled(
     n = res["hooked"]
     if loaded and n == 0:
         raise _no_match(loaded, lora_path, block_start, block_end)
+    _check_coverage(n + res["skipped_fused_int8"], filtered, new_model, lora_path)
     sch = schedule
     shape = "constant" if sch.constant else (
         f"sigma {sch.start_sigma:g} -> {sch.end_sigma:g}, ramps in {sch.ramp_in:g} / out {sch.ramp_out:g}, "
@@ -125,7 +188,7 @@ def apply_hybrid_hdr_scheduled(
         f"Hybrid HDR LoRA (scheduled bypass, EXPERIMENTAL - not yet validated on a real H3 run): "
         f"{os.path.basename(lora_path)!r} max strength={sch.maximum_strength} ({shape}) "
         f"blocks={block_start}-{block_end} rows={apply_to}\n"
-        + _counts_text(counts, n, len(loaded))
+        + _counts_text(counts, n, len(loaded)) + "\n" + note
         + (f"\nskipped (fused int8 fc2, cannot carry a scheduled hook)={res['skipped_fused_int8']}"
            if res["skipped_fused_int8"] else "")
         + (f"\nunsupported adapter types (LoCon mid / DoRA)={res['unsupported']}" if res["unsupported"] else "")
