@@ -33,7 +33,7 @@ Every node shows its stage, its run status and H3 errors in plain English. That 
 | **H3 DCC Bridge** (N14) | External EXR sim ingest (no solver) |
 | **H3 Pose Puppeteer** (N15) | Driving pose → motion hints; rig_type pose_only = clean pose for Apply MiniMax H3 Fun ControlNet (other rigs blend the pose over the character plate, no retarget) |
 | **H3 HDR Roundtrip** (N16) | OCIO view↔scene with HDR tag propagation |
-| **H3 Hybrid HDR LoRA** | Apply extracted HDR LoRA to Ref2VA (constant strength) |
+| **H3 Hybrid HDR LoRA** | Apply extracted HDR LoRA to Ref2VA (constant strength, or sigma-scheduled in one run: experimental) |
 | **H3 Hybrid HDR Extract** | Extract LoRA from Ref2VA/FL2VA/Singularity triple on GPU box |
 | **H3 Color QC** | Hasler-Süsstrunk + luma DR + texture/flicker for Hybrid A/B |
 
@@ -817,7 +817,22 @@ Or use node **MiniMaxH3_HybridExtract** in ComfyUI.
 
 **Apply**: wire **MiniMaxH3_HybridHDR** on a Ref2VA MODEL before sampling (`strength` 0.5–1.0, blocks 25–49 default).
 
-**Late-step HDR** (two-stage — not hook keyframes): sample early steps with plain Ref2VA, then continue with HybridHDR MODEL via `KSamplerAdvanced` start/end steps or `SamplerCustomAdvanced`. Do **not** use SplitSigmas on H3.
+**Late-step HDR**, two ways:
+- **Two-stage** (with the default `mode` = constant merge): sample the early steps with plain Ref2VA, then continue
+  with the HybridHDR MODEL via `KSamplerAdvanced` start/end steps or `SamplerCustomAdvanced`. Do **not** use
+  SplitSigmas on H3.
+- **One run** (`mode` = scheduled, experimental). The LoRA is installed once, and its strength follows the sampling
+  sigma: off above `start_sigma`, rising over `ramp_in`, falling over `ramp_out`, off below `end_sigma`, with a
+  linear / smoothstep / cosine shape.
+  - `apply_to` = `text + visual rows` keeps the adapter off H3's audio rows. Audio can still shift a little,
+    because it attends to the adapted video.
+  - Tested on core 0.39's patcher with a small stand-in model: strength 0 = no change; constant = the merge; the
+    window and ramps are exact; re-applying does not stack; an interrupted step leaves the model as it was.
+  - **Not yet run on real H3**: use the two-stage way for work you rely on.
+
+`include_global_parameters` (default on, as before): LoRA layers outside every DiT block (embeddings, refiner,
+output heads) are applied whatever the block range. Turn it off to apply only blocks `block_start`-`block_end`. The
+report lists matched, global, skipped and applied layers.
 
 **A/B workflow**: `workflows/h3_hybrid_hdr_ab.json` — Ref2VA vs Singularity vs HybridHDR @0.5/1.0 into **MiniMaxH3_ColorQC**.
 
