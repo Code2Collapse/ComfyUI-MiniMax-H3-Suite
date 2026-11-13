@@ -795,7 +795,32 @@ in the workspace's `docs/research/l9178_minimax_hdr_rnd.md`. Shipped so far:
   - stops above white;
   - exposure and highlight flicker;
   - against a reference: PU21-PSNR, per-stop error and shadow colour drift.
-  It prints PASS / CHECK lines against the acceptance targets.
+  It prints PASS / CHECK lines against the acceptance targets, and ends with one HDR verdict (below).
+- **`tools/h3_hdr_deliver.py`** takes decoded frames to the finished files. The steps, in order:
+  1. the log code is interpreted, giving scene-linear ACEScg;
+  2. exposure is applied;
+  3. alpha is kept or composited over a plate;
+  4. HDR QC runs;
+  5. the outputs are written:
+     - **EXR**: half float, ACEScg chromaticities, alpha;
+     - **DPX**: any log curve, 10 / 16-bit, transfer "Logarithmic";
+     - **HLG**: BT.2100, 10-bit 4:4:4 HEVC, BT.2020 / ARIB STD-B67 tags; diffuse white at 75 %, so HLG holds about
+       1.9 stops above white and the report says what was clipped;
+  6. every file is read back and checked, and `<name>.delivery.json` is saved beside them.
+
+  **The HDR verdict** is PASS only when highlight information above diffuse white is measured. A 16-bit file or an
+  EXR alone never passes. The QC fails or flags:
+  - an 8-bit picture stored in a deeper file;
+  - highlights clipped at one level;
+  - a smooth boost with no highlight detail;
+  - negative light;
+  - exposure flicker or pumping, highlight flicker, chroma instability, jumps between frames;
+  - gamut excursions;
+  - broken alpha;
+  - misalignment with the reference.
+
+  Tested on synthetic frames: a textured HDR scene PASSES; the same scene as an expanded 8-bit SDR FAILS. It is
+  still a command-line tool; a ComfyUI node for it is waiting on the owner's go-ahead.
 - The curves and camera gamuts are NukeMax's (vendored, `mmx_vendor/hdr_curves`). They match OpenColorIO's ACES
   configs, including CAT02 for ARRI / Sony gamuts.
 

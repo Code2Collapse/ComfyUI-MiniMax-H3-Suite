@@ -29,6 +29,7 @@ for p in (str(HERE.parent), str(HERE)):
         sys.path.insert(0, p)
 
 from mmx_utils import hdr_log as H  # noqa: E402
+from mmx_utils import hdr_qc as Q  # noqa: E402
 import h3_vae_log_probe as PROBE  # noqa: E402  (same readers and input-space rules)
 
 ACCEPT = {"stops_above_white_min": 2.0, "footroom_max": 0.01, "exposure_flicker_max_stops": 0.05,
@@ -76,6 +77,13 @@ def report(values: np.ndarray, input_space: str, ref_lin: np.ndarray | None = No
     if ref_lin is not None:
         rep["reference"] = compare(lin, ref_lin, white_nits)
     rep["checks"] = checks(rep)
+    # A26 L9.212: the full detector set (fake-HDR, pumping, chroma, discontinuities, gamut, alignment) + one verdict
+    is_log = input_space not in ("ACEScg",) and not input_space.startswith("linear:")
+    rep["hdr_qc"] = Q.run(lin, ref=ref_lin, log_codes=values if is_log else None, code=input_space if is_log else None,
+                          white_nits=white_nits)
+    v = rep["hdr_qc"]["verdict"]
+    rep["checks"].append(f"{v['status']} HDR verdict" + (": " + "; ".join(v["fail"] + v["check"])
+                                                         if v["fail"] or v["check"] else ""))
     return rep
 
 
@@ -112,7 +120,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     vals = PROBE.read_frames(a.input, a.frames)
     ref = PROBE.to_acescg(PROBE.read_frames(a.reference, a.frames), a.reference_space) if a.reference else None
-    rep = {"tool": "h3_hdr_qc", "version": 1, "input": Path(a.input).name, **report(vals, a.input_space, ref,
+    rep = {"tool": "h3_hdr_qc", "version": 2, "input": Path(a.input).name, **report(vals, a.input_space, ref,
                                                                                     a.white_nits)}
     Path(a.out).write_text(json.dumps(rep, indent=1, default=float), encoding="utf-8")
     print("\n".join(rep["checks"]))
