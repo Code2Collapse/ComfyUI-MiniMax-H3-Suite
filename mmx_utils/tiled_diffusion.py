@@ -37,6 +37,84 @@ class TilingUnsupported(ValueError):
     """A call that cannot be tiled correctly; the message says why and what to do."""
 
 
+# ── tile dispatch (A26 L9.215 / 4.5, 5.3): a small, versioned execution interface ──────────────────────────────────
+# A dispatcher runs the per-tile model calls of ONE sampler step and returns their outputs IN TILE ORDER; the
+# coordinator then accumulates them in that order, so any dispatcher gives the serial result bit for bit when its
+# workers compute what the serial loop computes. Protocol (TILE_DISPATCH_API = 1):
+#     dispatcher.api_version == 1
+#     dispatcher.map(fns, model_function, device) -> [fns[i](model_function_k, device_k) for every i], in order
+# Other packs (e.g. C2C's GPU worker service) may provide one in transformer_options["c2c_tile_dispatch"]; without
+# one the serial loop runs. Nothing here imports another pack.
+TILE_DISPATCH_API = 1
+DISPATCH_KEYS = ("mmx_tile_dispatch", "c2c_tile_dispatch")
+
+
+class SerialDispatch:
+    """The default: every tile on the calling model, one after another (the original behaviour)."""
+    api_version = TILE_DISPATCH_API
+    name = "serial"
+    shares_state = True
+
+    def map(self, fns, model_function, device):
+        return [fn(model_function, device) for fn in fns]
+
+
+class ThreadDispatch:
+    """Tiles over worker replicas [(model_function, device)]: tile i runs on worker i % n, each worker takes its
+    tiles in order, results come back in tile order. Replicas must live on the coordinator's device for now: moving a
+    tile's payload (keyframe latents, layouts, control hints) between GPUs and keeping per-GPU replicas in sync is the
+    multi-GPU replica provider, which is not built yet (it needs >= 2 GPUs to develop and verify)."""
+    api_version = TILE_DISPATCH_API
+    name = "threads"
+    shares_state = False
+
+    def __init__(self, replicas):
+        if not replicas:
+            raise ValueError("ThreadDispatch needs at least one (model_function, device) replica")
+        self.replicas = list(replicas)
+
+    def map(self, fns, model_function, device):
+        import threading
+        for _mf, dev in self.replicas:
+            if torch.device(dev) != torch.device(device):
+                raise TilingUnsupported(
+                    f"tile workers on another device ({dev} vs {device}) need the multi-GPU replica provider, which is "
+                    "not available yet; run H3 Tiled Diffusion serially")
+        n = len(self.replicas)
+        out, errors = [None] * len(fns), []
+
+        def work(k):
+            mf, dev = self.replicas[k]
+            try:
+                for i in range(k, len(fns), n):
+                    out[i] = fns[i](mf, dev)
+            except Exception as exc:  # noqa: BLE001 - re-raised on the coordinator
+                errors.append(exc)
+        threads = [threading.Thread(target=work, args=(k,), name=f"mmx-tile-{k}") for k in range(n)]
+        [t.start() for t in threads]
+        [t.join() for t in threads]
+        if errors:
+            raise errors[0]
+        return out
+
+
+def resolve_dispatch(opts: dict):
+    """The dispatcher for this call: a registered one when its api_version matches, else serial."""
+    for key in DISPATCH_KEYS:
+        d = (opts or {}).get(key)
+        if d is None:
+            continue
+        if getattr(d, "api_version", None) != TILE_DISPATCH_API or not callable(getattr(d, "map", None)):
+            raise TilingUnsupported(f"transformer_options['{key}'] is not a tile dispatcher of API version "
+                                    f"{TILE_DISPATCH_API} (got {getattr(d, 'api_version', None)!r}); update the pack "
+                                    "that installed it, or remove it to tile serially")
+        if (opts or {}).get("parallel_layout") == "sequence" and not getattr(d, "shares_state", False):
+            raise TilingUnsupported("this model is already split by sequence parallelism (C2C Multi-GPU Split); "
+                                    "parallel tiles and sequence parallelism are separate layouts - use one of them")
+        return d
+    return SerialDispatch()
+
+
 def disabled() -> bool:
     return os.environ.get(KILL_SWITCH, "").strip().lower() in ("off", "0", "false", "no", "disable", "disabled")
 
@@ -254,6 +332,7 @@ class H3TiledDiffusion:
         self.layout_factory = layout_factory
         self._plans: dict = {}
         self.last_report = "not run yet"
+        self.last_dispatch = None
 
     # -- planning -------------------------------------------------------------------------------------------------
     def _factory(self):
@@ -339,6 +418,11 @@ class H3TiledDiffusion:
 
         _, _, T, H, W = video.shape
         controls = control_patches(c)
+        dispatch = resolve_dispatch(opts)
+        if controls and not getattr(dispatch, "shares_state", False):
+            raise TilingUnsupported(
+                "H3 Tiled Diffusion cannot run tiles in parallel with core's H3 Fun ControlNet: the patch holds one "
+                "cropped hint at a time. Remove the parallel tile dispatcher or the ControlNet.")
         sigmas = opts.get("sigmas")
         sigma = float(sigmas.flatten()[0]) if sigmas is not None else float(t.flatten()[0]) / 1000.0
         full_hints = []
@@ -352,11 +436,10 @@ class H3TiledDiffusion:
             raise TilingUnsupported(f"the video denoise mask {tuple(mask.shape)} is not on the latent grid "
                                     f"{(T, H, W)}; H3 Tiled Diffusion crops it per tile")
 
-        buf = torch.zeros(video.shape, dtype=torch.float32, device=video.device)
-        wsum = torch.zeros((1, 1, 1, H, W), dtype=torch.float32, device=video.device)
-        audio_acc = None
-        try:
-            for (h0, w0, h1, w1), w, p in zip(plan.tiles, plan.weights, plan.payloads):
+        def tile_fn(k):
+            (h0, w0, h1, w1), p = plan.tiles[k], plan.payloads[k]
+
+            def run(mf, _dev):
                 c_t = dict(c)
                 c_t["minimax_payload"] = p
                 if mask is not None:
@@ -369,18 +452,30 @@ class H3TiledDiffusion:
                 if audio is not None:
                     x_t, shapes_t = pack([v_t, audio])
                     c_t["latent_shapes"] = shapes_t
-                    out = unpack(self._call(model_function, x_t, t, c_t, cou), shapes_t)
-                    v_out, a_out = out[0], out[1]
-                else:
-                    v_out, a_out = self._call(model_function, v_t, t, c_t, cou), None
-                wd = w.to(device=video.device)[None, None, None]
-                buf[:, :, :, h0:h1, w0:w1] += v_out.float() * wd
-                wsum[:, :, :, h0:h1, w0:w1] += wd
-                if a_out is not None:
-                    audio_acc = a_out.float() if audio_acc is None else audio_acc + a_out.float()
+                    out = unpack(self._call(mf, x_t, t, c_t, cou), shapes_t)
+                    return out[0], out[1]
+                return self._call(mf, v_t, t, c_t, cou), None
+            return run
+
+        try:
+            outputs = dispatch.map([tile_fn(k) for k in range(len(plan.tiles))], model_function, video.device)
         finally:
             for patch, (_active, hint, shape) in zip(controls, full_hints):
                 patch.control_latent, patch.control_latent_shape = hint, shape
+        if len(outputs) != len(plan.tiles) or any(o is None for o in outputs):
+            raise RuntimeError(f"the tile dispatcher returned {len(outputs)} results for {len(plan.tiles)} tiles")
+        # accumulate in TILE ORDER whatever the completion order: the serial result, bit for bit
+        buf = torch.zeros(video.shape, dtype=torch.float32, device=video.device)
+        wsum = torch.zeros((1, 1, 1, H, W), dtype=torch.float32, device=video.device)
+        audio_acc = None
+        for (h0, w0, h1, w1), w, (v_out, a_out) in zip(plan.tiles, plan.weights, outputs):
+            wd = w.to(device=video.device)[None, None, None]
+            buf[:, :, :, h0:h1, w0:w1] += v_out.float().to(video.device) * wd
+            wsum[:, :, :, h0:h1, w0:w1] += wd
+            if a_out is not None:
+                a_out = a_out.float().to(video.device)
+                audio_acc = a_out if audio_acc is None else audio_acc + a_out
+        self.last_dispatch = getattr(dispatch, "name", type(dispatch).__name__)
         out_v = (buf / wsum.clamp(min=1e-12)).to(video.dtype)
         if audio is None:
             return out_v
