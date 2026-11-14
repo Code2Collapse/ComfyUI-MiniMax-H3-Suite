@@ -951,6 +951,23 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
   - The whole clip runs in one pass. `chunk_latent_steps` trades memory for an approximate result: the network's
     normalisation sees the whole clip.
   - Then re-sample at low denoise to add detail, with conditioning made for the new size.
+  - **Any aspect ratio (2026-11-14).** The network is fully convolutional, so the output shape is limited only by
+    H3's 32 px grid and by memory, never by 16:9.
+    - `aspect` takes `source` (default) or a preset: 1:1, 5:4, 4:5, 4:3, 3:4, 3:2, 2:3, 16:9, 9:16, 1.85:1, 2:1,
+      2.39:1, 21:9. Or `custom` plus `custom_ratio` (e.g. `2.39:1`, up to 8:1). It applies with `size_by = scale`
+      or `megapixels`; with `width / height` the box sets the ratio.
+    - `fit` decides how the picture fills the new shape:
+      - `auto` (default) is exact when the ratios match, and otherwise stops and asks;
+      - `contain`: the whole picture, at a smaller output;
+      - `crop`: fill the shape and cut at `anchor`;
+      - `pad`: the whole picture, with a padded border. The border is marked in the noise mask, so the next sampler
+        pass generates it;
+      - `stretch`: an explicit distortion.
+    - The report lists the requested size and ratio, the legal size, the actual ratio and how far it is off.
+    - **Changed behaviour:** a width / height box whose ratio differs from the clip used to be stretched silently. It
+      now stops with that message; `fit = stretch` gives the old result exactly.
+    - Shapes are tested for every ratio, from portrait, square and landscape sources, through interpolation and the
+      network's architecture. A run with the trained checkpoint on a GPU is not verified yet.
 - **H3 Tiled Diffusion** patches the model so every denoising step runs tile by tile and the predictions are blended.
   - All tiles share the same sigmas and noise, so no overlap is frozen and no seam is repaired afterwards.
   - Each tile keeps its global frame positions, so it predicts what the full frame would there.

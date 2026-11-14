@@ -19,6 +19,7 @@ if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
 from mmx_nodes.av_noise_mask import _streams, existing_masks  # noqa: E402
+from mmx_utils import h3_aspect as A  # noqa: E402
 from mmx_utils import h3_latent_upscaler as U  # noqa: E402
 
 LOG = logging.getLogger("MiniMaxSuite.latent_upscale_model")
@@ -66,11 +67,12 @@ def load(model_name: str, precision: str, device):
 
 
 def upscale(latent, method="model", model_name=U.NO_MODEL, width=1280, height=704, device="auto", precision="fp16",
-            chunk_latent_steps=0, chunk_overlap_steps=4, offload_model=True):
+            chunk_latent_steps=0, chunk_overlap_steps=4, offload_model=True, cells=None):
+    """``cells`` = (h, w) latent cells to resize to (the sizing planner's content size); else width / height px."""
     video, audio = _streams(latent, "H3 Latent Upscale")
     if method not in U.METHODS:
         raise U.UpscalerError(f"method must be one of {', '.join(U.METHODS)}")
-    h_out, w_out = U.target_cells(width, height)
+    h_out, w_out = tuple(int(v) for v in cells) if cells is not None else U.target_cells(width, height)
     _, c, t, h, w = video.shape
     if c != 24:
         raise U.UpscalerError(f"expected the 24-channel H3 video latent, got {c} channels")
@@ -121,8 +123,41 @@ def upscale(latent, method="model", model_name=U.NO_MODEL, width=1280, height=70
     return out, "\n".join(lines)
 
 
-SIZE_BY = ("width / height", "scale", "megapixels")
+SIZE_BY = A.SIZE_BY
 PX_PER_CELL = 16          # H3's VAE: one latent cell per 16 x 16 pixels
+
+
+def frame(latent, plan, pad_fill="edge"):
+    """Crop or pad the resized video latent (and its noise mask) to the plan's output cells, at its anchor."""
+    import torch.nn.functional as F
+    if plan.mode not in ("crop", "pad"):
+        return latent, ""
+    video, audio = _streams(latent, "H3 Latent Upscale")
+    (oh, ow), (oy, ox) = plan.out_cells, plan.offset_cells
+    vm, am = existing_masks(latent)
+    vm5 = None if vm is None else (vm if vm.ndim == 5 else vm.reshape((1, 1) + tuple(vm.shape[-3:])))
+    if plan.mode == "crop":
+        v = video[..., oy:oy + oh, ox:ox + ow].contiguous()
+        m = None if vm5 is None else vm5[..., oy:oy + oh, ox:ox + ow].contiguous()
+        note = f"cropped to {ow}x{oh} cells at (x {ox}, y {oy})"
+    else:
+        if pad_fill not in A.PAD_FILLS:
+            raise A.SizingError(f"pad_fill must be one of {', '.join(A.PAD_FILLS)}")
+        ch, cw = video.shape[-2:]
+        pads = (ox, ow - cw - ox, oy, oh - ch - oy)                    # left, right, top, bottom
+        b, c, t = video.shape[:3]
+        flat = video.reshape(b, c * t, ch, cw).float()
+        flat = F.pad(flat, pads, mode="replicate") if pad_fill == "edge" else F.pad(flat, pads)
+        v = flat.reshape(b, c, t, oh, ow).to(video.dtype)
+        base = vm5.float() if vm5 is not None else torch.ones((1, 1, t, ch, cw))
+        mb = base.reshape(base.shape[0], -1, ch, cw)
+        m = F.pad(mb, pads, value=1.0).reshape(tuple(base.shape[:3]) + (oh, ow))   # padded cells: regenerate (1)
+        note = f"padded to {ow}x{oh} cells ({pad_fill}); the pad is marked for regeneration in the noise mask"
+    out = dict(latent)
+    out["samples"] = _nested((v, audio))
+    if m is not None:
+        out["noise_mask"] = _nested((m, am if am is not None else torch.ones_like(audio[:, :1])))
+    return out, note
 
 
 def target_size(latent, size_by, width, height, scale=2.0, megapixels=1.0):
@@ -191,6 +226,23 @@ class MiniMaxH3_LatentUpscaleModel(io.ComfyNode):
                                tooltip="size_by = scale: multiply the current size by this."),
                 io.Float.Input("megapixels", default=1.0, min=0.05, max=33.0, step=0.05, optional=True,
                                tooltip="size_by = megapixels: the target pixel count in millions, aspect kept."),
+                # work order 2026-11-14 s7, appended: any aspect ratio, with an explicit fit (never a silent stretch)
+                io.Combo.Input("aspect", options=list(A.ASPECTS), default="source", optional=True,
+                               tooltip="Output ratio for size_by = scale / megapixels: the source's own, a preset "
+                                       "(portrait, square, landscape, ultrawide) or custom. With width / height the "
+                                       "box sets the ratio and this is ignored."),
+                io.String.Input("custom_ratio", default="2.39:1", optional=True,
+                                tooltip="aspect = custom: W:H (e.g. 4:5, 2.39:1) or a decimal; up to 8:1."),
+                io.Combo.Input("fit", options=list(A.FITS), default="auto", optional=True,
+                               tooltip="How the picture fills the new shape. auto: exact when the ratios match, "
+                                       "otherwise stop and ask. contain: whole picture, smaller output. crop: fill, "
+                                       "cut at 'anchor'. pad: whole picture, border padded (regenerate it). stretch: "
+                                       "distort on purpose (the behaviour before 2026-11-14)."),
+                io.Combo.Input("anchor", options=list(A.ANCHORS), default="center", optional=True,
+                               tooltip="crop: which part is kept. pad: where the picture sits."),
+                io.Combo.Input("pad_fill", options=list(A.PAD_FILLS), default="edge", optional=True,
+                               tooltip="fit = pad: repeat the border cells, or zero latent. Either way the padded "
+                                       "area is marked in the noise mask for the next sampler pass to generate."),
             ],
             outputs=[io.Latent.Output(display_name="latent"), io.String.Output(display_name="report")],
         )
@@ -198,12 +250,18 @@ class MiniMaxH3_LatentUpscaleModel(io.ComfyNode):
     @classmethod
     def execute(cls, latent, method="model", model_name=U.NO_MODEL, width=1280, height=704, device="auto",
                 precision="fp16", chunk_latent_steps=0, chunk_overlap_steps=4, offload_model=True,
-                size_by=None, scale=2.0, megapixels=1.0) -> io.NodeOutput:
-        width, height, how = target_size(latent, size_by or SIZE_BY[0], width, height, scale, megapixels)
+                size_by=None, scale=2.0, megapixels=1.0, aspect=None, custom_ratio=None, fit=None, anchor=None,
+                pad_fill=None) -> io.NodeOutput:
+        video, _audio = _streams(latent, "H3 Latent Upscale")
+        try:
+            plan = A.plan(tuple(video.shape[-2:]), size_by or SIZE_BY[0], width, height, scale, megapixels,
+                          aspect or "source", custom_ratio or "2.39:1", fit or "auto", anchor or "center")
+        except A.SizingError as exc:
+            raise U.UpscalerError(f"H3 Latent Upscale: {exc}") from None
         out, report = upscale(latent, method, model_name, width, height, device, precision, chunk_latent_steps,
-                              chunk_overlap_steps, offload_model)
-        if how:
-            report = f"{how}\n{report}"
+                              chunk_overlap_steps, offload_model, cells=plan.content_cells)
+        out, note = frame(out, plan, pad_fill or "edge")
+        report = "\n".join(x for x in (plan.report(), report, note) if x)
         return io.NodeOutput(out, report, ui={"text": [report]})
 
 
