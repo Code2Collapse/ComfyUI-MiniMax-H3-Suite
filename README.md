@@ -980,6 +980,7 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
       aspect, `anchor` for crop / pad, `pad_fill` for pad. Hidden values are kept.
     - The report warns above the 4x scale the network was trained for, and when a plain (non-AV) noise mask had
       to be dropped. `crop` counts the picture's size before cutting against the 33 MP limit.
+    - It also takes a plain H3 video latent (straight from VAE Encode, no audio) and returns the same kind.
     - Saved workflows give the same size and result as before. A box whose ratio differs from the clip used to be
       stretched silently; it still is under `auto`, but the report now says so.
     - Shapes are tested for every ratio, from portrait, square and landscape sources, through interpolation and the
