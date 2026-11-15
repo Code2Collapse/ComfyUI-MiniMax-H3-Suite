@@ -118,6 +118,9 @@ class MiniMaxH3_HybridHDR(io.ComfyNode):
         if int(block_start) > int(block_end):
             raise ValueError("block_start must be <= block_end")
         path = folder_paths.get_full_path("loras", lora_name)
+        if not path:      # L9.258: the "<no loras folder>" placeholder or a file that is gone
+            raise RuntimeError(f"H3 Hybrid HDR LoRA: the LoRA {lora_name!r} was not found in models/loras. Put the LoRA file "
+                               "there (or pick one from the list) and run again.")
         if mode == MODES[1]:
             sched = Schedule(float(strength), float(start_sigma), float(end_sigma), float(ramp_in), float(ramp_out),
                              str(schedule_curve)).validate()

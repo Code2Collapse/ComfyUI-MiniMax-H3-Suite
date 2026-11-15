@@ -83,6 +83,9 @@ class MiniMaxH3_TurboLoRA(io.ComfyNode):
                 "MiniMaxH3_TurboLoRA needs ComfyUI folder_paths to resolve LoRA files."
             )
         path = folder_paths.get_full_path("loras", lora_name)
+        if not path:      # L9.258: the "<no loras folder>" placeholder or a file that is gone
+            raise RuntimeError(f"H3 Turbo LoRA: the LoRA {lora_name!r} was not found in models/loras. Put the LoRA file "
+                               "there (or pick one from the list) and run again.")
         patched = apply_turbo_lora(model, path, float(strength), low_vram=bool(low_vram))
         mode = "merge" if low_vram else "bypass"
         report = (

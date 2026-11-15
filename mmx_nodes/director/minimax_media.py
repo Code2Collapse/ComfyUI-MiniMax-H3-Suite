@@ -461,8 +461,21 @@ async def minimax_director_get_audio(request):
     return web.json_response({"audio_file": audio_file, "peaks": peaks})
 
 
-@_route("get", "/minimax_director_open_folder")
+def local_page_request(request) -> bool:
+    """True only for a request from this machine that is not a cross-site browser request (H3-NODES audit
+    2026-11-14 P2: a plain GET let any LAN client, or an <img> tag on any web page, open windows on the host)."""
+    remote = (getattr(request, "remote", "") or "").lower()
+    if remote not in ("127.0.0.1", "::1", "localhost"):
+        return False
+    site = (request.headers.get("Sec-Fetch-Site") or "").lower()
+    return site not in ("cross-site", "same-site")
+
+
+@_route("post", "/minimax_director_open_folder")
 async def minimax_director_open_folder(request):
+    if not local_page_request(request):
+        return web.json_response({"success": False, "error": "Opening a folder is only allowed from the ComfyUI "
+                                  "page on this machine."}, status=403)
     upload_dir = os.path.join(folder_paths.get_input_directory(), WORKSPACE_SUBDIR)
     os.makedirs(upload_dir, exist_ok=True)
     try:

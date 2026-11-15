@@ -110,11 +110,11 @@ def deferred_routes() -> list[str]:
 
 
 def director_nodes() -> list:
-    """The five registerable classes, or an empty list if they did not import."""
-    if _IMPORT_ERROR is not None:
-        return []
-    nodes = [MiniMaxH3Director, MiniMaxH3PreviewOverride, MiniMaxH3RetakeStitch,
-             MiniMaxH3EnhancePrompt, MiniMaxH3SaveLastFrame]
+    """The registerable classes: the five Director nodes when they imported, plus the All-in-One on its own guard
+    (L9.258: it used to vanish whenever any of the five failed, although it does not depend on them)."""
+    nodes = [] if _IMPORT_ERROR is not None else [MiniMaxH3Director, MiniMaxH3PreviewOverride,
+                                                   MiniMaxH3RetakeStitch, MiniMaxH3EnhancePrompt,
+                                                   MiniMaxH3SaveLastFrame]
     if MiniMaxH3_DirectorAllInOne is not None:
         nodes.append(MiniMaxH3_DirectorAllInOne)
     return nodes
