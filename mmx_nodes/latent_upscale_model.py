@@ -40,6 +40,42 @@ def _nested(parts):
     return comfy.nested_tensor.NestedTensor(tuple(parts))
 
 
+def _parts(latent, what="H3 Latent Upscale"):
+    """(video, audio): an H3 audio + video latent, or (S1, spec H3_REGEN_STD) a plain single-stream H3 VIDEO latent
+    [B, 24, T, h, w] (VAEEncode output) with audio None. Anything else is refused as before."""
+    s = latent.get("samples") if isinstance(latent, dict) else None
+    if isinstance(s, torch.Tensor) and s.ndim == 5 and s.shape[1] == 24:
+        return s, None
+    return _streams(latent, what)
+
+
+def _pack(video, audio):
+    """The same kind of latent the node was given: AV NestedTensor, or a plain video tensor (audio None)."""
+    return video if audio is None else _nested((video, audio))
+
+
+def _vmask(latent):
+    """(video mask 5-D or None, audio mask or None) for either latent kind."""
+    m = latent.get("noise_mask")
+    s = latent.get("samples")
+    if isinstance(s, torch.Tensor) and isinstance(m, torch.Tensor):        # video-only latent: a plain video mask
+        if m.ndim == 5:
+            return m, None
+        if m.ndim >= 3 and tuple(m.shape[-3:]) == tuple(s.shape[-3:]):
+            return m.reshape((1, 1) + tuple(m.shape[-3:])), None
+        return None, None
+    vm, am = existing_masks(latent)
+    if vm is not None and vm.ndim != 5:
+        vm = vm.reshape((1, 1) + tuple(vm.shape[-3:]))
+    return vm, am
+
+
+def _pack_mask(vm, am, audio):
+    if audio is None:
+        return vm
+    return _nested((vm, am if am is not None else torch.ones_like(audio[:, :1])))
+
+
 def _device(choice: str):
     if choice == "cpu":
         return torch.device("cpu")
@@ -69,7 +105,7 @@ def load(model_name: str, precision: str, device):
 def upscale(latent, method="model", model_name=U.NO_MODEL, width=1280, height=704, device="auto", precision="fp16",
             chunk_latent_steps=0, chunk_overlap_steps=4, offload_model=True, cells=None):
     """``cells`` = (h, w) latent cells to resize to (the sizing planner's content size); else width / height px."""
-    video, audio = _streams(latent, "H3 Latent Upscale")
+    video, audio = _parts(latent)
     if method not in U.METHODS:
         raise U.UpscalerError(f"method must be one of {', '.join(U.METHODS)}")
     h_out, w_out = tuple(int(v) for v in cells) if cells is not None else U.target_cells(width, height)
@@ -77,7 +113,8 @@ def upscale(latent, method="model", model_name=U.NO_MODEL, width=1280, height=70
     if c != 24:
         raise U.UpscalerError(f"expected the 24-channel H3 video latent, got {c} channels")
     lines = [f"video latent {h} x {w} cells ({h * 16} x {w * 16} px), {t} latent steps -> {h_out} x {w_out} cells "
-             f"({h_out * 16} x {w_out * 16} px), scale {w_out / w:.3f} x {h_out / h:.3f}; audio untouched"]
+             f"({h_out * 16} x {w_out * 16} px), scale {w_out / w:.3f} x {h_out / h:.3f}; "
+             + ("audio untouched" if audio is not None else "video-only latent (no audio stream)")]
     if (h_out, w_out) == (h, w):
         lines.append("target equals the input size: unchanged")
         return dict(latent), "\n".join(lines)
@@ -113,11 +150,12 @@ def upscale(latent, method="model", model_name=U.NO_MODEL, width=1280, height=70
         up = U.interpolate_video(video, h_out, w_out, method)
         lines.append(f"{method} interpolation, no model")
     out = dict(latent)
-    out["samples"] = _nested((up.to(video.dtype), audio))
+    out["samples"] = _pack(up.to(video.dtype), audio)
     # L9.256 (H3-NODES audit 2026-11-14): nothing describing the OLD size may travel on
     if out.pop("mmx_geometry", None) is not None:
         lines.append("the source geometry record (mmx_geometry) was dropped: it described the size before upscaling")
-    if isinstance(latent.get("noise_mask"), torch.Tensor):
+    vm, am = _vmask(latent)
+    if isinstance(latent.get("noise_mask"), torch.Tensor) and vm is None:
         out.pop("noise_mask", None)
         lines.append("WARNING: a plain noise mask (not an H3 audio+video mask) was dropped - it cannot follow the "
                      "resize. Set it again after upscaling (Set AV Noise Mask).")
@@ -127,11 +165,9 @@ def upscale(latent, method="model", model_name=U.NO_MODEL, width=1280, height=70
                      "drop. Upscale in two passes instead.")
     if method == "model" and abs(sx / sy - 1.0) > 0.02:
         lines.append(f"note: unequal axis scales ({sx:.3f} x {sy:.3f}); the network sees one scale (their mean)")
-    vm, am = existing_masks(latent)
     if vm is not None:
-        vm5 = vm if vm.ndim == 5 else vm.reshape((1, 1) + tuple(vm.shape[-3:]))
-        vm5 = U.interpolate_video(vm5.float(), h_out, w_out, "nearest-exact")
-        out["noise_mask"] = _nested((vm5, am if am is not None else torch.ones_like(audio[:, :1])))
+        vm5 = U.interpolate_video(vm.float(), h_out, w_out, "nearest-exact")
+        out["noise_mask"] = _pack_mask(vm5, am, audio)
         lines.append("the video noise mask was resized with it (nearest)")
     return out, "\n".join(lines)
 
@@ -145,10 +181,9 @@ def frame(latent, plan, pad_fill="edge"):
     import torch.nn.functional as F
     if plan.mode not in ("crop", "pad"):
         return latent, ""
-    video, audio = _streams(latent, "H3 Latent Upscale")
+    video, audio = _parts(latent)
     (oh, ow), (oy, ox) = plan.out_cells, plan.offset_cells
-    vm, am = existing_masks(latent)
-    vm5 = None if vm is None else (vm if vm.ndim == 5 else vm.reshape((1, 1) + tuple(vm.shape[-3:])))
+    vm5, am = _vmask(latent)
     if plan.mode == "crop":
         v = video[..., oy:oy + oh, ox:ox + ow].contiguous()
         m = None if vm5 is None else vm5[..., oy:oy + oh, ox:ox + ow].contiguous()
@@ -170,9 +205,9 @@ def frame(latent, plan, pad_fill="edge"):
             note += ("; there was no noise mask, so the picture is marked for regeneration too (to keep it, set an "
                      "AV noise mask of 0 on the picture before upscaling)")
     out = dict(latent)
-    out["samples"] = _nested((v, audio))
+    out["samples"] = _pack(v, audio)
     if m is not None:
-        out["noise_mask"] = _nested((m, am if am is not None else torch.ones_like(audio[:, :1])))
+        out["noise_mask"] = _pack_mask(m, am, audio)
     return out, note
 
 
@@ -180,7 +215,7 @@ def target_size(latent, size_by, width, height, scale=2.0, megapixels=1.0):
     """(width, height, note) in pixels for the chosen sizing; upscale() snaps them to the 32 px grid."""
     if size_by == SIZE_BY[0]:
         return int(width), int(height), ""
-    video, _audio = _streams(latent, "H3 Latent Upscale")
+    video, _audio = _parts(latent)
     cur_w, cur_h = int(video.shape[-1]) * PX_PER_CELL, int(video.shape[-2]) * PX_PER_CELL
     if size_by == "scale":
         k = float(scale)
@@ -268,7 +303,7 @@ class MiniMaxH3_LatentUpscaleModel(io.ComfyNode):
                 precision="fp16", chunk_latent_steps=0, chunk_overlap_steps=4, offload_model=True,
                 size_by=None, scale=2.0, megapixels=1.0, aspect=None, custom_ratio=None, fit=None, anchor=None,
                 pad_fill=None) -> io.NodeOutput:
-        video, _audio = _streams(latent, "H3 Latent Upscale")
+        video, _audio = _parts(latent)
         try:
             plan = A.plan(tuple(video.shape[-2:]), size_by or SIZE_BY[0], width, height, scale, megapixels,
                           aspect or "source", custom_ratio or "2.39:1", fit or "auto", anchor or "center")
