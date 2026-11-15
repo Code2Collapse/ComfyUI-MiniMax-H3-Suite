@@ -554,6 +554,12 @@ Caching fixed for 36 nodes: their `fingerprint_inputs` read linked tensors (or u
 None), so ComfyUI stored NaN and the node - and everything after it, the sampler included - ran again on every queue.
 Measured live with classic caching: H3 Motion Context Trim re-ran every time before, is cached after.
 
+2026-11-15: **H3 Text Encoder Unload** was the last NaN fingerprint (on purpose, for its unload side effect), so the
+sampler after it ran again on every queue. Its fingerprint now reports whether an encoder it released is loaded
+again: an unchanged graph caches, and the unload still runs whenever the encoder is back in memory. **H3 Control
+Hints** now warns in its report when the plate and the transform have different frame counts (it makes the shorter
+length, as before), and the multishot samplers free the encoder through ComfyUI's model management.
+
 ### One node: H3 Region Edit (plate + mask + ControlNet)
 
 **H3 Region Edit** does a masked edit steered by a ControlNet in one node. Connect the plate, the mask (1 =
