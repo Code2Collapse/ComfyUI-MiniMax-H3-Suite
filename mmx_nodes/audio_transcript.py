@@ -504,7 +504,12 @@ try:
     _PKG = _Path(__file__).resolve().parents[1]
     if str(_PKG) not in _sys.path:
         _sys.path.insert(0, str(_PKG))
-    from mmx_nodes.director.v1_adapter import adapt as _adapt
+    try:
+        # relative first: the top-level name made Python import the director package a SECOND time, which
+        # re-ran its route decorators - every Director route was registered twice (H3-INV 2026-11-14, L9.244)
+        from .director.v1_adapter import adapt as _adapt
+    except ImportError:                     # loaded as a plain module (no parent package)
+        from mmx_nodes.director.v1_adapter import adapt as _adapt
 
     MiniMaxH3_AudioTranscript = _adapt(
         DenoAudioTranscript,
