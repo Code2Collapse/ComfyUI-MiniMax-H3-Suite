@@ -495,7 +495,7 @@ class MiniMaxH3EnhancePrompt(io.ComfyNode):
         url = media.normalize_base_url(base_url, defaults["url"])
         model_name = model or defaults["model"]
         # the widget names an environment variable; the key is read here and never stored
-        api_key = media.resolve_api_key({"api_key_env": api_key_env})
+        api_key = media.resolve_api_key({"api_key_env": api_key_env}, url)
         system = (system_prompt or "").strip() or system_for(preset, max_words)
 
         user = (idea or "").strip() or "Describe what these images show as a video."

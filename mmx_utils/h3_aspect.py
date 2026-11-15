@@ -188,11 +188,16 @@ def plan(src_cells: Tuple[int, int], size_by: str = SIZE_BY[0], width: int = 128
     mode = fit
     if fit == "auto":
         if not same:
-            raise SizingError(
-                f"the target ratio {r:.4f} differs from the source ratio {src_r:.4f}. Choose how to fit: "
-                "fit = contain (whole picture, smaller output), crop (fill, cut at 'anchor'), pad (whole picture, "
-                "padded) or stretch (distort - the behaviour before 2026-11-14).")
-        mode = "exact"
+            # saved workflows (and every API prompt without 'fit') get 'auto'; before 2026-11-14 these stretched, so
+            # 'auto' keeps that result and says so loudly instead of failing a run that used to work (H3-NODES
+            # audit P0, compatibility). Whether 'auto' should stop instead is an owner question.
+            mode = "stretch"
+            notes.append(
+                f"WARNING: the target ratio {r:.4f} differs from the source ratio {src_r:.4f}, so fit = auto "
+                "STRETCHED the picture (the behaviour before 2026-11-14). Choose fit = contain (whole picture, "
+                "smaller output), crop (fill, cut at 'anchor') or pad (whole picture, padded) to avoid distortion.")
+        else:
+            mode = "exact"
     elif same and fit in ("crop", "pad", "contain"):
         mode = "exact"                                      # nothing to crop / pad: same ratio
 

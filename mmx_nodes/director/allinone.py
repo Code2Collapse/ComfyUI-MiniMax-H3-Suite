@@ -159,6 +159,18 @@ async def muse_minimax_analyze_character_endpoint(request):
 
         if provider == "off":
             return web.json_response({"status": "error", "message": "Analyze is set to Off / Manual."})
+        if provider == "gemini":
+            # the server's GEMINI_API_KEY only ever goes to Google (H3-NODES audit 2026-11-14, P0): base_url comes
+            # from the request, so any other host would receive the key. Checked before any connection is opened.
+            from urllib.parse import urlsplit
+            official = urlsplit(_MUSE_MINIMAX_PROVIDER_DEFAULTS["gemini"]["url"])
+            asked = urlsplit(base_url)
+            if (asked.scheme, (asked.hostname or "").lower()) != (official.scheme, official.hostname):
+                return web.json_response({
+                    "status": "error",
+                    "message": "Gemini analysis only talks to %s; clear the custom address to use it."
+                               % official.hostname,
+                })
         if not image_b64:
             return web.json_response({"status": "error", "message": "No image provided for analysis."})
 

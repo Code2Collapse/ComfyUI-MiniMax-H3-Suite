@@ -957,15 +957,16 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
       2.39:1, 21:9. Or `custom` plus `custom_ratio` (e.g. `2.39:1`, up to 8:1). It applies with `size_by = scale`
       or `megapixels`; with `width / height` the box sets the ratio.
     - `fit` decides how the picture fills the new shape:
-      - `auto` (default) is exact when the ratios match, and otherwise stops and asks;
+      - `auto` (default) is exact when the ratios match; otherwise it stretches, exactly as before 2026-11-14, and
+        the report carries a WARNING naming contain / crop / pad;
       - `contain`: the whole picture, at a smaller output;
       - `crop`: fill the shape and cut at `anchor`;
       - `pad`: the whole picture, with a padded border. The border is marked in the noise mask, so the next sampler
         pass generates it;
       - `stretch`: an explicit distortion.
     - The report lists the requested size and ratio, the legal size, the actual ratio and how far it is off.
-    - **Changed behaviour:** a width / height box whose ratio differs from the clip used to be stretched silently. It
-      now stops with that message; `fit = stretch` gives the old result exactly.
+    - Saved workflows give the same size and result as before. A box whose ratio differs from the clip used to be
+      stretched silently; it still is under `auto`, but the report now says so.
     - Shapes are tested for every ratio, from portrait, square and landscape sources, through interpolation and the
       network's architecture. A run with the trained checkpoint on a GPU is not verified yet.
 - **H3 Tiled Diffusion** patches the model so every denoising step runs tile by tile and the predictions are blended.

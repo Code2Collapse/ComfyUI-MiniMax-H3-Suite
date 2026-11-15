@@ -235,7 +235,7 @@ class MiniMaxH3_LatentUpscaleModel(io.ComfyNode):
                                 tooltip="aspect = custom: W:H (e.g. 4:5, 2.39:1) or a decimal; up to 8:1."),
                 io.Combo.Input("fit", options=list(A.FITS), default="auto", optional=True,
                                tooltip="How the picture fills the new shape. auto: exact when the ratios match, "
-                                       "otherwise stop and ask. contain: whole picture, smaller output. crop: fill, "
+                                       "otherwise stretch as before 2026-11-14 with a WARNING in the report. contain: whole picture, smaller output. crop: fill, "
                                        "cut at 'anchor'. pad: whole picture, border padded (regenerate it). stretch: "
                                        "distort on purpose (the behaviour before 2026-11-14)."),
                 io.Combo.Input("anchor", options=list(A.ANCHORS), default="center", optional=True,

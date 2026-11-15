@@ -23,6 +23,7 @@ import logging
 import math
 import os
 import platform
+import re
 import subprocess
 import wave
 
@@ -594,7 +595,40 @@ def _resolve_provider(data):
 API_KEY_ENV_VARS = ("MINIMAX_DIRECTOR_VLM_API_KEY", "OPENAI_API_KEY")
 
 
-def resolve_api_key(data=None):
+# A key read from the server's ENVIRONMENT may only travel to a destination its owner chose (H3-NODES audit
+# 2026-11-14, P0): the base_url comes from the request / workflow, so without this any client that can reach
+# ComfyUI could post base_url=http://attacker and receive the key. A key typed into the request itself is the
+# caller's own and is sent as before.
+VLM_HOSTS_ENV = "MINIMAX_DIRECTOR_VLM_HOSTS"         # comma-separated extra hosts the owner trusts with env keys
+_LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+_OFFICIAL_HOSTS = {"OPENAI_API_KEY": {"api.openai.com"},
+                   "GEMINI_API_KEY": {"generativelanguage.googleapis.com"}}
+
+
+def _host(url):
+    import urllib.parse
+    try:
+        return (urllib.parse.urlsplit(str(url or "")).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def env_key_allowed(var, base_url):
+    """True when the environment variable ``var`` may be sent to ``base_url``."""
+    host = _host(base_url)
+    if not host:
+        return False
+    if host in _LOOPBACK or host in _OFFICIAL_HOSTS.get(var, ()):
+        return True
+    extra = {h.strip().lower() for h in (os.environ.get(VLM_HOSTS_ENV) or "").split(",") if h.strip()}
+    return host in extra
+
+
+def _key_like(name):
+    return bool(re.fullmatch(r"[A-Z][A-Z0-9_]*(API_KEY|_KEY|_TOKEN)", name or ""))
+
+
+def resolve_api_key(data=None, base_url=None):
     """Find the bearer token for a cloud endpoint, without ever storing one in a workflow.
 
     A hosted OpenAI-compatible endpoint needs authentication, and until now nothing here
@@ -611,16 +645,28 @@ def resolve_api_key(data=None):
 
     Returns "" when there is nothing to send, which is the normal case for local Ollama
     and LM Studio.
+
+    A key from the environment (2. and 3.) is only returned for a ``base_url`` it may go to
+    (``env_key_allowed``: loopback, the variable's official host, or a host listed in
+    MINIMAX_DIRECTOR_VLM_HOSTS), and a named variable must look like a key
+    (``*_API_KEY`` / ``*_KEY`` / ``*_TOKEN``) - otherwise a shared workflow or any client could
+    name any variable and point base_url at its own server.
     """
     data = data or {}
     key = (data.get("api_key") or "").strip()
     if key:
         return key
     named = (data.get("api_key_env") or "").strip()
-    for var in ([named] if named else []) + list(API_KEY_ENV_VARS):
+    candidates = ([named] if named and _key_like(named) else []) + list(API_KEY_ENV_VARS)
+    for var in candidates:
         value = (os.environ.get(var) or "").strip()
-        if value:
+        if not value:
+            continue
+        if env_key_allowed(var, base_url):
             return value
+        log.warning("[MiniMaxDirector] not sending %s to %s: environment keys only go to localhost, the "
+                    "key's own service, or hosts listed in %s.", var, _host(base_url) or "an unknown host",
+                    VLM_HOSTS_ENV)
     return ""
 
 
@@ -721,10 +767,12 @@ async def vlm_generate(images_b64, prompt, provider, base_url, model,
                         # entirely, and the endpoint's own body rarely says where
                         raise VLMError(
                             "%s refused the request (HTTP %s)%s. Set an API key in the "
-                            "Analyze settings, or put one in the %s environment variable."
+                            "Analyze settings, or put one in the %s environment variable "
+                            "(an environment key is only sent to localhost, its own service, "
+                            "or a host listed in %s)."
                             % (provider, response.status,
                                "" if headers else " and no API key was sent",
-                               API_KEY_ENV_VARS[0]))
+                               API_KEY_ENV_VARS[0], VLM_HOSTS_ENV))
                     if response.status != 200:
                         raise VLMError("%s HTTP %s: %s" % (provider, response.status, await response.text()))
                     resp_json = await response.json()
@@ -762,7 +810,7 @@ async def analyze_character_endpoint(request):
         char_index = int(data.get("char_index", 0))
         kind = plan.sanitize_kind(data.get("kind"))
         provider, base_url, model_name = _resolve_provider(data)
-        api_key = resolve_api_key(data)
+        api_key = resolve_api_key(data, base_url)
 
         if provider == "off":
             return web.json_response({"status": "error", "message": "Analyze is set to Off / Manual."})
@@ -871,7 +919,7 @@ async def unload_ollama_endpoint(request):
         provider, base_url, model_name = _resolve_provider(data)
         # one code path for every provider, so the gear menu and the Enhance node cannot
         # disagree about what "unload" means
-        freed = await unload_model(provider, base_url, model_name, resolve_api_key(data))
+        freed = await unload_model(provider, base_url, model_name, resolve_api_key(data, base_url))
         return web.json_response({
             "status": "ok", "provider": provider, "released": freed,
             "note": "" if freed else "server exposes no unload — give it its own idle timeout",
