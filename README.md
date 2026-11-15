@@ -976,6 +976,8 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
     - The report lists the requested size and ratio, the legal size, the actual ratio and how far it is off.
     - The node shows only the inputs that apply: `aspect` with scale / megapixels, `custom_ratio` for a custom
       aspect, `anchor` for crop / pad, `pad_fill` for pad. Hidden values are kept.
+    - The report warns above the 4x scale the network was trained for, and when a plain (non-AV) noise mask had
+      to be dropped. `crop` counts the picture's size before cutting against the 33 MP limit.
     - Saved workflows give the same size and result as before. A box whose ratio differs from the clip used to be
       stretched silently; it still is under `auto`, but the report now says so.
     - Shapes are tested for every ratio, from portrait, square and landscape sources, through interpolation and the
