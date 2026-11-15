@@ -562,6 +562,8 @@ length, as before), and the multishot samplers free the encoder through ComfyUI'
 Also 2026-11-15: the Director's HTTP routes were mounted twice (one package imported under two names); now once.
 Task workflows 15-21 pass the plate window's own sound to Source AV Latent, and character_replacement 2 and 3 no
 longer carry an empty Mask-Aware ControlNet `schedule` value that made ComfyUI refuse the run.
+The Director's open-folder route now answers only the ComfyUI page on this machine; Turbo LoRA and Hybrid HDR name
+a missing LoRA file plainly; the All-in-One Director no longer disappears when the other Director nodes cannot load.
 
 ### One node: H3 Region Edit (plate + mask + ControlNet)
 
