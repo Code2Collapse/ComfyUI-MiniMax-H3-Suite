@@ -971,6 +971,8 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
         pass generates it;
       - `stretch`: an explicit distortion.
     - The report lists the requested size and ratio, the legal size, the actual ratio and how far it is off.
+    - The node shows only the inputs that apply: `aspect` with scale / megapixels, `custom_ratio` for a custom
+      aspect, `anchor` for crop / pad, `pad_fill` for pad. Hidden values are kept.
     - Saved workflows give the same size and result as before. A box whose ratio differs from the clip used to be
       stretched silently; it still is under `auto`, but the report now says so.
     - Shapes are tested for every ratio, from portrait, square and landscape sources, through interpolation and the
