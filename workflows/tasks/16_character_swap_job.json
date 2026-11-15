@@ -2,7 +2,7 @@
  "id": "debb19e5-a640-461c-b375-ac906a36c195",
  "revision": 0,
  "last_node_id": 61,
- "last_link_id": 135,
+ "last_link_id": 137,
  "nodes": [
   {
    "id": 5,
@@ -916,7 +916,9 @@
      "localized_name": "audio",
      "name": "audio",
      "type": "AUDIO",
-     "links": null
+     "links": [
+      137
+     ]
     }
    ],
    "title": "Plate window",
@@ -1449,6 +1451,13 @@
      "shape": 7,
      "type": "LATENT",
      "link": 88
+    },
+    {
+     "localized_name": "audio",
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": 137
     }
    ],
    "outputs": [
@@ -3867,6 +3876,14 @@
    32,
    18,
    "STRING"
+  ],
+  [
+   137,
+   36,
+   4,
+   42,
+   6,
+   "AUDIO"
   ]
  ],
  "groups": [
@@ -3987,7 +4004,7 @@
     "state": {
      "lastGroupId": 24,
      "lastNodeId": 61,
-     "lastLinkId": 135,
+     "lastLinkId": 137,
      "lastRerouteId": 0
     },
     "revision": 0,
@@ -3999,7 +4016,7 @@
       -666.458984375,
       305,
       136.458984375,
-      168
+      188
      ]
     },
     "outputNode": {
@@ -4093,6 +4110,20 @@
       "pos": [
        51,
        124
+      ]
+     },
+     {
+      "id": "47ba345e-1afb-54e3-b3bb-f1fac1ba70cf",
+      "name": "audio",
+      "type": "AUDIO",
+      "linkIds": [
+       136
+      ],
+      "localized_name": "audio",
+      "shape": 7,
+      "pos": [
+       51,
+       144
       ]
      }
     ],
@@ -4875,7 +4906,7 @@
         "name": "audio",
         "shape": 7,
         "type": "AUDIO",
-        "link": null
+        "link": 136
        },
        {
         "localized_name": "mask",
@@ -6168,6 +6199,14 @@
       "target_id": 12,
       "target_slot": 17,
       "type": "INT"
+     },
+     {
+      "id": 136,
+      "origin_id": -10,
+      "origin_slot": 6,
+      "target_id": 13,
+      "target_slot": 3,
+      "type": "AUDIO"
      }
     ],
     "extra": {}

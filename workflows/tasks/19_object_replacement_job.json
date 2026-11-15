@@ -2,7 +2,7 @@
  "id": "debb19e5-a640-461c-b375-ac906a36c195",
  "revision": 0,
  "last_node_id": 81,
- "last_link_id": 201,
+ "last_link_id": 202,
  "nodes": [
   {
    "id": 5,
@@ -914,7 +914,7 @@
     "state": {
      "lastGroupId": 38,
      "lastNodeId": 81,
-     "lastLinkId": 201,
+     "lastLinkId": 202,
      "lastRerouteId": 0
     },
     "revision": 0,
@@ -2040,7 +2040,9 @@
         "localized_name": "audio",
         "name": "audio",
         "type": "AUDIO",
-        "links": null
+        "links": [
+         202
+        ]
        }
       ],
       "title": "Plate window",
@@ -4671,7 +4673,7 @@
         "name": "audio",
         "shape": 7,
         "type": "AUDIO",
-        "link": null
+        "link": 202
        },
        {
         "localized_name": "mask",
@@ -6564,6 +6566,14 @@
       "target_id": 60,
       "target_slot": 8,
       "type": "STRING"
+     },
+     {
+      "id": 202,
+      "origin_id": 36,
+      "origin_slot": 4,
+      "target_id": 69,
+      "target_slot": 3,
+      "type": "AUDIO"
      }
     ],
     "extra": {}
