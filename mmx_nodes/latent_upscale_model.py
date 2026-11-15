@@ -114,6 +114,19 @@ def upscale(latent, method="model", model_name=U.NO_MODEL, width=1280, height=70
         lines.append(f"{method} interpolation, no model")
     out = dict(latent)
     out["samples"] = _nested((up.to(video.dtype), audio))
+    # L9.256 (H3-NODES audit 2026-11-14): nothing describing the OLD size may travel on
+    if out.pop("mmx_geometry", None) is not None:
+        lines.append("the source geometry record (mmx_geometry) was dropped: it described the size before upscaling")
+    if isinstance(latent.get("noise_mask"), torch.Tensor):
+        out.pop("noise_mask", None)
+        lines.append("WARNING: a plain noise mask (not an H3 audio+video mask) was dropped - it cannot follow the "
+                     "resize. Set it again after upscaling (Set AV Noise Mask).")
+    sx, sy = w_out / w, h_out / h
+    if method == "model" and max(sx, sy) > 4.0:
+        lines.append(f"WARNING: scale {max(sx, sy):.2f} is above the 4x the upscaler was trained for; quality may "
+                     "drop. Upscale in two passes instead.")
+    if method == "model" and abs(sx / sy - 1.0) > 0.02:
+        lines.append(f"note: unequal axis scales ({sx:.3f} x {sy:.3f}); the network sees one scale (their mean)")
     vm, am = existing_masks(latent)
     if vm is not None:
         vm5 = vm if vm.ndim == 5 else vm.reshape((1, 1) + tuple(vm.shape[-3:]))
@@ -153,6 +166,9 @@ def frame(latent, plan, pad_fill="edge"):
         mb = base.reshape(base.shape[0], -1, ch, cw)
         m = F.pad(mb, pads, value=1.0).reshape(tuple(base.shape[:3]) + (oh, ow))   # padded cells: regenerate (1)
         note = f"padded to {ow}x{oh} cells ({pad_fill}); the pad is marked for regeneration in the noise mask"
+        if vm5 is None:
+            note += ("; there was no noise mask, so the picture is marked for regeneration too (to keep it, set an "
+                     "AV noise mask of 0 on the picture before upscaling)")
     out = dict(latent)
     out["samples"] = _nested((v, audio))
     if m is not None:

@@ -211,6 +211,11 @@ def plan(src_cells: Tuple[int, int], size_by: str = SIZE_BY[0], width: int = 128
     if mode == "crop":
         k = max((box[1] * PX_PER_CELL) / sw, (box[0] * PX_PER_CELL) / sh)
         cont = (max(box[0], _even(sh * k / PX_PER_CELL)), max(box[1], _even(sw * k / PX_PER_CELL)))
+        cpx = cont[0] * cont[1] * PX_PER_CELL * PX_PER_CELL
+        if cpx > MAX_MEGAPIXELS * 1e6:   # the network resizes the WHOLE content before the crop (L9.256)
+            raise SizingError(f"crop needs the picture at {cont[1] * PX_PER_CELL}x{cont[0] * PX_PER_CELL} px "
+                              f"({cpx / 1e6:.1f} MP) before cutting - above the {MAX_MEGAPIXELS:g} MP limit. Use a "
+                              "smaller size, fit = contain / pad, or crop the source first.")
         off = (_offset(cont[0] - box[0], anchor, "y"), _offset(cont[1] - box[1], anchor, "x"))
         return Plan(box, cont, off, mode, requested, r, notes)
     # pad
