@@ -259,16 +259,7 @@ class MiniMaxH3_MultishotSampler(io.ComfyNode):
 
             import comfy.model_management as _mm
 
-            try:
-                clip.patcher.model.to(_mm.text_encoder_offload_device())
-            except Exception:
-                pass
-            try:
-                _dev = _mm.get_torch_device()
-                _mm.free_memory(_mm.get_total_memory(_dev) * 0.9, _dev)
-                _mm.soft_empty_cache()
-            except Exception:
-                pass
+            _release_encoder(clip, _mm)
 
             guider = ncs.BasicGuider().get_guider(model, cond)[0]
             shot_seed = (seed + si) if seed_per_shot else seed
@@ -431,16 +422,7 @@ class MiniMaxH3_MultishotMemorySampler(io.ComfyNode):
                     {"minimax_keyframes": keyframes, "minimax_frame_count": frame_count},
                 )
 
-            try:
-                clip.patcher.model.to(_mm.text_encoder_offload_device())
-            except Exception:
-                pass
-            try:
-                _dev = _mm.get_torch_device()
-                _mm.free_memory(_mm.get_total_memory(_dev) * 0.9, _dev)
-                _mm.soft_empty_cache()
-            except Exception:
-                pass
+            _release_encoder(clip, _mm)
 
             guider = ncs.BasicGuider().get_guider(model, cond)[0]
             noise = ncs.RandomNoise().get_noise(seed + si)[0]
@@ -477,3 +459,22 @@ class MiniMaxH3_MultishotMemorySampler(io.ComfyNode):
             + ("; " + "; ".join(notes) if notes else "")
         )
         return io.NodeOutput(master, {"waveform": waveform, "sample_rate": sr}, n, report)
+
+
+def _release_encoder(clip, _mm):
+    """Free the text encoder before sampling a shot (H3-NODES audit 2026-11-14 P1): through model management
+    (unload_model_and_clones), never a raw ``.to()`` that leaves ComfyUI's bookkeeping wrong, and failures are
+    logged instead of swallowed. A failure does not stop the run - the shot can still sample, only with less VRAM."""
+    import logging
+    log = logging.getLogger(__name__)
+    try:
+        from mmx_utils.encoder_unload import unload_clip
+        unload_clip(clip, label="H3 text encoder")
+    except Exception as exc:  # noqa: BLE001 - reported, not hidden
+        log.warning("[H3 Multishot] could not free the text encoder before sampling: %s", exc)
+    try:
+        _dev = _mm.get_torch_device()
+        _mm.free_memory(_mm.get_total_memory(_dev) * 0.9, _dev)
+        _mm.soft_empty_cache()
+    except Exception as exc:  # noqa: BLE001 - reported, not hidden
+        log.warning("[H3 Multishot] could not free VRAM before sampling: %s", exc)

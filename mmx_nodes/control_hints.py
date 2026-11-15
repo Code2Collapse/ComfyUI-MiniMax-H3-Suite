@@ -76,6 +76,13 @@ class MiniMaxH3_ControlHints(io.ComfyNode):
         boxes = list(transform.boxes)
         cw, ch = transform.canvas
         b = min(plate.shape[0], len(boxes))
+        # H3-NODES audit 2026-11-14 P1: the hints used to come out shorter than the plate with no word about it.
+        # The length is kept (saved workflows), but the report now says so.
+        short = ""
+        if plate.shape[0] != len(boxes):
+            short = (f"WARNING: the plate has {plate.shape[0]} frames but the transform has {len(boxes)} boxes, so "
+                     f"only {b} hint frames were made. Downstream frame counts (17k+5) and audio alignment will not "
+                     "match the plate: feed the plate the transform was tracked on.\n")
 
         dev = plate.device
         if mm is not None:
@@ -117,7 +124,7 @@ class MiniMaxH3_ControlHints(io.ComfyNode):
 
         hints = run_with_cpu_fallback(_work, device=dev, label="MiniMaxH3_ControlHints")
         report = (
-            f"hint_type={hint_type} crop_space={cw}x{ch} frames={b}\n"
+            short + f"hint_type={hint_type} crop_space={cw}x{ch} frames={b}\n"
             f"transform planner={transform.planner_mode} (shared affine spine)\n"
             f"wire hints -> control_video of Apply MiniMax H3 Fun ControlNet or H3 Mask-Aware ControlNet"
         )

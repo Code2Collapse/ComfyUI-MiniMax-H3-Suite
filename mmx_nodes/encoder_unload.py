@@ -18,7 +18,9 @@ if str(_PKG) not in sys.path:
 from mmx_utils.encoder_unload import (
     check_can_leave_accelerator,
     describe,
+    remember_freed,
     unload_clip,
+    unload_fingerprint,
 )
 
 try:
@@ -83,20 +85,18 @@ class MiniMaxH3_TextEncoderUnload(io.ComfyNode):
 
     @classmethod
     def fingerprint_inputs(cls, **_kwargs):
-        # NaN on purpose, and the one place this pack allows it. The unload is
-        # a SIDE EFFECT, not a value: a cache hit would skip it, so a second
-        # run - or a run after another branch reloaded the encoder - would
-        # free nothing while still reporting success.
-        return float("nan")
+        # The unload is a SIDE EFFECT: a real state token, never NaN (NaN re-ran the sampler on every queue).
+        return unload_fingerprint()
 
     @classmethod
     def IS_CHANGED(cls, **_kwargs):
-        return float("nan")
+        return unload_fingerprint()
 
     @classmethod
     def execute(cls, positive, clip, negative=None) -> io.NodeOutput:
         check_can_leave_accelerator(clip)
         unload_clip(clip, label="H3 text encoder")
+        remember_freed(clip)
 
         if negative is None:
             # Not None and not an empty conditioning: either would be accepted

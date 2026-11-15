@@ -21,12 +21,11 @@ TWO THINGS THAT LOOK WRONG AND ARE NOT:
     encode and BEFORE the sampler, and in a dataflow graph the only way to
     say "after" is to be on the wire.
 
-  * IS_CHANGED returns NaN, which this pack otherwise forbids. Here it is
-    correct: the unload is a SIDE EFFECT, not a value. A cache hit would skip
-    it, so the second run of a workflow - or a run after another branch
-    reloaded the encoder - would silently not free anything while reporting
-    success. The rule exists to stop NaN being used in place of knowing
-    whether state changed; this node genuinely must run every time.
+  * Its fingerprint is a STATE token, not a value hash: the unload is a side
+    effect, so a cache hit must never skip it while the encoder is back in
+    memory. It is "free" while nothing it released is resident (an unchanged
+    graph caches, sampler included) and unique while one is (the unload runs).
+    It used to be NaN, which re-ran every downstream node on every queue.
 """
 
 from __future__ import annotations
@@ -111,6 +110,40 @@ def unload_clip(clip: Any, *, label: str = "text encoder") -> None:
         # holding freed blocks, and not returning them makes the failure worse
         # than it needs to be.
         empty_cache(force=True)
+
+
+# clone_base_uuid of every encoder this process released (core groups a model and its clones by it).
+_FREED: set = set()
+_TOKENS = __import__("itertools").count(1)
+
+
+def remember_freed(clip: Any) -> None:
+    uid = getattr(getattr(clip, "patcher", None), "clone_base_uuid", None)
+    if uid is not None:
+        _FREED.add(uid)
+
+
+def any_freed_encoder_resident() -> bool:
+    """True when an encoder this node released is loaded again (another branch or a re-encode reloaded it)."""
+    if not _FREED or model_management is None:
+        return False
+    for lm in list(getattr(model_management, "current_loaded_models", []) or []):
+        try:
+            m = lm.model
+        except Exception:  # noqa: BLE001 - a dead weakref is simply not resident
+            continue
+        if m is not None and getattr(m, "clone_base_uuid", None) in _FREED:
+            return True
+    return False
+
+
+def unload_fingerprint() -> Any:
+    """A real state token instead of NaN (H3-NODES audit 2026-11-14 P1): NaN made every downstream node - the
+    sampler included - re-run on every queue. "free" while nothing this node released is resident, so an unchanged
+    graph caches; a unique token while one is resident, so the unload (a side effect) runs."""
+    if any_freed_encoder_resident():
+        return "resident:%d" % next(_TOKENS)       # a counter: Windows' monotonic clock is too coarse to be unique
+    return "free"
 
 
 def describe(clip: Any) -> str:
