@@ -559,6 +559,9 @@ sampler after it ran again on every queue. Its fingerprint now reports whether a
 again: an unchanged graph caches, and the unload still runs whenever the encoder is back in memory. **H3 Control
 Hints** now warns in its report when the plate and the transform have different frame counts (it makes the shorter
 length, as before), and the multishot samplers free the encoder through ComfyUI's model management.
+Also 2026-11-15: the Director's HTTP routes were mounted twice (one package imported under two names); now once.
+Task workflows 15-21 pass the plate window's own sound to Source AV Latent, and character_replacement 2 and 3 no
+longer carry an empty Mask-Aware ControlNet `schedule` value that made ComfyUI refuse the run.
 
 ### One node: H3 Region Edit (plate + mask + ControlNet)
 
