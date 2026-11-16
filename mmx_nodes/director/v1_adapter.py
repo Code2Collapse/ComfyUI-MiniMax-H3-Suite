@@ -68,7 +68,9 @@ _OUTPUT_TYPES = {
 
 # Keys the classic API accepts in an input's options dict that have no V3
 # equivalent, or that V3 derives itself. Passing them through raises TypeError.
-_DROP = {"forceInput", "dynamicPrompts", "advanced", "lazy", "rawLink",
+# "advanced" is NOT dropped any more (V3 has it; it only folds the input in Nodes 2.0). "forceInput" stays dropped on
+# purpose: turning a saved widget into a socket would shift saved widget values (fe 1.53 restores by position).
+_DROP = {"forceInput", "dynamicPrompts", "lazy", "rawLink",
          "defaultInput", "control_after_generate", "widgetType", "image_upload",
          "image_folder", "animated", "video_upload", "placeholder"}
 
@@ -86,6 +88,10 @@ def _build_input(name: str, spec, *, optional: bool):
     type_spec = spec[0]
     options = dict(spec[1]) if len(spec) > 1 and isinstance(spec[1], dict) else {}
     tooltip = options.pop("tooltip", None)
+    advanced = options.pop("advanced", None)
+    # A28 declarative UI keys (c2c_section, c2c_show_if, ...) travel to the front end through V3's extra_dict; passed
+    # as keyword arguments they raised TypeError and the node vanished (PARAM_MMX_B audit, 2026-11-16)
+    extra = {k: options.pop(k) for k in list(options) if k.startswith("c2c_")} or None
     for key in list(options):
         if key in _DROP:
             options.pop(key)
@@ -97,7 +103,7 @@ def _build_input(name: str, spec, *, optional: bool):
         return io.Combo.Input(
             name, options=choices,
             default=default if default is not None else (choices[0] if choices else None),
-            optional=optional, tooltip=tooltip)
+            optional=optional, tooltip=tooltip, extra_dict=extra, advanced=advanced)
 
     factory = _INPUT_TYPES.get(str(type_spec))
     if factory is None:
@@ -110,7 +116,7 @@ def _build_input(name: str, spec, *, optional: bool):
     # multiline belongs to String only; passing it elsewhere is a TypeError.
     if str(type_spec) != "STRING":
         options.pop("multiline", None)
-    return factory(name, optional=optional, tooltip=tooltip, **options)
+    return factory(name, optional=optional, tooltip=tooltip, extra_dict=extra, advanced=advanced, **options)
 
 
 def adapt(v1_cls, *, node_id: str, display_name: str, category: str,
