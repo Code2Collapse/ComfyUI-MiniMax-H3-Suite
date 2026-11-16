@@ -1069,6 +1069,27 @@ ComfyUI (CUDA / ROCm / XPU), and the draft audio is resampled with core's `comfy
 Limits: 4K is two upscaler passes; upstream's quality figures (fast decoder PSNR, before / after) are unevidenced
 here.
 
+## Regenerate 2K IC (Open-H3): a draft as `<Video 1>` to 2560x1440 (ported 2026-11-16)
+
+A separate pipeline from Regenerate STD. Ported from slmonker's ComfyUI-OpenH3Regenerate2KIC @ `a85bd96` (Apache-2.0;
+it follows the NVlabs/Sana `sol-engine` Open-H3-Regenerate-2K-IC work). The draft rides as the `<Video 1>` reference
+of core's MiniMax H3 Reference to Video (Ref2VA) while an in-context (IC) LoRA regenerates it at 2560x1440. Menu:
+MiniMax H3 / Regenerate IC. **Status: IMPLEMENTED and UNIT TESTED on the CPU with tiny tensors; NOT VERIFIED with
+real weights, on a GPU, or for image quality.**
+
+| Node | What it does |
+|---|---|
+| H3 Open Regen IC · Prepare Draft | 24 fps by floor mapping, at least 113 real frames, 124..362 frames on 17k+5; outputs `frame_count` and `real_frames` |
+| H3 Open Regen IC · Official Prompt | the upstream task prompt word for word, plus your caption |
+| H3 Open Regen IC · Sigma Grid | up3 (0.834942 / 0.696852 / 0.468753 / 0), up4, hf8, or a checked custom list; use with Sigma Shift 12 / 3 |
+| H3 Open Regen IC · Compose Target Latent | puts the upscaled video into core's Ref2VA latent with the audio pinned; silence is encoded with the audio VAE at run time (an optional asset you place in `models/h3_assets` works for 124 frames) - never zeros pretending to be silence |
+| H3 Open Regen IC · LoRA Chain | fixed order speed LoRA (HyperFlow 8-step; DMAD 4-step accepted) -> LMS Sharp -> IC LoRA; the official IC LoRA file is converted at load time, a ComfyUI-keyed one is used as is |
+
+Use the Suite's H3 Latent Upscale (Model) for the one-pass upscale to 2560x1440 (core 0.39 has no
+LatentUpscaleWithModel). Models (file names from upstream; **every source UNVERIFIED, nothing is downloaded, no
+weights are shipped**): the Ref2VA bf16 model (or the hybrid FL2VA/Ref2VA one), the IC LoRA, HyperFlow 8-step, LMS
+Sharp r64, the bf16 latent upscaler (`.safetensors` only).
+
 ## Sigma Presets (official templates)
 
 **Sigma Presets** gives the sigma schedule, sampler, cfg and steps of a model as ComfyUI's official workflow
