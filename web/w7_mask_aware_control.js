@@ -285,7 +285,7 @@ app.registerExtension({
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function (...args) {
       const r = onConfigure?.apply(this, args);
-      if (!this[STATE]?.dead) rebuild(this[STATE], this);
+      if (this[STATE] && !this[STATE].dead) rebuild(this[STATE], this);   // L9.259: build() may have failed
       return r;
     };
   },
