@@ -207,6 +207,24 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.anchor_studio", "MiniMaxH3_AnchorStudio"),
     (".mmx_nodes.anchor_studio", "MiniMaxH3_AnchorApproval"),
     (".mmx_nodes.anchor_studio", "MiniMaxH3_PropConsistencyChecker"),
+    # H3-REGEN-STD-001 (spec docs/research/H3_REGEN_STD_spec.md): Open-H3 Regenerate, standard pipeline
+    # (ported from rdh9616/ComfyUI-Open-H3-Regenerate, Apache-2.0)
+    (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenLoRA"),
+    (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenSigmas"),
+    (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenPrepareDraft"),
+    (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenUpscale"),
+    (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenRefineLatent"),
+    (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenFastVAEDecode"),
+    (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenFinish"),
+    (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenSaveLatent"),
+    (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenLoadLatent"),
+    # H3-REGEN-IC-001 (spec docs/research/H3_REGEN_IC_spec.md): Open-H3 Regenerate 2K IC, a DISTINCT pipeline
+    # (ported from slmonker's 2K IC pack, Apache-2.0; see CREDITS.md)
+    (".mmx_nodes.open_regen_ic", "MiniMaxH3_OpenRegenICPrepareDraft"),
+    (".mmx_nodes.open_regen_ic", "MiniMaxH3_OpenRegenICPrompt"),
+    (".mmx_nodes.open_regen_ic", "MiniMaxH3_OpenRegenICSigmas"),
+    (".mmx_nodes.open_regen_ic", "MiniMaxH3_OpenRegenICComposeLatent"),
+    (".mmx_nodes.open_regen_ic", "MiniMaxH3_OpenRegenICLoRAChain"),
 )
 
 

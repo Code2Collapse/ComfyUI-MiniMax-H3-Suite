@@ -1,3 +1,14 @@
+# H3 Open Regen (standard) — `h3_open_regen_std_*.json`
+
+Ported from rdh9616/ComfyUI-Open-H3-Regenerate (Apache-2.0) onto the Suite's `MiniMaxH3_OpenRegen*` nodes; guide in
+the main README, section "Regenerate STD (Open-H3)". `h3_open_regen_std_draft_video_to_2k.json` (a draft video to
+2K), `h3_open_regen_std_prompt_to_2k.json` (prompt -> 768p draft -> 2K) and `h3_open_regen_std_decode_saved_latent.json`
+(resume after a failed decode). Core nodes only besides the Suite. **Status: wiring checked against the registered
+node definitions (tests/test_workflow_wiring.py) and the graph contracts (tests/test_open_regen_workflows.py); NOT
+run on H3 weights or a GPU.** Model widgets hold file names only.
+
+---
+
 # Character replacement — `character_replacement/1_…6_*.json`
 
 Six task workflows (replace keeping composition, change pose, change look, expression transfer, masked subject,

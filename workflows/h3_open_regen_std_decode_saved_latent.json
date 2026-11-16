@@ -1,0 +1,413 @@
+{
+  "revision": 0,
+  "last_node_id": 7,
+  "last_link_id": 8,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MarkdownNote",
+      "pos": [
+        40,
+        100
+      ],
+      "size": [
+        620,
+        420
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "START HERE",
+      "properties": {},
+      "widgets_values": [
+        "# H3 Open Regen: decode a saved refined latent\n\nEvery H3 Open Regen run saves its refined latent to `output/open_h3_latents/` **before** decoding (files written by upstream Open-H3 Regenerate load too). If decoding failed, this workflow turns a saved file into the final video without redoing the refine.\n\n1. *Load Refined Latent* is set to **(newest)**; pick another file to decode an older one (press R to refresh).\n2. **Run**. Output: `output/video/open_h3_regen_2k_*` with the soundtrack stored in the file (silence when none was stored)."
+      ],
+      "color": "#2a2a2a",
+      "bgcolor": "#353535"
+    },
+    {
+      "id": 2,
+      "type": "VAELoader",
+      "pos": [
+        860,
+        100
+      ],
+      "size": [
+        360,
+        108
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "title": "Video VAE (fallback decoder)",
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 3,
+      "type": "MiniMaxH3_OpenRegenLoadLatent",
+      "pos": [
+        1260,
+        100
+      ],
+      "size": [
+        520,
+        160
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "links": [
+            1
+          ]
+        },
+        {
+          "name": "frame_count",
+          "type": "INT",
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            5
+          ]
+        }
+      ],
+      "title": "H3 Open Regen · Load Refined Latent",
+      "properties": {
+        "Node name for S&R": "MiniMaxH3_OpenRegenLoadLatent"
+      },
+      "widgets_values": [
+        "(newest)"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 4,
+      "type": "MiniMaxH3_OpenRegenFastVAEDecode",
+      "pos": [
+        860,
+        340
+      ],
+      "size": [
+        360,
+        152
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 1
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            3
+          ]
+        },
+        {
+          "name": "report",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "H3 Open Regen · Fast VAE Decode",
+      "properties": {
+        "Node name for S&R": "MiniMaxH3_OpenRegenFastVAEDecode"
+      },
+      "widgets_values": [
+        "fast_h3_vae_noncausal_24l.safetensors",
+        false
+      ]
+    },
+    {
+      "id": 5,
+      "type": "MiniMaxH3_OpenRegenFinish",
+      "pos": [
+        1260,
+        340
+      ],
+      "size": [
+        360,
+        172
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 3
+        },
+        {
+          "name": "frame_count",
+          "type": "INT",
+          "link": 4,
+          "widget": {
+            "name": "frame_count"
+          }
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            7
+          ]
+        }
+      ],
+      "title": "H3 Open Regen · Finish Frames",
+      "properties": {
+        "Node name for S&R": "MiniMaxH3_OpenRegenFinish"
+      },
+      "widgets_values": [
+        0,
+        "auto (1088 -> 1080, 2176 -> 2160)"
+      ]
+    },
+    {
+      "id": 6,
+      "type": "CreateVideo",
+      "pos": [
+        1660,
+        340
+      ],
+      "size": [
+        360,
+        200
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            8
+          ]
+        }
+      ],
+      "title": "Create video (24 fps)",
+      "properties": {
+        "Node name for S&R": "CreateVideo"
+      },
+      "widgets_values": [
+        24.0,
+        "auto",
+        "sRGB",
+        "none"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "SaveVideo",
+      "pos": [
+        2060,
+        340
+      ],
+      "size": [
+        640,
+        520
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 8
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": null
+        }
+      ],
+      "title": "Save regenerated video",
+      "properties": {
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "video/open_h3_regen_2k",
+        "auto",
+        "auto",
+        "auto"
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    }
+  ],
+  "links": [
+    [
+      1,
+      3,
+      0,
+      4,
+      0,
+      "LATENT"
+    ],
+    [
+      2,
+      2,
+      0,
+      4,
+      1,
+      "VAE"
+    ],
+    [
+      3,
+      4,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      4,
+      3,
+      1,
+      5,
+      1,
+      "INT"
+    ],
+    [
+      5,
+      3,
+      2,
+      5,
+      2,
+      "AUDIO"
+    ],
+    [
+      6,
+      5,
+      0,
+      6,
+      0,
+      "IMAGE"
+    ],
+    [
+      7,
+      5,
+      1,
+      6,
+      1,
+      "AUDIO"
+    ],
+    [
+      8,
+      6,
+      0,
+      7,
+      0,
+      "VIDEO"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "00 · START HERE",
+      "bounding": [
+        0,
+        0,
+        700,
+        590
+      ],
+      "color": "#3f3f46",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "01 · DECODE SAVED LATENT",
+      "bounding": [
+        820,
+        0,
+        1920,
+        930
+      ],
+      "color": "#7a3b3b",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.55,
+      "offset": [
+        80,
+        120
+      ]
+    }
+  },
+  "version": 0.4
+}

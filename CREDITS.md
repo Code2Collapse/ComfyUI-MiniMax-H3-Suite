@@ -368,7 +368,40 @@ The decisions for every pack in both reference folders are in the work area's
   the arithmetic in `mmx_utils/reference_prep.py` (17k+5 snapping, soundtrack pairing by number, reference-order
   check).
 
+## ComfyUI-Open-H3-Regenerate (Regenerate STD: draft -> 1080p / 2K / 4K)
+
+- **Source:** [rdh9616/ComfyUI-Open-H3-Regenerate](https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate) @ `46ff778`
+  by rdh9616 (vendored read-only at `third_party/ComfyUI-Open-H3-Regenerate`).
+- **Licence:** Apache-2.0, Copyright 2026 rdh9616. Apache-2.0 code may be distributed inside this GPL-3.0 pack
+  (permissive -> copyleft). Licence text: `THIRD_PARTY_LICENSES/ComfyUI-Open-H3-Regenerate-LICENSE.txt`; upstream
+  NOTICE, kept verbatim as Apache-2.0 section 4(d) requires: `THIRD_PARTY_LICENSES/ComfyUI-Open-H3-Regenerate-NOTICE.txt`.
+- **Ported into this pack:** `mmx_utils/open_regen_core.py` (sigma grids, frame maths, key map, curve maths),
+  `mmx_nodes/open_regen.py` (nine nodes `MiniMaxH3_OpenRegen*`, category `MiniMax H3/Regenerate STD`).
+- **Change notice (Apache-2.0 section 4(b)):** Modified by Code2Collapse, 2026-11: V3 schema, Suite upscaler engine,
+  comfy.audio resample, mmap-safe cache. Distributed as part of a GPL-3.0 work. Every ported file says so in its header.
+- **Not ported:** `OpenH3VideoToPrompt` / `llm_prompt.py` (an LLM server path with a key read from the Windows
+  registry; the Suite's Prompt Writer / Vision cover it). Upstream node ids are not registered as aliases.
+
+## NVIDIA fast H3 VAE decoder (StreamRender-H3)
+
+- **Source:** NVlabs/Sana, branch `sol-engine`, `models/Open-H3-Regenerate-2K/open_h3/fast_vae/decoder.py`, as
+  vendored by ComfyUI-Open-H3-Regenerate (`fast_vae_decoder.py`, `fast_vae_lean.py`).
+- **Licence:** Apache-2.0, Copyright NVIDIA Corporation (see the upstream NOTICE above).
+- **Shipped in this pack:** `mmx_utils/fast_h3_vae/decoder.py` (unchanged code, NVIDIA header lines kept verbatim) and
+  `mmx_utils/fast_h3_vae/lean.py` (only its decoder import changed). Code only: the weights
+  (`fast_h3_vae_noncausal_24l.safetensors`) are not shipped and keep their own licence.
+- **Model weights used by the pipeline are not included.** The refiner LoRA and fast decoder weights (MiniMax H3
+  Community License), LightX2V FL2VA Turbo, LMS Sharp (Alissonerdx) and the H3 latent upscaler (LBH-123-AI) keep their
+  own licences; the code licence does not cover them.
+
 ## Code2Collapse's own packs
 
 `# PORTED FROM:` headers that name ComfyUI-WanNodeExperiments or ComfyUI-CustomNodePacks point at the same
 owner's packs. That code needs no third-party credit. Shared CNP code is carried as the vendored C2C core (above).
+
+- **Open-H3 Regenerate 2K IC nodes** (`mmx_nodes/open_regen_ic.py`, `mmx_utils/open_regen_ic.py`): ported from
+  slmonker/ComfyUI-OpenH3Regenerate2KIC @ a85bd96 (Apache-2.0, author slmonker; `nodes.py`,
+  `tools/convert_ic_lora.py`). Follows the NVlabs/Sana `sol-engine` Open-H3-Regenerate-2K-IC work. Modified by
+  Code2Collapse, 2026-11: V3 schema, run-time silence option, asset length check, LoRA chain node, appended outputs.
+  Distributed as part of a GPL-3.0 work. The silence asset and all weights are not bundled; they stay under the
+  MiniMax-H3 Community License.
