@@ -564,6 +564,8 @@ Task workflows 15-21 pass the plate window's own sound to Source AV Latent, and 
 longer carry an empty Mask-Aware ControlNet `schedule` value that made ComfyUI refuse the run.
 The Director's open-folder route now answers only the ComfyUI page on this machine; Turbo LoRA and Hybrid HDR name
 a missing LoRA file plainly; the All-in-One Director no longer disappears when the other Director nodes cannot load.
+The status line under every Suite node now says "ran in N s" after a run (it stayed at "running…" on nodes without a
+preview), and an interrupt marks only the node that was running.
 
 ### One node: H3 Region Edit (plate + mask + ControlNet)
 
@@ -1012,6 +1014,60 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
   - A Fun ControlNet on the model (core's Apply MiniMax H3 Fun ControlNet) now follows the split: each tile and chunk
     gets only its own part of the control video, mask and source video. It used to be refused whenever the run was
     split. The H3 Mask-Aware ControlNet is still refused for split runs (its gate is built for the whole frame).
+
+## Regenerate STD (Open-H3): a draft to 1080p / 2K / 4K (ported 2026-11-16)
+
+Ported from [rdh9616/ComfyUI-Open-H3-Regenerate](https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate) @ `46ff778`
+(Apache-2.0; NVIDIA's fast decoder Apache-2.0), rebuilt on core 0.39 and the Suite's own pieces: the 3D latent
+upscaler engine, the 17k+5 helpers and the AV noise-mask layout. It regenerates a low-resolution draft (an H3 draft or
+another model's video) with NVIDIA's refine recipe: the draft is upscaled in latent space, re-noised to sigma 0.8
+(or the 0.909375 release grid) and refined in 3 Euler steps at CFG 1 with one merged LoRA. Menu: MiniMax H3 /
+Regenerate STD. **Status: IMPLEMENTED and UNIT TESTED on the CPU with tiny tensors; NOT VERIFIED with real weights,
+on a GPU, or for image quality.**
+
+| Node | What it does |
+|---|---|
+| H3 Open Regen · LoRA | merged refiner + LightX2V FL2VA Turbo + LMS Sharp LoRA (Diffusers keys mapped to ComfyUI's H3), plus the 50 Sharp AdaLN curve branches; `report` says the mapped modules, the curve mode and whether the curve table is the reference one |
+| H3 Open Regen · Sigmas | 3 steps 0.909375 / 0.857 / 0.667, 2 steps 0.7 / 0.494, or the shift-6 grid from `start_sigma` |
+| H3 Open Regen · Prepare Draft | 24 fps (nearest frame), max_frames, cover-scale + centre crop to 768p / 576p / keep, pad to 17k+5 frames; `frame_count` = the real frames |
+| H3 Open Regen · Latent Upscale | the Suite's upscaler to 768p / 1080p / 2K / 4K (computed 1088 / 2176 rows; 4K = two passes via 2K); video or AV latent in, same kind out |
+| H3 Open Regen · Refine Latent | AV latent: the video regenerates, the audio stream (encoded silence, the draft's audio or the latent's own) is held clean |
+| H3 Open Regen · Fast VAE Decode | NVIDIA's fast decoder (24 layers, no tiling), strict load, falls back to the connected H3 VAE when VRAM is short |
+| H3 Open Regen · Finish Frames | drops the padding, crops 1088 -> 1080 / 2176 -> 2160, cuts the soundtrack to frame_count / 24 s |
+| H3 Open Regen · Save / Load Refined Latent | the refined latent is written to `output/open_h3_latents/` before decoding, so a failed decode never costs the refine; files from upstream load too |
+
+Workflows in `workflows/`: `h3_open_regen_std_draft_video_to_2k.json` (Load Video -> Prepare Draft -> VAE Encode ->
+Latent Upscale -> Refine Latent -> sampler (FL2VA -> Open Regen LoRA -> BlockSparseAttention) -> Save -> Fast VAE
+Decode -> Finish -> Create Video 24 fps), `h3_open_regen_std_prompt_to_2k.json` (a 768p FL2VA + Turbo draft; its AV
+latent goes straight to the upscaler; the Turbo LoRA stays on the draft branch) and
+`h3_open_regen_std_decode_saved_latent.json` (resume after a failed decode).
+
+Temporal rules: 24 fps everywhere; clips are 17k+5 frames (latent 5k+2 steps, audio 40 Hz); `frame_count` travels
+from Prepare Draft to Save and Finish so the padding is always trimmed; the model never hears the source audio (it is
+pinned); the output soundtrack is the source's (or the draft's decoded audio), cut from t = 0. The source must start
+at t = 0.
+
+Models (file names from upstream; **every source UNVERIFIED, nothing is downloaded, no weights are shipped**; weights
+keep their own licences, mostly the MiniMax H3 Community License, which the code licence does not cover):
+
+| File | Folder | Claimed source (UNVERIFIED) |
+|---|---|---|
+| `open_h3_regenerate_2k_lora.safetensors`, `sharp_curve_branches.safetensors` | loras | HF Efficient-Large-Model/Open-H3-Regenerate-2K |
+| `fast_h3_vae_noncausal_24l.safetensors` | vae | same repo, `vae_fast/` |
+| `minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors` (or `_fp16`) | latent_upscale_models | same repo or LBH-123-AI |
+| `minimax_h3_fl2va_pruned_int8_convrot.safetensors`; `minimax_h3_ref2va_pruned_int8_convrot.safetensors` (curve table only) | diffusion_models | Comfy-Org/MiniMax-H3 |
+| H3 text encoder, `minimax_h3_video_vae_fp16`, `minimax_h3_audio_vae_fp32` | text_encoders / vae | Comfy-Org/MiniMax-H3 |
+| draft only: `minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16` | loras | LightX2V |
+
+Choices made for the owner's open questions (easy to change: constants at the top of `mmx_nodes/open_regen.py`):
+start_sigma default 0 (release grid) with 0.8 in the workflows; upscaler `.safetensors` only (pickle files are not
+listed); the fast decoder is ported and loaded strictly; upstream's Video-to-Prompt node is not ported (use H3 Prompt
+Writer / H3 Vision); the LoRA RAM copy is bf16 by default (fp32 under advanced); core 0.39 only; upstream node ids
+are not registered as aliases, so upstream workflows need re-wiring. Changed from upstream: the LoRA cache copies
+every tensor off the file's memory map (upstream kept the file locked on Windows), the upscaler device follows
+ComfyUI (CUDA / ROCm / XPU), and the draft audio is resampled with core's `comfy.audio` (no torchaudio).
+Limits: 4K is two upscaler passes; upstream's quality figures (fast decoder PSNR, before / after) are unevidenced
+here.
 
 ## Sigma Presets (official templates)
 
