@@ -162,6 +162,7 @@ app.registerExtension({
       if (st) {
         const ms = st.t0 ? Date.now() - st.t0 : 0;
         st.fullError = "";
+        st.state = "done";
         setStatus(st, ms ? `ran in ${(ms / 1000).toFixed(2)}s` : "ran", "ok");
       }
       return r;
@@ -169,12 +170,29 @@ app.registerExtension({
   },
 
   async setup() {
+    // L9.259: core sends "executed" only for nodes with UI output, so most nodes stayed at "running…". The node
+    // that is running is tracked; the next "executing" (or the end of the run) means it finished.
+    let running = null;
+    const finish = () => {
+      const st = running;
+      running = null;
+      if (st && st.t0 && st.state === "running") {
+        setStatus(st, `ran in ${((Date.now() - st.t0) / 1000).toFixed(2)}s`, "ok");
+      }
+      if (st) st.t0 = 0;
+    };
     api.addEventListener("executing", ({ detail }) => {
-      if (detail == null) return;
-      const n = findNodeByExecId(detail);          // "12:5" inside a subgraph (L2.47)
+      const id = detail != null && typeof detail === "object" ? detail.node : detail;
+      finish();
+      if (id == null) return;                      // the run ended
+      const n = findNodeByExecId(id);              // "12:5" inside a subgraph (L2.47)
       const st = n && n[ST];
-      if (st) { st.t0 = Date.now(); st.fullError = ""; setStatus(st, "running…", ""); }
+      if (st) {
+        st.t0 = Date.now(); st.fullError = ""; st.state = "running"; setStatus(st, "running…", "");
+        running = st;
+      }
     });
+    api.addEventListener("execution_success", () => finish());
 
     api.addEventListener("execution_error", ({ detail }) => {
       const n = findNodeByExecId(detail?.node_id);
@@ -183,15 +201,14 @@ app.registerExtension({
       const raw = [detail?.exception_message, ...(detail?.traceback || [])]
         .filter(Boolean).join("\n");
       st.fullError = raw;                    // full text on hover
+      st.state = "error";
       setStatus(st, humaniseH3Error(raw), "error");
       n.setDirtyCanvas(true, true);
     });
 
     api.addEventListener("execution_interrupted", () => {
-      forEachNode((n) => {
-        const st = n[ST];
-        if (st && st.t0) setStatus(st, "cancelled", "");
-      });
+      // only the node that was running is cancelled; nodes that finished earlier keep their status (L9.259)
+      if (running) { setStatus(running, "cancelled", ""); running.t0 = 0; running.state = ""; running = null; }
     });
   },
 });

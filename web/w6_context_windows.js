@@ -309,11 +309,12 @@ app.registerExtension({
       const r = onCreated?.apply(this, arguments);
       if (this.size[0] < NODE_MIN_W) this.size[0] = NODE_MIN_W;
       const st = build(this);
-      bindExecutionLifecycle(this, st, {
+      const lifeOff = bindExecutionLifecycle(this, st, {   // L9.259: kept so removal unsubscribes
         onStart: () => { st.plan = null; st.paint(); },
         onAbort: () => {},
       });
       chainOnRemoved(this, () => {
+        try { lifeOff(); } catch (_e) { /* ignore */ }
         try { st.zoomOff?.(); } catch (_e) { /* ignore */ }
         try { st.resizeObs?.disconnect(); } catch (_e) { /* ignore */ }
         disposeState(this, ST_KEY);

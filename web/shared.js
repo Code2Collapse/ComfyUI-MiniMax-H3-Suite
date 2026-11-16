@@ -159,13 +159,17 @@ export function bindExecutionLifecycle(node, st, { onStart, onAbort }) {
     offs.push(() => api.removeEventListener(type, fn));
   };
 
+  // fe 1.53 sends the executing node's id ITSELF as the detail ("12" or "12:5" inside a subgraph), not {node}
+  // (L9.259: the loading state never started and errors never reached the panels)
+  const isMe = (id) => id != null && (findNodeByExecId(id) === node || String(id) === String(node.id));
   add("executing", (e) => {
-    const d = e.detail || {};
-    if (d.node != null && String(d.node) === String(node.id)) {
+    const d = e.detail;
+    const id = d != null && typeof d === "object" ? d.node : d;
+    if (isMe(id)) {
       onStart?.();
       return;
     }
-    if (d.node == null && st.state === "loading") {
+    if (id == null && st.state === "loading") {
       onAbort?.("Execution finished without a UI update for this node.");
     }
   });
@@ -173,7 +177,7 @@ export function bindExecutionLifecycle(node, st, { onStart, onAbort }) {
   add("execution_error", (e) => {
     const d = e.detail || {};
     const nid = d.node_id ?? d.node;
-    if (nid != null && String(nid) !== String(node.id)) return;
+    if (nid != null && !isMe(nid)) return;
     onAbort?.(d.exception_message || d.exception_type || "Execution error.");
   });
 
