@@ -759,6 +759,23 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
   the key in the request URL, where a connection error could carry it into the error text and the log). Any
   error text it returns is cleaned of the key.
 
+## HDR inside the Suite: SDR -> HDR EXR, 4K join, dataset and training (v1.1.0, 2026-11-17)
+
+18 nodes in **MiniMax H3/HDR** (search "H3 HDR"). Step-by-step: [`docs/HDR_HOWTO.md`](docs/HDR_HOWTO.md); five
+example workflows in [`workflows/hdr/`](workflows/hdr/README_hdr.md); changes: [`CHANGELOG.md`](CHANGELOG.md).
+
+- Values are scene-linear Rec.709, 1.0 = diffuse white; the model sees HDR through `diffhdr_log_16384`. All curve math
+  lives in one file, `mmx_utils/hdr_math.py`. Nothing clamps after Log Decode; only the log signal is held to 0..1.
+- (a) SDR clip -> HDR IC-LoRA (the SDR clip as `<Video 1>`) -> Log Decode -> Bias Correct -> half-float EXR.
+  (b) the same + Regenerate STD at 4K -> Gain Map Join (HDR light from the draft, detail from the 4K picture).
+  (c) dataset: Poly Haven / Hugging Face HDRIs -> camera-move clips -> SDR / log-HDR pairs. (d) training with
+  ai-toolkit (`minimax_h3_ref2va`, loss on the HDR target only) as a background job with a log and loss curve.
+  (e) eval: error in stops per brightness band.
+- Downloads and training run in the background, show progress, can be cancelled and skip what is already done.
+- Tested on synthetic data on CPU (curve round trip < 1e-4 relative up to 16384x white, EXR keeps values > 1, HDR10
+  tags, job cancel / resume). **Not tested here**: the real H3 model, the HDR LoRA, a GPU, real downloads or a real
+  training run, so picture quality is not verified.
+
 ## Real HDR from H3 (experimental, 2026-11-11)
 
 H3 was trained on SDR video, so it emits SDR. Pushing that through an inverse log curve gives a valid 16-bit file
