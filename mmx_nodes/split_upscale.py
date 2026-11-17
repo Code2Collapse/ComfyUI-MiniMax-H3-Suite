@@ -327,7 +327,8 @@ class MiniMaxH3_TemporalSplitParams(io.ComfyNode):
         )
         # Preview report assumes a typical 124-frame / 37-row clip; actual Split
         # Upscale recomputes segments from the connected latent.
-        report = temporal_param_report(param, 37)
+        report = ("EXAMPLE for a 124-frame clip (37 latent rows) - Split Upscale recomputes the segments from the "
+                  "latent you connect.\n" + temporal_param_report(param, 37))          # L9.258: was unlabelled
         return io.NodeOutput(param, report)
 
 
@@ -443,7 +444,8 @@ class MiniMaxH3_SpatialSplitParams(io.ComfyNode):
         )
         # Grid preview uses a representative 64x64 latent canvas; Split Upscale
         # recomputes from the real latent H×W.
-        report = spatial_param_report(param, h=64, w=64)
+        report = ("EXAMPLE on a 64 x 64 latent - Split Upscale recomputes the tile grid from the latent you "
+                  "connect.\n" + spatial_param_report(param, h=64, w=64))           # L9.258: was unlabelled
         return io.NodeOutput(param, report)
 
 

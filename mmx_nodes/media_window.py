@@ -192,7 +192,9 @@ class MiniMaxH3_FrameWindow(io.ComfyNode):
             inputs=[
                 C2C_VIDEO.Input("media", tooltip="From H3 Media Probe (or CustomNodePacks' Load Video (C2C))."),
                 io.Int.Input("start", default=0, min=0, max=10_000_000, tooltip="First frame of the window (0 = first frame of the media)."),
-                io.Int.Input("count", default=81, min=0, max=100_000, tooltip="Frames in the window. 0 = to the end (still checked against memory)."),
+                io.Int.Input("count", default=81, min=0, max=100_000, tooltip="Frames in the window. 0 = to the end (still checked against memory). H3 generates 17k+5 "
+                             "frames (22, 39, 56, 73, 90, 107, 124 ...); the default 81 is not on that grid - the "
+                             "window's JSON says the nearest ones."),
                 io.Int.Input("lookbehind", default=0, min=0, max=1000, tooltip="Extra frames before the window, e.g. for a tracker. Reported separately, never counted as window frames.", extra_dict={'c2c_section': 'Context'}),
                 io.Int.Input("lookahead", default=0, min=0, max=1000, tooltip="Extra frames after the window.", extra_dict={'c2c_section': 'Context'}),
                 io.Int.Input("step", default=1, min=1, max=100, tooltip="Take every Nth frame (inside the window and the handles)."),
@@ -250,6 +252,11 @@ class MiniMaxH3_FrameWindow(io.ComfyNode):
                         "count": (int(count) - core_n) if int(count) > core_n else 0},
             "crop": list(media.crop) if getattr(media, "crop", None) else None,
         }
+        total = len(positions)
+        if total >= 22 and (total - 5) % 17:                 # L9.258: H3's frame grid is 17k+5
+            lo = 5 + 17 * ((total - 5) // 17)
+            window["h3_frame_grid"] = (f"{total} frames is not on H3's 17k+5 grid: the nearest are {lo} and {lo + 17}"
+                                       " (set count / handles so the window total lands on one)")
         from mmx_vendor.c2c_core.video.audio import LazyAudio, lazy_audio_for_handle
         if step == 1:
             audio = lazy_audio_for_handle(media.trimmed(before, after))      # L9.79: the generation hears the window
