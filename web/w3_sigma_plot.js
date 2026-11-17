@@ -12,6 +12,7 @@ import {
   widgetByName,
 } from "./shared.js";
 import {
+  button,
   lineChart,
   mountPanel,
   statusLine,
@@ -101,11 +102,84 @@ function updateShiftStatus(st, shiftVideo, shiftAudio) {
   }
 }
 
+/** The schedule as saved by "Save JSON" (L8.02): shifts, trained shifts and every step's numbers. Pure. */
+export function sigmaExport(st) {
+  return {
+    node: NODE,
+    shift_video: st.shiftVideo,
+    shift_audio: st.shiftAudio,
+    trained_shift_video: st.trainedVideo,
+    trained_shift_audio: st.trainedAudio,
+    steps: st.steps || [],
+  };
+}
+
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const LEGEND = [["σ video", "--cu-series-1", false], ["σ audio", "--cu-series-3", false], ["dσa/dσv (right axis)", "--cu-series-4", true]];
+
+/** The plot as a PNG on the panel's own background (the chart canvas itself is transparent), with a legend band on
+ *  top naming the series and the shifts, so the file reads on its own. */
+function chartPng(st) {
+  const src = st.chart.el.querySelector("canvas");
+  if (!src || !src.width || !src.height) return null;
+  const k = src.width / Math.max(1, src.getBoundingClientRect().width || src.width);   // backing scale
+  const band = Math.round(22 * k);
+  const out = document.createElement("canvas");
+  out.width = src.width;
+  out.height = src.height + band;
+  const ctx = out.getContext("2d");
+  let bg = "";
+  for (let el = st.root; el && !bg; el = el.parentElement) {
+    const c = getComputedStyle(el).backgroundColor;
+    if (c && c !== "transparent" && !/rgba\(.*,\s*0\)$/.test(c)) bg = c;
+  }
+  ctx.fillStyle = bg || "#16161c";
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(src, 0, band);
+  // legend: canvas cannot read var(--x) (paints black), so the tokens are resolved first
+  const css = getComputedStyle(st.chart.el);
+  ctx.font = `${Math.round(10 * k)}px system-ui, sans-serif`;
+  ctx.textBaseline = "middle";
+  let x = Math.round(6 * k);
+  const y = band / 2;
+  for (const [label, token, dashed] of LEGEND) {
+    ctx.strokeStyle = css.getPropertyValue(token).trim() || "#aaa";
+    ctx.lineWidth = Math.max(1, 1.5 * k);
+    ctx.setLineDash(dashed ? [3 * k, 2 * k] : []);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 14 * k, y); ctx.stroke();
+    x += 18 * k;
+    ctx.fillStyle = css.getPropertyValue("--cu-ink").trim() || "#ddd";
+    ctx.fillText(label, x, y);
+    x += ctx.measureText(label).width + 12 * k;
+  }
+  ctx.setLineDash([]);
+  ctx.fillStyle = css.getPropertyValue("--cu-ink-dim").trim() || "#999";
+  const shifts = `shift ${st.shiftVideo} / ${st.shiftAudio}`;
+  ctx.fillText(shifts, Math.max(x, out.width - ctx.measureText(shifts).width - 6 * k), y);
+  return out;
+}
+
+/** e.g. sigma_inspector_7_v12_a3.png: node id and the shifts the curve was drawn with. */
+function exportName(node, st, ext) {
+  return `sigma_inspector_${node.id}_v${st.shiftVideo}_a${st.shiftAudio}.${ext}`;
+}
+
 function pushSteps(st) {
   if (!st.steps?.length) return;
   const { xs, values } = stepsToChartData(st.steps);
   st.chart.setData(xs, values);
   updateShiftStatus(st, st.shiftVideo, st.shiftAudio);
+  for (const b of st.exportBtns || []) b.disabled = false;
 }
 
 function buildDom(node) {
@@ -141,6 +215,16 @@ function buildDom(node) {
   root.appendChild(chart.el);
   root.appendChild(status.el);
 
+  // L8.02: save the plot (PNG) and the schedule (JSON) next to Copy CSV; enabled once a curve is shown
+  const pngBtn = button("Save PNG");
+  const jsonBtn = button("Save JSON");
+  for (const b of [pngBtn, jsonBtn]) {
+    b.disabled = true;
+    b.classList.add("c2c-ui-chart__copy");
+  }
+  const legend = chart.el.querySelector(".c2c-ui-chart__legend");
+  (legend || root).append(pngBtn, jsonBtn);
+
   const st = {
     root,
     chart,
@@ -156,8 +240,19 @@ function buildDom(node) {
     apiOff: [],
     zoomOff: null,
     panelWidget: null,
+    exportBtns: [pngBtn, jsonBtn],
   };
   node[ST_KEY] = st;
+  pngBtn.addEventListener("click", () => {
+    const c = chartPng(st);
+    if (!c) return;
+    c.toBlob((blob) => { if (blob) download(blob, exportName(node, st, "png")); }, "image/png");
+  });
+  jsonBtn.addEventListener("click", () => {
+    if (!st.steps?.length) return;
+    download(new Blob([JSON.stringify(sigmaExport(st), null, 1)], { type: "application/json" }),
+             exportName(node, st, "json"));
+  });
 
   st.panelWidget = mountPanel(node, "mmx_sigma_plot", root, { minHeight: PANEL_MIN });
   st.panelWidget.onPanelResize = () => chart.redraw();

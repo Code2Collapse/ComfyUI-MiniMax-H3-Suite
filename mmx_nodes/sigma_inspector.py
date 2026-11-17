@@ -30,6 +30,9 @@ class MiniMaxH3_SigmaInspector(io.ComfyNode):
             node_id="MiniMaxH3_SigmaInspector",
             display_name="H3 Sigma Inspector",
             category="MiniMax H3/Sampling",
+            # L8.02: a display node. Core sends a CACHED node's UI only for output nodes, so as a plain node the plot
+            # stayed empty on every re-run of an unchanged graph (measured: docs/evidence/L8.02). It is cheap (no model).
+            is_output_node=True,
             description=(
                 "Read-only debug table: per-step sigma_v, sigma_a, analytic dσa/dσv "
                 "(shift-invariant), finite-difference dσa/dσv (what the sampler steps), "
