@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from dataclasses import asdict
 import sys
 from pathlib import Path
 
@@ -33,7 +35,9 @@ class MiniMaxH3_ColorQC(io.ComfyNode):
             description=(
                 "Score a decoded clip for Hybrid HDR A/B: Hasler-Süsstrunk colourfulness "
                 "(display sRGB 0-255), linear luma DR, clipped highlight fraction, headroom, "
-                "texture energy, temporal flicker, and optional Oklab distance to a reference."
+                "texture energy, temporal flicker, and optional Oklab distance to a reference. Also per frame: "
+                "colourfulness trend, frame-to-frame Oklab drift (worst frame named), chroma and luma histograms, "
+                "a banding heuristic and deltaE_OK against the reference - all in metrics_json for A/B tables."
             ),
             inputs=[
                 io.Image.Input("images"),
@@ -46,6 +50,8 @@ class MiniMaxH3_ColorQC(io.ComfyNode):
             outputs=[
                 io.String.Output("report"),
                 io.Image.Output("preview"),
+                # appended last (L8.06): saved links to report / preview keep their slots
+                io.String.Output("metrics_json", tooltip="Every number above plus per-frame lists, as JSON."),
             ],
         )
 
@@ -63,7 +69,7 @@ class MiniMaxH3_ColorQC(io.ComfyNode):
             ref = reference.to(device) if reference is not None else None
             metrics, report = measure_color_qc(imgs, ref)
             preview = build_preview_strip(imgs, metrics)
-            return report, preview.to(images.dtype)
+            return report, preview.to(images.dtype), json.dumps(asdict(metrics))
 
-        report, preview = run_with_cpu_fallback(_work, device=dev, label="MiniMaxH3_ColorQC")
-        return io.NodeOutput(report, preview)
+        report, preview, metrics_json = run_with_cpu_fallback(_work, device=dev, label="MiniMaxH3_ColorQC")
+        return io.NodeOutput(report, preview, metrics_json)
