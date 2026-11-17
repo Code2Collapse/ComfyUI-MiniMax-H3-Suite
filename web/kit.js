@@ -17,7 +17,7 @@
 // Sits UNDER the bespoke widgets; it adds a row and never replaces anything.
 // Plain ES module, no Vue, nothing touches `window` at import time.
 
-import { app, api, chainOnRemoved, findNodeByExecId, forEachNode, themeVar, vueFitNodeHeight } from "./shared.js";
+import { app, api, chainOnRemoved, findNodeByExecId, forEachNode, themeVar, vueFitNodeHeight, vueNodesActive } from "./shared.js";
 import { humaniseH3Error } from "./h3_errors.js";
 
 const PREFIX = "MiniMaxH3_";
@@ -82,11 +82,51 @@ function buildStrip(stage) {
   return { el, badge, status };
 }
 
+/** Hover text for an error: the plain-English message, then the exception's own first line (L9.259 - the hover used
+ *  to be the raw traceback). Pure; tests/test_kit_error_row.py runs it. */
+export function errorTooltip(plain, raw) {
+  const line = String(raw || "").split("\n").map((l) => l.trim()).find(Boolean) || "";
+  return line && line !== plain ? `${plain}\n\n${line}` : String(plain || "");
+}
+
+/** Strip height for a state: one 18 px row, or (an error) up to ERROR_LINES wrapped rows of the measured text. */
+export const ERROR_LINES = 3;
+export function stripHeight(state, textHeight) {
+  if (state !== "error") return 18;
+  return Math.max(18, Math.min(Math.ceil(textHeight || 0) + 4, ERROR_LINES * 13 + 4));
+}
+
 function setStatus(st, text, tone) {
+  const err = tone === "error";
   st.status.textContent = text || "";
-  st.status.style.color = tone === "error" ? themeVar("danger") : "";
-  st.status.style.opacity = tone === "error" ? "1" : ".7";
-  st.status.title = st.fullError || "";
+  st.status.style.color = err ? themeVar("danger") : "";
+  st.status.style.opacity = err ? "1" : ".7";
+  // an error wraps to ERROR_LINES lines (it was one ellipsed row: cut to a few words, L9.259); other states stay one row
+  st.status.style.whiteSpace = err ? "normal" : "nowrap";
+  st.status.style.display = err ? "-webkit-box" : "";
+  st.status.style.webkitBoxOrient = err ? "vertical" : "";
+  st.status.style.webkitLineClamp = err ? String(ERROR_LINES) : "";
+  st.status.style.lineHeight = err ? "13px" : "";
+  st.status.style.overflowWrap = err ? "anywhere" : "";
+  st.status.title = err ? errorTooltip(text, st.fullError) : "";
+  st.ui.el.style.alignItems = err ? "flex-start" : "center";
+  refitStrip(st, err);
+}
+
+/** Grow / shrink the node when the strip's height changes (never on a same-height status change). */
+function refitStrip(st, err) {
+  const node = st.node;
+  if (!node) return;
+  const h = stripHeight(err ? "error" : "", st.status.scrollHeight);
+  const old = st.height || 18;
+  if (h === old) return;
+  st.height = h;
+  try {
+    if (vueNodesActive()) { vueFitNodeHeight(node); return; }
+    // classic: add / remove only the strip's change, so a node the user sized by hand keeps its extra room
+    if (node.graph) node.setSize([node.size[0], Math.max(node.computeSize?.()[1] ?? 0, node.size[1] + h - old)]);
+    node.setDirtyCanvas?.(true, true);
+  } catch (_e) { /* node may be mid-removal */ }
 }
 
 /** The saved values with one trailing placeholder when core's legacy migration would otherwise drop entries at
@@ -117,7 +157,7 @@ app.registerExtension({
       try {
         if (!this[ST]) {
           const ui = buildStrip(stage);
-          const st = { ui, status: ui.status, t0: 0, fullError: "" };
+          const st = { ui, status: ui.status, t0: 0, fullError: "", node: null, height: 18 };
           this[ST] = st;
           // ComfyUI insets a DOM widget by `margin` (default 10) on every side:
           // a 15px slot gave the strip no room and its badge spilled past the
@@ -127,8 +167,9 @@ app.registerExtension({
           // is what serialize() and configure() read. Which length a save ends up with also decides whether core's
           // legacy migration fires - see the configure() guard below (C2C L8.21).
           w.serialize = false;
-          w.computeSize = (width) => [width, 18];
-          chainOnRemoved(this, () => { delete this[ST]; });
+          w.computeSize = (width) => [width, st.height || 18];
+          st.node = this;
+          chainOnRemoved(this, () => { st.node = null; delete this[ST]; });
           setStatus(st, "", "");
         }
         if (hasAdvanced) requestAnimationFrame(() => vueFitNodeHeight(this));

@@ -347,7 +347,7 @@ export function setWidgetVisible(widget, visible) {
   }
 }
 
-function vueNodesActive() {
+export function vueNodesActive() {
   try {
     return app?.ui?.settings?.getSettingValue?.("Comfy.VueNodes.Enabled") === true;
   } catch (_e) { return false; }
