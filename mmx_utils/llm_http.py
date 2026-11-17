@@ -37,6 +37,38 @@ DEFAULTS: dict[str, tuple[str, str, str]] = {
     OPENAI: ("https://api.openai.com/v1", "", "OPENAI_API_KEY"),
 }
 OFFLINE_ENV = "MMX_PROMPT_WRITER_OFFLINE"
+# L9.288 (L3 audit P1): base_url and api_key_env come from the workflow, so a shared workflow (or any client) could
+# name ANY environment variable and send it to its own server. An environment key now only goes to loopback, the
+# key's own service, or a host the owner lists; a named variable must look like a key. Same rule as the Director
+# (mmx_nodes/director/minimax_media.py env_key_allowed), kept here so this module imports nothing heavy.
+HOSTS_ENV = "MMX_PROMPT_WRITER_HOSTS"                # comma-separated extra hosts the owner trusts with env keys
+_LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+_OFFICIAL_HOSTS = {"ANTHROPIC_API_KEY": {"api.anthropic.com"}, "OPENAI_API_KEY": {"api.openai.com"},
+                   "GEMINI_API_KEY": {"generativelanguage.googleapis.com"}}
+
+
+def _host(url: str) -> str:
+    import urllib.parse
+    try:
+        return (urllib.parse.urlsplit(str(url or "")).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def key_allowed(var: str, base_url: str) -> bool:
+    """True when the environment variable ``var`` may be sent to ``base_url``."""
+    import re
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*(API_KEY|_KEY|_TOKEN)", var or ""):
+        return False
+    host = _host(base_url)
+    if not host:
+        return False
+    if host in _LOOPBACK or host in _OFFICIAL_HOSTS.get(var, ()):
+        return True
+    extra = set()
+    for env in (HOSTS_ENV, "MINIMAX_DIRECTOR_VLM_HOSTS"):
+        extra |= {h.strip().lower() for h in (os.environ.get(env) or "").split(",") if h.strip()}
+    return host in extra
 PREFLIGHT_TIMEOUT = 3.0
 
 
@@ -67,7 +99,15 @@ class BackendConfig:
 
     @property
     def key(self) -> str:
-        return os.environ.get(self.api_key_env, "") if self.api_key_env else ""
+        if not self.api_key_env:
+            return ""
+        value = os.environ.get(self.api_key_env, "")
+        if value and not key_allowed(self.api_key_env, self.base_url):
+            self.log.append(f"not sending {self.api_key_env} to {_host(self.base_url) or 'an unknown host'}: "
+                            f"environment keys only go to localhost, the key's own service, or hosts listed in "
+                            f"{HOSTS_ENV}")
+            return ""
+        return value
 
 
 def offline() -> bool:
