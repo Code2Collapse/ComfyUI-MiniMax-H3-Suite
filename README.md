@@ -759,6 +759,19 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
   the key in the request URL, where a connection error could carry it into the error text and the log). Any
   error text it returns is cleaned of the key.
 
+## Color QC: per-frame trends and a JSON output (2026-11-18)
+
+**H3 Color QC** now also measures, frame by frame:
+- colourfulness, with its lowest and highest values and the trend over the clip;
+- colour drift from one frame to the next, naming the frame with the biggest jump;
+- chroma and luma histograms;
+- a banding estimate (a heuristic, not a perceptual model);
+- the colour difference to the reference (deltaE in Oklab), frame by frame when the reference is a clip of the same length.
+
+All of it goes to the new `metrics_json` output, added after the existing outputs so saved workflows keep their links.
+It also uses far less memory: a 49-frame 1080p clip with a reference peaked at 0.5 GB of extra RAM instead of 6.2 GB,
+with the same scores.
+
 ## Panels inside subgraphs and readable errors (2026-11-18)
 
 - With the Suite installed on its own, every node panel now stays live after **Convert to Subgraph** in Nodes 2.0.
