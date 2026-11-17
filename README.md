@@ -759,6 +759,14 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
   the key in the request URL, where a connection error could carry it into the error text and the log). Any
   error text it returns is cleaned of the key.
 
+## Security: where the Prompt Writer may send your API keys (2026-11-18)
+
+The Prompt Writer reads a provider key from the environment variable you name. A key from the environment is now
+sent only to this machine (localhost), the key's own service (Anthropic / OpenAI / Gemini), or hosts you list in
+`MMX_PROMPT_WRITER_HOSTS` (comma-separated; the Director's `MINIMAX_DIRECTOR_VLM_HOSTS` counts too), and the
+variable must look like a key (`*_API_KEY`, `*_KEY`, `*_TOKEN`). Before, a shared workflow could name any variable
+and send it to any server. If a key is held back, the node's log says why.
+
 ## Compact nodes: only the controls that matter (2026-11-18)
 
 Every Suite node now shows only the controls that apply to its current settings and wiring, in collapsible sections
