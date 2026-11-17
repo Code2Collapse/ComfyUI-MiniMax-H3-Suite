@@ -1107,6 +1107,13 @@ LatentUpscaleWithModel). Models (file names from upstream; **every source UNVERI
 weights are shipped**): the Ref2VA bf16 model (or the hybrid FL2VA/Ref2VA one), the IC LoRA, HyperFlow 8-step, LMS
 Sharp r64, the bf16 latent upscaler (`.safetensors` only).
 
+Example workflows (2026-11-17): `workflows/h3_open_regen_ic_draft_to_2k.json` (HyperFlow 8-step chain) and
+`workflows/h3_open_regen_ic_t2va_to_2k.json` (DMAD 4-step chain). Load Video -> Prepare Draft -> VAE Encode ->
+Latent Upscale (Model) to 2560x1440; Official Prompt -> Reference to Video with the draft as `ref_video_0` at the
+same 2560 x 1440 x 124; Compose Target Latent; Ref2VA -> LoRA Chain -> Sigma Shift 12 / 3; up3 sigmas, Euler, CFG 1,
+seed 42; VAE Decode -> Create Video with the draft's audio. Model widgets hold file names only. Checked by the wiring
+test (types, links, widget values) - not run with real weights.
+
 ## Sigma Presets (official templates)
 
 **Sigma Presets** gives the sigma schedule, sampler, cfg and steps of a model as ComfyUI's official workflow
