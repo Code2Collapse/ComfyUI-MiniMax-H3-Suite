@@ -759,6 +759,15 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
   the key in the request URL, where a connection error could carry it into the error text and the log). Any
   error text it returns is cleaned of the key.
 
+## Panels inside subgraphs and readable errors (2026-11-18)
+
+- With the Suite installed on its own, every node panel now stays live after **Convert to Subgraph** in Nodes 2.0.
+  Before, the subgraph showed a dead copy of the panel. With the C2C Custom Node Packs also installed, only one copy of
+  this fix runs.
+- When a node fails, the plain-English error in the strip at the bottom of the node now wraps to up to three lines
+  instead of being cut to a few words. Hovering shows the same message plus the original error line, not the raw
+  traceback. The node grows to fit the message and shrinks back on the next run.
+
 ## Security: where the Prompt Writer may send your API keys (2026-11-18)
 
 The Prompt Writer reads a provider key from the environment variable you name. A key from the environment is now
