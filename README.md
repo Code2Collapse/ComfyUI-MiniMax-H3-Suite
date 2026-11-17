@@ -759,6 +759,14 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
   the key in the request URL, where a connection error could carry it into the error text and the log). Any
   error text it returns is cleaned of the key.
 
+## Compact nodes: only the controls that matter (2026-11-18)
+
+Every Suite node now shows only the controls that apply to its current settings and wiring, in collapsible sections
+(e.g. Latent Upscale (Model) hides the model controls for plain resizing; Identity Fusion folds its expression
+controls). Hidden controls keep their values and still run; the node resizes to fit in both renderers and inside
+subgraphs. Saved workflows load unchanged. The Suite carries its own copy of the layout engine, so it works without
+CustomNodePacks; with both installed, one engine runs.
+
 ## HDR inside the Suite: SDR -> HDR EXR, 4K join, dataset and training (v1.1.0, 2026-11-17)
 
 18 nodes in **MiniMax H3/HDR** (search "H3 HDR"). Step-by-step: [`docs/HDR_HOWTO.md`](docs/HDR_HOWTO.md); five
