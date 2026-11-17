@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__version__ = "1.1.0"   # 1.1.0: HDR (A29) + Open-H3 Regenerate STD / 2K IC; see CHANGELOG.md
+
 from pathlib import Path
 
 # ComfyUI imports its own top-level `utils` package and `nodes.py` before custom
@@ -225,6 +227,26 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.open_regen_ic", "MiniMaxH3_OpenRegenICSigmas"),
     (".mmx_nodes.open_regen_ic", "MiniMaxH3_OpenRegenICComposeLatent"),
     (".mmx_nodes.open_regen_ic", "MiniMaxH3_OpenRegenICLoRAChain"),
+    # owner A29 (2026-11-16): HDR inference + I/O
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRLogEncode"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRLogDecode"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRBiasCorrect"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRGamutConvert"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRClipMask"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRGainMapJoin"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRPrompt"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRTonemapPreview"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRLoadEXRSequence"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRSaveEXRSequence"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRSaveLog16"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDRSaveHDR10"),
+    (".mmx_nodes.hdr_a29_nodes", "MiniMaxH3_HDREvalReport"),
+    # owner A29 (2026-11-16): HDR dataset + training (background jobs)
+    (".mmx_nodes.hdr_a29_dataset_nodes", "MiniMaxH3_HDRFetchPolyHaven"),
+    (".mmx_nodes.hdr_a29_dataset_nodes", "MiniMaxH3_HDRFetchHuggingFace"),
+    (".mmx_nodes.hdr_a29_dataset_nodes", "MiniMaxH3_HDRHDRIToClips"),
+    (".mmx_nodes.hdr_a29_dataset_nodes", "MiniMaxH3_HDRMakePairs"),
+    (".mmx_nodes.hdr_a29_train_node", "MiniMaxH3_HDRTrainICLoRA"),
 )
 
 

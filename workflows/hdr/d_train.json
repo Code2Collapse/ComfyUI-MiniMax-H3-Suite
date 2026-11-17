@@ -1,0 +1,107 @@
+{
+ "revision": 0,
+ "last_node_id": 2,
+ "last_link_id": 0,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "MarkdownNote",
+   "pos": [
+    20,
+    60
+   ],
+   "size": [
+    560,
+    520
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "START HERE",
+   "properties": {},
+   "widgets_values": [
+    "# Train the HDR IC-LoRA (A29, node 16)\n\nTrains MiniMax H3 (ref2va) with ai-toolkit: the SDR clip is the `<Video 1>` reference, the log-HDR clip is the target, the loss is on the target only, LoRA on qkv_proj / out_proj / fc1 / fc2 (rank / alpha 16).\n\n1. Build the dataset first (`c_dataset_build.json`): `dataset_folder` = its `pairs` folder.\n2. Set **aitoolkit_dir** to your ai-toolkit folder. It must include MiniMax H3 support: if the node says it is missing, open a terminal in that folder and run `git pull`.\n3. Leave **dry_run** on for the first run: it checks everything and writes the YAML without training. Then turn it off and run.\n4. Training runs in the background (**wait** off): the panel shows the log, the loss curve and **Cancel**. Run again with the same **job_name** to continue from the last checkpoint.\n\nNeeds a CUDA GPU with enough memory for H3 (quantised, low_vram) and the H3 weights (downloaded by ai-toolkit from Comfy-Org/MiniMax-H3 on first run). Checkpoints: `output/hdr_lora/<job_name>/`."
+   ],
+   "color": "#2a2a2a",
+   "bgcolor": "#353535"
+  },
+  {
+   "id": 2,
+   "type": "MiniMaxH3_HDRTrainICLoRA",
+   "pos": [
+    620,
+    60
+   ],
+   "size": [
+    460,
+    760
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": []
+    },
+    {
+     "name": "yaml_path",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "title": "H3 HDR · Train IC-LoRA",
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_HDRTrainICLoRA"
+   },
+   "widgets_values": [
+    "hdr_dataset/pairs",
+    "",
+    "",
+    "h3_hdr_iclora_v1",
+    "hdr_lora",
+    3000,
+    0.0001,
+    250,
+    16,
+    16,
+    768,
+    "ref2va_pruned",
+    true,
+    true,
+    false
+   ]
+  }
+ ],
+ "links": [],
+ "groups": [
+  {
+   "id": 1,
+   "title": "D · Train HDR IC-LoRA",
+   "bounding": [
+    600,
+    0,
+    520,
+    860
+   ],
+   "color": "#3f3f46",
+   "font_size": 24,
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.6,
+   "offset": [
+    60,
+    80
+   ]
+  }
+ },
+ "version": 0.4
+}

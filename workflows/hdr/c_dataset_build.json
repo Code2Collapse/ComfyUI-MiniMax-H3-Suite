@@ -1,0 +1,227 @@
+{
+ "revision": 0,
+ "last_node_id": 4,
+ "last_link_id": 2,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "MarkdownNote",
+   "pos": [
+    20,
+    60
+   ],
+   "size": [
+    560,
+    560
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "START HERE",
+   "properties": {},
+   "widgets_values": [
+    "# HDR dataset build (A29, nodes 12, 14, 15)\n\nBuilds the HDR IC-LoRA training set: **Poly Haven HDRIs -> camera-move EXR clips -> SDR / log-HDR video pairs**.\n\n1. **Fetch Poly Haven** downloads CC0 HDRIs (2k .hdr, 20 of them) to `output/hdr_dataset/hdri`. Re-running skips what is already there; an interrupted download resumes.\n2. **HDRI -> Clips** renders 2 camera moves (pan / tilt / push) per HDRI: 73 frames (17k+5) at 1344x768, half EXR, scene-linear Rec.709 (1.0 = diffuse white), to `output/hdr_dataset/clips`.\n3. **Make Pairs** writes `output/hdr_dataset/pairs/control/<clip>.mp4` (SDR reference: exposure shift, half hard clip / half soft roll-off, 15 % unclipped, 8-bit h264 crf 16-28), `targets/<clip>.mp4` (diffhdr_log_16384, lossless RGB), `targets/<clip>.txt` (caption) and `meta.jsonl`.\n\nAll three run as background jobs; the panel on each node shows progress, the log and a **Cancel** button. With **wait** on (default) the node waits and ComfyUI's Cancel stops the job.\n\nDisk: about 6 MB per 2k HDRI, about 0.4 GB of EXR per clip (73 frames), a few MB per pair. Next: `d_train.json`."
+   ],
+   "color": "#2a2a2a",
+   "bgcolor": "#353535"
+  },
+  {
+   "id": 2,
+   "type": "MiniMaxH3_HDRFetchPolyHaven",
+   "pos": [
+    620,
+    60
+   ],
+   "size": [
+    440,
+    420
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "hdri_folder",
+     "type": "STRING",
+     "links": [
+      1
+     ]
+    },
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "title": "H3 HDR Dataset · Fetch Poly Haven",
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_HDRFetchPolyHaven"
+   },
+   "widgets_values": [
+    "hdr_dataset/hdri",
+    "all",
+    "2k",
+    20,
+    "hdr",
+    true
+   ]
+  },
+  {
+   "id": 3,
+   "type": "MiniMaxH3_HDRHDRIToClips",
+   "pos": [
+    1100,
+    60
+   ],
+   "size": [
+    440,
+    560
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "hdri_folder",
+     "type": "STRING",
+     "link": 1,
+     "widget": {
+      "name": "hdri_folder"
+     }
+    }
+   ],
+   "outputs": [
+    {
+     "name": "clips_folder",
+     "type": "STRING",
+     "links": [
+      2
+     ]
+    },
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "title": "H3 HDR Dataset · HDRI -> Clips",
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_HDRHDRIToClips"
+   },
+   "widgets_values": [
+    "hdr_dataset/hdri",
+    "hdr_dataset/clips",
+    2,
+    73,
+    1344,
+    768,
+    60.0,
+    "mix",
+    "grey_0.18",
+    0,
+    0,
+    true
+   ]
+  },
+  {
+   "id": 4,
+   "type": "MiniMaxH3_HDRMakePairs",
+   "pos": [
+    1580,
+    60
+   ],
+   "size": [
+    460,
+    620
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clips_folder",
+     "type": "STRING",
+     "link": 2,
+     "widget": {
+      "name": "clips_folder"
+     }
+    }
+   ],
+   "outputs": [
+    {
+     "name": "dataset_folder",
+     "type": "STRING",
+     "links": []
+    },
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "title": "H3 HDR Dataset · Make Pairs",
+   "properties": {
+    "Node name for S&R": "MiniMaxH3_HDRMakePairs"
+   },
+   "widgets_values": [
+    "hdr_dataset/clips",
+    "hdr_dataset/pairs",
+    0,
+    1.5,
+    0.15,
+    16,
+    28,
+    "HDR scene-linear footage encoded in a log curve, high dynamic range. Scene: {scene}. Lighting: {lighting}. Camera: {camera}.",
+    24,
+    true
+   ]
+  }
+ ],
+ "links": [
+  [
+   1,
+   2,
+   0,
+   3,
+   0,
+   "STRING"
+  ],
+  [
+   2,
+   3,
+   0,
+   4,
+   0,
+   "STRING"
+  ]
+ ],
+ "groups": [
+  {
+   "id": 1,
+   "title": "C · HDR dataset build",
+   "bounding": [
+    600,
+    0,
+    1480,
+    720
+   ],
+   "color": "#3f3f46",
+   "font_size": 24,
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.6,
+   "offset": [
+    60,
+    80
+   ]
+  }
+ },
+ "version": 0.4
+}

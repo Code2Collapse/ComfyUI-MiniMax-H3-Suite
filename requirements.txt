@@ -13,3 +13,5 @@ numpy>=1.24.0
 # mediapipe         # face landmarks
 # PyOpenColorIO OpenImageIO   # OCIO / EXR bridges
 # openai-whisper scenedetect  # audio transcript, shot cuts
+# OpenEXR          # HDR EXR I/O ONLY if this OpenCV build cannot read/write EXR (the HDR nodes set
+#                  # OPENCV_IO_ENABLE_OPENEXR first and fall back to OpenImageIO)

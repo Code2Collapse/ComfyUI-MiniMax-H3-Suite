@@ -1,0 +1,12 @@
+[project]
+name = "comfyui-minimax-h3-suite"
+description = "MiniMax H3 Suite for ComfyUI: masked replacement spine, sampling guards, long video, Open-H3 Regenerate (STD + 2K IC) and HDR (log encode, IC-LoRA dataset + training, EXR / HDR10 delivery)."
+version = "1.1.0"
+license = { file = "LICENSE" }
+
+[project.urls]
+Repository = "https://github.com/Code2Collapse/ComfyUI-MiniMax-H3-Suite"
+
+[tool.comfy]
+PublisherId = "code2collapse"
+DisplayName = "MiniMax H3 Suite"
