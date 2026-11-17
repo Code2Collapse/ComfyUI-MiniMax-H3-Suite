@@ -119,15 +119,15 @@ class MiniMaxH3_ProxyManager(io.ComfyNode):
             inputs=[
                 C2C_VIDEO.Input("media", tooltip="From H3 Media Probe / Media Conform, or Load Video (C2C)."),
                 io.Combo.Input("scale", options=list(SCALES), default="1/2"),
-                io.Int.Input("custom_width", default=0, min=0, max=16384, tooltip="scale custom: 0 = keep aspect."),
-                io.Int.Input("custom_height", default=0, min=0, max=16384, tooltip="scale custom: 0 = keep aspect."),
+                io.Int.Input("custom_width", default=0, min=0, max=16384, tooltip="scale custom: 0 = keep aspect.", extra_dict={'c2c_show_if': {'scale': ['custom']}}),
+                io.Int.Input("custom_height", default=0, min=0, max=16384, tooltip="scale custom: 0 = keep aspect.", extra_dict={'c2c_show_if': {'scale': ['custom']}}),
                 io.Combo.Input("codec", options=list(EXT), default="h264",
                                tooltip="h264 (.mp4) small; prores (.mov) edit-friendly 10-bit; ffv1 (.mkv) lossless."),
                 io.Combo.Input("audio", options=["keep", "none"], default="keep",
                                tooltip="keep: the selection's audio (AAC, FLAC in .mkv); a silent source gives silence."),
                 io.String.Input("job_dir", default="h3_jobs/proxies",
                                 tooltip="A folder inside ComfyUI's output folder; proxies go to <job_dir>/proxies/."),
-                io.Boolean.Input("rebuild", default=False, tooltip="Encode again even when a matching proxy exists."),
+                io.Boolean.Input("rebuild", default=False, tooltip="Encode again even when a matching proxy exists.", extra_dict={'c2c_section': 'Cache'}),
             ],
             outputs=[
                 C2C_VIDEO.Output("proxy", tooltip="Lazy handle on the proxy file."),

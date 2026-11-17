@@ -153,30 +153,31 @@ class MiniMaxH3_FirstBlockCache(io.ComfyNode):
                     tooltip="How much block 0's residual may move before the "
                             "step must run in full. Relative, not absolute: "
                             "0.08 means 8%. Higher is faster and freezes "
-                            "motion sooner. Custom mode only."),
+                            "motion sooner. Custom mode only.", extra_dict={"c2c_show_if": {"mode": [CUSTOM_MODE]}}),
                 io.Float.Input(
                     "start_percent", default=0.10, min=0.0, max=1.0, step=0.01,
                     optional=True,
                     tooltip="Skip nothing before this point in the denoise. "
                             "Early steps decide composition, so caching there "
-                            "changes what the shot is of. Custom mode only."),
+                            "changes what the shot is of. Custom mode only.",
+                            extra_dict={"c2c_show_if": {"mode": [CUSTOM_MODE]}}),
                 io.Float.Input(
                     "end_percent", default=0.95, min=0.0, max=1.0, step=0.01,
                     optional=True,
                     tooltip="Skip nothing after this point. The last steps are "
                             "fine detail and cheap to get wrong. Custom mode "
-                            "only."),
+                            "only.", extra_dict={"c2c_show_if": {"mode": [CUSTOM_MODE]}}),
                 io.Int.Input(
                     "max_consecutive_hits", default=2, min=1, max=20,
                     optional=True,
                     tooltip="How many steps may be skipped back to back. Error "
                             "compounds: two is recoverable, ten is a still "
-                            "frame. Custom mode only."),
+                            "frame. Custom mode only.", extra_dict={"c2c_show_if": {"mode": [CUSTOM_MODE]}}),
                 io.Int.Input(
                     "warmup_steps", default=3, min=0, max=50, optional=True,
                     tooltip="Run this many steps in full before caching is "
                             "allowed at all, regardless of the window. Custom "
-                            "mode only."),
+                            "mode only.", extra_dict={"c2c_show_if": {"mode": [CUSTOM_MODE]}}),
                 io.Boolean.Input(
                     "temporal_guard", default=True, optional=True,
                     tooltip="Decide on the WORST single frame instead of the "
@@ -184,13 +185,13 @@ class MiniMaxH3_FirstBlockCache(io.ComfyNode):
                             "change completely while the average stays under "
                             "threshold - that frame then freezes while the rest "
                             "of the shot moves. Leave it on for video. Custom "
-                            "mode only."),
+                            "mode only.", extra_dict={"c2c_show_if": {"mode": [CUSTOM_MODE]}}),
                 io.Int.Input(
                     "metric_stride", default=1, min=1, max=16, optional=True,
                     tooltip="Compare every Nth row instead of all of them. The "
                             "comparison allocates too; on a long clip a stride "
                             "of 4 decides the same and costs less. Custom mode "
-                            "only."),
+                            "only.", extra_dict={"c2c_show_if": {"mode": [CUSTOM_MODE]}}),
             ],
             outputs=[
                 io.Model.Output("model"),

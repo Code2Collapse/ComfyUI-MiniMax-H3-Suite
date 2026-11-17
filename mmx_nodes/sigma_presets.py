@@ -86,9 +86,11 @@ class MiniMaxH3_SigmaPresets(io.ComfyNode):
                 io.Float.Input("denoise", default=1.0, min=0.01, max=1.0, step=0.01,
                                tooltip="Below 1: the last part of a longer schedule, as BasicScheduler does."),
                 io.Int.Input("width", default=1024, min=64, max=8192, step=16,
-                             tooltip="Image width: only Flux.2's scheduler depends on it."),
+                             tooltip="Image width: only Flux.2's scheduler depends on it.",
+                             extra_dict={"c2c_show_if": {"preset": ["Flux.2 dev (template)", "Flux.2 Klein base (template)", "Flux.2 Klein distilled (template)"]}}),
                 io.Int.Input("height", default=1024, min=64, max=8192, step=16,
-                             tooltip="Image height: only Flux.2's scheduler depends on it."),
+                             tooltip="Image height: only Flux.2's scheduler depends on it.",
+                             extra_dict={"c2c_show_if": {"preset": ["Flux.2 dev (template)", "Flux.2 Klein base (template)", "Flux.2 Klein distilled (template)"]}}),
                 io.Model.Input("model", optional=True,
                                tooltip="Optional: use this model's own sampling (its shift patches included) "
                                        "instead of the preset's."),

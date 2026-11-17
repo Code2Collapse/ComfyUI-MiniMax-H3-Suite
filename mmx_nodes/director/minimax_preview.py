@@ -408,16 +408,16 @@ class MiniMaxH3PreviewOverride(io.ComfyNode):
                                        "depends on 'playback'; with 'true speed' it is a "
                                        "ceiling, not a promise."),
                 io.Int.Input("webp_quality", default=80, min=1, max=100, step=1, optional=True,
-                             tooltip="WebP quality of the animation sent to the node."),
+                             tooltip="WebP quality of the animation sent to the node.", extra_dict={'c2c_section': 'Preview', 'c2c_show_if': {'preview_target': ['node', 'both']}}),
                 io.Int.Input("every_n_steps", default=1, min=1, max=50, step=1, optional=True,
-                             tooltip="Never preview more often than every N sampler steps."),
+                             tooltip="Never preview more often than every N sampler steps.", extra_dict={'c2c_section': 'Performance'}),
                 io.Int.Input("max_preview_overhead", default=25, min=0, max=100, step=5, optional=True,
                              tooltip="Cap on how much of the render time previews may use, in "
                                      "percent. A full VAE decode can cost tens of seconds per "
                                      "preview; this spaces them out automatically instead of "
-                                     "stalling the run. 0 disables the cap."),
+                                     "stalling the run. 0 disables the cap.", extra_dict={'c2c_section': 'Performance'}),
                 io.Boolean.Input("suppress_default_preview", default=True, optional=True,
-                                 tooltip="Hide ComfyUI's built-in single-frame preview while this runs."),
+                                 tooltip="Hide ComfyUI's built-in single-frame preview while this runs.", extra_dict={'c2c_section': 'Preview'}),
                 # NEW WIDGETS GO LAST. ComfyUI serialises widget values positionally, so
                 # inserting one in the middle shifts every value after it in workflows that
                 # were saved before it existed — this one first landed between preview_fps
@@ -432,7 +432,7 @@ class MiniMaxH3PreviewOverride(io.ComfyNode):
                                        "'source fps' plays them at preview_fps flat, like "
                                        "ComfyUI's own preview: motion reads at normal speed, "
                                        "the clip ends early. Judge timing with the first, "
-                                       "movement with the second."),
+                                       "movement with the second.", extra_dict={'c2c_section': 'Preview', 'c2c_show_if': {'preview_target': ['node', 'both']}}),
             ],
             outputs=[io.Model.Output(tooltip="Model with the preview attached.")],
             hidden=[io.Hidden.unique_id],

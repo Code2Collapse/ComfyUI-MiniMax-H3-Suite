@@ -145,6 +145,7 @@ class MiniMaxH3_DetailMatch(io.ComfyNode):
                     min=0,
                     max=0x7FFFFFFF,
                     tooltip="Seed for per-frame grain synthesis (deterministic per frame index).",
+                    extra_dict={'c2c_section': 'Grain'},
                 ),
             ],
             outputs=[

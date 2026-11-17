@@ -106,7 +106,8 @@ class MiniMaxH3_ContinuationNext(io.ComfyNode):
                                tooltip="For a segment that Commit held for approval: accept it (it joins the video) "
                                        "or reject it (its frames are generated again). 'keep waiting' stops here."),
                 io.Boolean.Input("restart", default=False,
-                                 tooltip="Archive this session (renamed with the date) and start again from frame 0."),
+                                 tooltip="Archive this session (renamed with the date) and start again from frame 0.",
+                                 extra_dict={"c2c_section": "Session"}),
                 io.Vae.Input("video_vae", optional=True,
                              tooltip="The H3 video VAE - needed with source_video (the plate is encoded per segment)."),
                 io.Vae.Input("audio_vae", optional=True,
@@ -391,15 +392,19 @@ class MiniMaxH3_ContinuationCommit(io.ComfyNode):
                                tooltip="accept unless drift: hold the segment when a drift limit is crossed. accept: "
                                        "always. always ask: hold every segment until H3 Continuation Next's decision."),
                 io.Float.Input("max_colour_drift", default=6.0, min=0.5, max=50.0, step=0.5,
-                               tooltip="Largest colour change (CIE Lab dE of the mean) from segment 0."),
+                               tooltip="Largest colour change (CIE Lab dE of the mean) from segment 0.",
+                               extra_dict={"c2c_section": "Drift limits"}),
                 io.Float.Input("min_sharpness", default=0.6, min=0.05, max=1.0, step=0.05,
-                               tooltip="Smallest sharpness (Laplacian variance) as a fraction of segment 0."),
+                               tooltip="Smallest sharpness (Laplacian variance) as a fraction of segment 0.",
+                               extra_dict={"c2c_section": "Drift limits"}),
                 io.Float.Input("max_seam_jump", default=3.0, min=1.0, max=50.0, step=0.5,
-                               tooltip="Largest change across the seam, in multiples of the clip's usual frame change."),
+                               tooltip="Largest change across the seam, in multiples of the clip's usual frame change.",
+                               extra_dict={"c2c_section": "Drift limits"}),
                 io.Combo.Input("freeze_tail", options=list(FREEZE_MODES), default=FREEZE_MODES[0], optional=True,
                                tooltip="H3 often ends by freezing on its last image. keep: as is. report: measure it. "
                                        "cut before it: shorten this segment to the longest 17k+5 length that ends "
-                                       "before the freeze, so the next segment continues from moving frames."),
+                                       "before the freeze, so the next segment continues from moving frames.",
+                                       extra_dict={"c2c_section": "Drift limits"}),
             ],
             outputs=[
                 io.Image.Output(display_name="new_frames", tooltip="The frames this segment added."),

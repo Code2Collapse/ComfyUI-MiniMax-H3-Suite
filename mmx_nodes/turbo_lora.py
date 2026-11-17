@@ -63,7 +63,7 @@ class MiniMaxH3_TurboLoRA(io.ComfyNode):
                     tooltip=(
                         "OFF (default): bypass path — sharpest, more peak VRAM. "
                         "ON: merge into weights — lowest VRAM, softer on int8/fp8 bases."
-                    ),
+                    ), extra_dict={"c2c_section": "Performance"},
                 ),
             ],
             outputs=[

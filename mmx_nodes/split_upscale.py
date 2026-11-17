@@ -286,19 +286,22 @@ class MiniMaxH3_TemporalSplitParams(io.ComfyNode):
                     "anchor_strength", default=0.999, min=0.0, max=1.0, step=0.001,
                     tooltip="How tightly the new chunk is pinned to the previous "
                             "segment's last latent row. Low values let the seam "
-                            "drift and look like two different takes spliced together."),
+                            "drift and look like two different takes spliced together.",
+                            extra_dict={"c2c_section": "Anchors"}),
                 io.Combo.Input(
                     "motion_anchor_frames",
                     options=["0", "5", "22", "39"],
                     default="22",
                     tooltip="Motion keyframes borrowed from the accumulated result "
                             "to carry fast movement across the seam. 0 disables; "
-                            "22 is one H3 cycle — use when limbs cross the boundary."),
+                            "22 is one H3 cycle — use when limbs cross the boundary.",
+                            extra_dict={"c2c_section": "Anchors"}),
                 io.Int.Input(
                     "identity_anchor_frames", default=24, min=0, max=240, step=1,
                     tooltip="Spacing of identity anchors sampled from the ORIGINAL "
                             "latent inside each chunk. Stops faces or wardrobe "
-                            "from slowly morphing across a long upscale. 0 disables."),
+                            "from slowly morphing across a long upscale. 0 disables.",
+                            extra_dict={"c2c_section": "Anchors"}),
             ],
             outputs=[
                 H3_TEMPORAL_SPLIT.Output(display_name="temporal_split_param"),
@@ -360,48 +363,54 @@ class MiniMaxH3_SpatialSplitParams(io.ComfyNode):
                     tooltip="How much of the overlap is a gradual freeze-to-free "
                             "ramp vs a hard frozen band. Too little fade leaves a "
                             "visible step in denoise strength — a brightness ridge "
-                            "along the seam."),
+                            "along the seam.", extra_dict={"c2c_section": "Seams"}),
                 io.Int.Input(
                     "min_tile_size", default=256, min=0, max=16_384, step=32,
                     tooltip="Smallest edge tile allowed in pixels. Stops the "
                             "planner from leaving a skinny sliver at the frame "
-                            "edge that has almost no context and blooms differently."),
+                            "edge that has almost no context and blooms differently.",
+                            extra_dict={"c2c_section": "Tiles"}),
                 io.Float.Input(
                     "seam_denoise", default=1.0, min=0.1, max=1.0, step=0.05,
                     tooltip="Cap on denoise in the seam neighbourhood. Below 1.0 "
                             "lets the sampler 'continue' frozen neighbour content at "
                             "moderate strength — stops fast motion being cut in half "
                             "at the tile edge under high denoise. 1.0 = classic "
-                            "behaviour (off). Try 0.5–0.8 for sports or hair."),
+                            "behaviour (off). Try 0.5–0.8 for sports or hair.", extra_dict={"c2c_section": "Seams"}),
                 # L8.51 (MMH3 Ultimate Upscale options). Appended last and optional, so saved UI workflows keep their values
                 # and API prompts written before them still validate.
                 io.Boolean.Input(
-                    "brightness_match", default=False, advanced=True, optional=True,
+                    "brightness_match", default=False, optional=True,
                     tooltip="Per-frame, per-channel median match of each sampled tile to the source at the same "
-                            "place and frame. Stops tile-to-tile and frame-to-frame brightness drift. Experimental."),
+                            "place and frame. Stops tile-to-tile and frame-to-frame brightness drift. Experimental.",
+                            extra_dict={"c2c_section": "Seams"}),
                 io.Combo.Input(
-                    "dynamic_fade", options=list(FADE_SCHEDULES), default="off", advanced=True, optional=True,
+                    "dynamic_fade", options=list(FADE_SCHEDULES), default="off", optional=True,
                     tooltip="Fade width over a tile's sampling steps. off: fixed. narrowing: starts at the fade "
                             "width and shrinks to dynamic_fade_min. widening: grows from dynamic_fade_min. Helps "
-                            "seams when a tile is sampled in many steps."),
+                            "seams when a tile is sampled in many steps.", extra_dict={"c2c_section": "Seams"}),
                 io.Int.Input(
-                    "dynamic_fade_min", default=32, min=0, max=16_384, step=32, advanced=True, optional=True,
-                    tooltip="Narrowest fade (pixels) the dynamic fade reaches."),
+                    "dynamic_fade_min", default=32, min=0, max=16_384, step=32, optional=True,
+                    tooltip="Narrowest fade (pixels) the dynamic fade reaches.",
+                    extra_dict={"c2c_section": "Seams", "c2c_show_if": {"dynamic_fade": ["narrowing", "widening"]}}),
                 io.Combo.Input(
-                    "overlap_blend", options=list(BLEND_SHAPES), default="linear", advanced=True, optional=True,
+                    "overlap_blend", options=list(BLEND_SHAPES), default="linear", optional=True,
                     tooltip="Shape of the cross-fade over an overlap when a tile is stitched: linear, smoothstep "
-                            "(eased) or midpoint (hard switch in the middle of the overlap)."),
+                            "(eased) or midpoint (hard switch in the middle of the overlap).",
+                            extra_dict={"c2c_section": "Seams"}),
                 io.Float.Input(
-                    "masked_area_noise", default=0.0, min=0.0, max=1.0, step=0.01, advanced=True, optional=True,
+                    "masked_area_noise", default=0.0, min=0.0, max=1.0, step=0.01, optional=True,
                     tooltip="Noise let into the frozen overlap while sampling. 0: frozen (original behaviour). 1: "
-                            "no freeze at all. Small values (0.01-0.05) let the seam move a little with the scene."),
+                            "no freeze at all. Small values (0.01-0.05) let the seam move a little with the scene.",
+                            extra_dict={"c2c_section": "Seams"}),
                 io.Int.Input(
-                    "grid_rows", default=0, min=0, max=9, advanced=True, optional=True,
+                    "grid_rows", default=0, min=0, max=9, optional=True,
                     tooltip="Equal tiles: split the height into this many tiles of one size (overlap from "
-                            "overlap_ratio). 0: use tile_height."),
+                            "overlap_ratio). 0: use tile_height.", extra_dict={"c2c_section": "Tiles"}),
                 io.Int.Input(
-                    "grid_cols", default=0, min=0, max=9, advanced=True, optional=True,
-                    tooltip="Equal tiles: split the width into this many tiles of one size. 0: use tile_width."),
+                    "grid_cols", default=0, min=0, max=9, optional=True,
+                    tooltip="Equal tiles: split the width into this many tiles of one size. 0: use tile_width.",
+                    extra_dict={"c2c_section": "Tiles"}),
             ],
             outputs=[
                 H3_SPATIAL_SPLIT.Output(display_name="spatial_split_param"),
@@ -485,12 +494,12 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                     tooltip="Second-pass resample on seams that fail a colour/"
                             "correlation probe. 'auto' only polishes bad seams; "
                             "'all' is slow but catches subtle colour steps. 'off' "
-                            "if you will fix seams in comp."),
+                            "if you will fix seams in comp.", extra_dict={"c2c_section": "Seams"}),
                 io.Boolean.Input(
                     "color_match", default=True,
                     tooltip="Median DC match on overlaps and per-chunk grade pin "
                             "to the source. Off saves a little time but seams "
-                            "often show a visible colour step between tiles."),
+                            "often show a visible colour step between tiles.", extra_dict={"c2c_section": "Seams"}),
             ],
             outputs=[
                 io.Latent.Output(display_name="latent"),

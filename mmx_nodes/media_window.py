@@ -193,8 +193,8 @@ class MiniMaxH3_FrameWindow(io.ComfyNode):
                 C2C_VIDEO.Input("media", tooltip="From H3 Media Probe (or CustomNodePacks' Load Video (C2C))."),
                 io.Int.Input("start", default=0, min=0, max=10_000_000, tooltip="First frame of the window (0 = first frame of the media)."),
                 io.Int.Input("count", default=81, min=0, max=100_000, tooltip="Frames in the window. 0 = to the end (still checked against memory)."),
-                io.Int.Input("lookbehind", default=0, min=0, max=1000, tooltip="Extra frames before the window, e.g. for a tracker. Reported separately, never counted as window frames."),
-                io.Int.Input("lookahead", default=0, min=0, max=1000, tooltip="Extra frames after the window."),
+                io.Int.Input("lookbehind", default=0, min=0, max=1000, tooltip="Extra frames before the window, e.g. for a tracker. Reported separately, never counted as window frames.", extra_dict={'c2c_section': 'Context'}),
+                io.Int.Input("lookahead", default=0, min=0, max=1000, tooltip="Extra frames after the window.", extra_dict={'c2c_section': 'Context'}),
                 io.Int.Input("step", default=1, min=1, max=100, tooltip="Take every Nth frame (inside the window and the handles)."),
             ],
             outputs=[

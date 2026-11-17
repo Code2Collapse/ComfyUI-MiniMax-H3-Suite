@@ -105,11 +105,12 @@ class MiniMaxH3_PrepareContinuation(io.ComfyNode):
                     "video_context_denoise", default=0.0, min=0.0, max=1.0, step=0.01,
                     tooltip="How much the pinned video context may change. 0 holds it "
                             "exactly, which is what makes the join invisible. Raise it "
-                            "only if the pinned frames are fighting the new prompt."),
+                            "only if the pinned frames are fighting the new prompt.",
+                            extra_dict={"c2c_section": "Context"}),
                 io.Float.Input(
                     "audio_context_denoise", default=0.0, min=0.0, max=1.0, step=0.01,
                     tooltip="The same for audio. Keep at 0 unless the audio seam is "
-                            "audibly repeating."),
+                            "audibly repeating.", extra_dict={"c2c_section": "Context"}),
             ],
             outputs=[
                 io.Latent.Output(display_name="continuation_av",
@@ -196,13 +197,13 @@ class MiniMaxH3_StitchContinuation(io.ComfyNode):
                     "blend_video_overlap", default=False, optional=True,
                     tooltip="Smoothstep the video across the seam. Off by default "
                             "because the pinned context should already match; turn it "
-                            "on when a residual difference still shows."),
+                            "on when a residual difference still shows.", extra_dict={"c2c_section": "Seam"}),
                 io.Boolean.Input(
                     "offload_to_cpu", default=False, optional=True,
                     tooltip="Keep the growing result in system RAM. Worth enabling for "
                             "long multi-pass runs: this accumulator is only read by the "
                             "next stitch and the final decode, so holding it in VRAM "
-                            "across many passes just starves the sampler."),
+                            "across many passes just starves the sampler.", extra_dict={"c2c_section": "Performance"}),
             ],
             outputs=[
                 io.Latent.Output(display_name="stitched_av"),
@@ -355,15 +356,15 @@ class MiniMaxH3_MergeAV(io.ComfyNode):
                                default="start",
                                tooltip="Where a crop_pad source sits inside the "
                                        "target. 'end' is what you want when matching "
-                                       "the tail of a shot."),
+                                       "the tail of a shot.", extra_dict={"c2c_show_if": {"fit_mode": ["crop_pad"]}}),
                 io.Float.Input("video_denoise", default=0.0, min=0.0, max=1.0,
                                step=0.01,
                                tooltip="Noise mask written onto the merged video. 0 "
                                        "pins it, so the sampler leaves the blend "
-                                       "alone."),
+                                       "alone.", extra_dict={"c2c_section": "Noise mask"}),
                 io.Float.Input("audio_denoise", default=0.0, min=0.0, max=1.0,
                                step=0.01,
-                               tooltip="The same for the merged audio."),
+                               tooltip="The same for the merged audio.", extra_dict={"c2c_section": "Noise mask"}),
             ],
             outputs=[io.Latent.Output(display_name="av_latent")],
         )

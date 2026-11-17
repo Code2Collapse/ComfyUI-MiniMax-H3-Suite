@@ -397,7 +397,7 @@ class MiniMaxH3EnhancePrompt(io.ComfyNode):
                 io.String.Input("system_prompt", multiline=True, default="", optional=True,
                                 tooltip="Overrides the built-in instructions. Leave empty to use "
                                         "the preset's own, which is derived from MiniMax's "
-                                        "prompt-writing guide."),
+                                        "prompt-writing guide.", extra_dict={'c2c_section': 'Prompt'}),
                 io.Float.Input("duration_seconds", default=5.0, min=1.0, max=60.0, step=0.5,
                                optional=True,
                                tooltip="Told to the model so its timestamps fit. Match the "
@@ -409,27 +409,27 @@ class MiniMaxH3EnhancePrompt(io.ComfyNode):
                                 tooltip="Empty = the provider's default (Ollama "
                                         "http://127.0.0.1:11434, LM Studio "
                                         "http://127.0.0.1:1234). http:// is added if you "
-                                        "leave it off. No path — just host and port."),
+                                        "leave it off. No path — just host and port.", extra_dict={'c2c_section': 'Server'}),
                 io.String.Input("model", default="", optional=True,
                                 tooltip="Model name. Must be a VISION model — a text-only model "
                                         "will ignore your images without saying so. Empty falls "
-                                        "back to the provider default."),
+                                        "back to the provider default.", extra_dict={'c2c_section': 'Server'}),
                 io.Int.Input("seed", default=0, min=0, max=0xFFFFFFFFFFFFFFFF,
                              control_after_generate=True, optional=True,
                              tooltip="Sent to the model, so the same seed and inputs give the "
                                      "same answer (servers that ignore seeds just ignore it). "
-                                     "ComfyUI caches node outputs: change it to get a fresh answer."),
+                                     "ComfyUI caches node outputs: change it to get a fresh answer.", extra_dict={'c2c_section': 'LLM'}),
                 io.Int.Input("max_image_size", default=768, min=128, max=2048, step=64,
                              optional=True,
                              tooltip="Long edge the images are downscaled to before they are "
-                                     "sent. Larger costs time and buys little."),
+                                     "sent. Larger costs time and buys little.", extra_dict={'c2c_section': 'LLM'}),
                 io.Int.Input("max_words", default=500, min=0, max=2000, step=50,
                              optional=True,
                              tooltip="Hard limit on the description. MiniMax's guide puts a "
                                      "detailed_description at 350-500 words; small models "
                                      "ignore that when asked politely, so the request is "
                                      "capped and the result trimmed to a sentence end. "
-                                     "0 disables both."),
+                                     "0 disables both.", extra_dict={'c2c_section': 'Prompt'}),
                 io.Boolean.Input("unload_after", default=True, optional=True,
                                  tooltip="Drop the vision model from VRAM when done, so it is "
                                          "not still resident while H3 samples. Turn off only "
@@ -438,11 +438,11 @@ class MiniMaxH3EnhancePrompt(io.ComfyNode):
                                          "llama-server in router mode. A plain llama-server or "
                                          "LM Studio cannot be told to let go over HTTP — give "
                                          "those an idle timeout of their own "
-                                         "(llama.cpp: --sleep-idle-seconds N)."),
+                                         "(llama.cpp: --sleep-idle-seconds N).", extra_dict={'c2c_section': 'Memory'}),
                 io.Combo.Input("on_error", options=["passthrough", "fail"],
                                default="passthrough", optional=True,
                                tooltip="'passthrough' hands your raw idea on and warns, so a "
-                                       "stopped Ollama does not kill the whole run."),
+                                       "stopped Ollama does not kill the whole run.", extra_dict={'c2c_section': 'LLM'}),
                 # Last, and it always will be: widgets are serialised positionally, so
                 # inserting one anywhere else hands every value after it to the wrong
                 # input in workflows already saved (see MAINTAINING, trap 9).
@@ -452,7 +452,7 @@ class MiniMaxH3EnhancePrompt(io.ComfyNode):
                                         "values are saved inside the workflow, so a key typed "
                                         "here would travel with every copy you share. Empty "
                                         "falls back to MINIMAX_DIRECTOR_VLM_API_KEY, then "
-                                        "OPENAI_API_KEY. Local Ollama and LM Studio need none."),
+                                        "OPENAI_API_KEY. Local Ollama and LM Studio need none.", extra_dict={'c2c_section': 'Server'}),
             ],
             outputs=[
                 io.String.Output(display_name="prompt",

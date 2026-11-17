@@ -63,17 +63,8 @@ function problemWith(term) {
 function rebuild(st, node) {
   const termsW = widgetByName(node, "terms");
   const strengthW = widgetByName(node, "strength");
-  const modeW = widgetByName(node, "context_mode");
-  const prefixW = widgetByName(node, "prompt_prefix");
-
-  if (prefixW) {
-    const needed = String(modeW?.value ?? "standalone") === "prompt_prefix";
-    if (prefixW.hidden !== !needed) {
-      prefixW.hidden = !needed;
-      if (prefixW.element) prefixW.element.hidden = !needed;
-      node.setDirtyCanvas(true, true);
-    }
-  }
+  // prompt_prefix shows only for context_mode = prompt_prefix: declared in Python (c2c_show_if), applied with a real
+  // resize by the A28 layout engine (web/mmx_node_layout.js) - this panel no longer hides it (one owner per node).
 
   const terms = parseTerms(termsW?.value);
   const strength = Number(strengthW?.value ?? 1);

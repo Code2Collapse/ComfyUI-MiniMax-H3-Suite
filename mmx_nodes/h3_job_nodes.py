@@ -105,21 +105,21 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
                 io.Int.Input("context", default=39, min=0, max=500,
                              tooltip="Accepted frames each next segment continues from (H3 Continuation: 5, 22, 39 "
                                      "or 56)."),
-                io.Int.Input("blend", default=0, min=0, max=200, tooltip="Frames generated twice and cross-faded."),
-                io.Int.Input("lookbehind", default=0, min=0, max=500, tooltip="Tracking handles before (read only)."),
-                io.Int.Input("lookahead", default=0, min=0, max=500, tooltip="Tracking handles after (read only)."),
+                io.Int.Input("blend", default=0, min=0, max=200, tooltip="Frames generated twice and cross-faded.", extra_dict={'c2c_section': 'Segments'}),
+                io.Int.Input("lookbehind", default=0, min=0, max=500, tooltip="Tracking handles before (read only).", extra_dict={'c2c_section': 'Segments'}),
+                io.Int.Input("lookahead", default=0, min=0, max=500, tooltip="Tracking handles after (read only).", extra_dict={'c2c_section': 'Segments'}),
                 io.Int.Input("seed", default=0, min=0, max=2**31 - 1,
                              control_after_generate=io.ControlAfterGenerate.fixed,
                              tooltip="The job's base seed: segment k's first attempt uses seed + k, retries add 1000."),
-                io.Int.Input("max_retries", default=2, min=0, max=20),
+                io.Int.Input("max_retries", default=2, min=0, max=20, extra_dict={'c2c_section': 'Automation'}),
                 io.Combo.Input("approval", options=list(APPROVAL), default=APPROVAL[0],
                                tooltip="QC decides: a failed segment is retried with a new seed (up to max_retries, "
                                        "then it waits for review). review when QC fails: a failed segment waits for "
                                        "you at once. review every segment: every segment waits for you."),
                 io.Boolean.Input("auto_continue", default=True,
                                  tooltip="After each committed segment, queue the next run automatically."),
-                io.Int.Input("max_auto_runs", default=100, min=1, max=10000),
-                io.Float.Input("fps", default=24.0, min=1.0, max=240.0),
+                io.Int.Input("max_auto_runs", default=100, min=1, max=10000, extra_dict={'c2c_section': 'Automation', 'c2c_show_if': {'auto_continue': [True]}}),
+                io.Float.Input("fps", default=24.0, min=1.0, max=240.0, extra_dict={'c2c_hide_if_linked': ['media']}),
                 io.Combo.Input("deliver_codec", options=["h264", "prores", "ffv1"], default="prores"),
                 C2C_VIDEO.Input("media", optional=True, tooltip="The source plate (edit tasks)."),
                 io.String.Input("prompt", default="", optional=True, multiline=True),
@@ -129,7 +129,7 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
                 io.Int.Input("hold_head", default=0, min=0, max=64, optional=True,
                              tooltip="Frames of the first picture a segment without continuation context generates "
                                      "before its window and then drops (the PRB workflow's AV handles: 8). The model's "
-                                     "first frames settle on a held picture, not on the cut."),
+                                     "first frames settle on a held picture, not on the cut.", extra_dict={'c2c_section': 'Segments'}),
                 io.String.Input("shot_plan", optional=True, force_input=True,
                                 tooltip="From H3 Shot Planner: the job becomes its shots (their length sets 'count'; "
                                         "each segment gets its shot's prompt, with 'prompt' above as a shared "
@@ -365,8 +365,8 @@ class MiniMaxH3_JobController(io.ComfyNode):
                 io.String.Input("segment_plan", force_input=True),
                 io.String.Input("job", default="h3_job"),
                 io.Combo.Input("action", options=list(ACTIONS), default="run"),
-                io.Int.Input("action_segment", default=0, min=0, max=100000),
-                io.String.Input("action_take", default=""),
+                io.Int.Input("action_segment", default=0, min=0, max=100000, extra_dict={'c2c_show_if': {'action': ['retry segment (new seed)', 'rollback to segment', 'choose take', 'generate alternate take']}}),
+                io.String.Input("action_take", default="", extra_dict={'c2c_show_if': {'action': ['choose take', 'generate alternate take']}}),
                 C2C_VIDEO.Input("media", optional=True, tooltip="The source plate (edit tasks)."),
                 C2C_VIDEO.Input("matte", optional=True,
                                 tooltip="A matte clip frame-aligned with the plate: matte_window is cut exactly like "
@@ -746,31 +746,31 @@ class MiniMaxH3_QCGate(io.ComfyNode):
                     io.String.Input("diff_report", default="", optional=True, force_input=True),
                     io.Float.Input("min_mean", default=0.01, min=0.0, max=1.0, step=0.001),
                     io.Float.Input("freeze_max", default=0.5, min=0.0, max=1.0, step=0.01),
-                    io.Float.Input("seam_max", default=0.08, min=0.0, max=1.0, step=0.001),
+                    io.Float.Input("seam_max", default=0.08, min=0.0, max=1.0, step=0.001, extra_dict={'c2c_section': 'Continuity'}),
                     io.Float.Input("diff_max", default=0.0, min=0.0, max=1.0, step=0.001,
-                                   tooltip="0 = do not judge the difference report."),
+                                   tooltip="0 = do not judge the difference report.", extra_dict={'c2c_section': 'Difference'}),
                     io.String.Input("memory", default="", optional=True, force_input=True,
                                     tooltip="From H3 Subject Memory: judge the segment against its scene's look."),
                     io.Float.Input("colour_drift_max", default=12.0, min=0.0, max=100.0, step=0.1,
                                    tooltip="With a memory: the largest mean-colour distance (CIE76 delta E) from the "
-                                           "scene's accepted frames. 0 = do not judge."),
+                                           "scene's accepted frames. 0 = do not judge.", extra_dict={'c2c_section': 'Colour'}),
                     io.Image.Input("plate", optional=True,
                                    tooltip="The plate of this segment's window (edit tasks): outside the mask the "
                                            "result must stay the plate."),
                     io.Mask.Input("mask", optional=True,
                                   tooltip="The edit mask of this segment's window (e.g. from matte_window)."),
                     io.Int.Input("protect_px", default=4, min=0, max=128,
-                                 tooltip="The mask is grown by this many pixels before the plate check."),
+                                 tooltip="The mask is grown by this many pixels before the plate check.", extra_dict={'c2c_section': 'Plate'}),
                     io.Float.Input("background_max", default=0.008, min=0.0, max=1.0, step=0.001,
-                                   tooltip="Largest difference from the plate allowed outside the edit (2/255)."),
+                                   tooltip="Largest difference from the plate allowed outside the edit (2/255).", extra_dict={'c2c_section': 'Plate'}),
                     io.Float.Input("mask_jump_max", default=0.35, min=0.0, max=1.0, step=0.01,
-                                   tooltip="A frame whose mask area changes more than this share is flagged."),
+                                   tooltip="A frame whose mask area changes more than this share is flagged.", extra_dict={'c2c_section': 'Mask'}),
                     io.Boolean.Input("strict_masks", default=False,
-                                     tooltip="Fail the segment on mask jumps / dropouts (otherwise a warning)."),
+                                     tooltip="Fail the segment on mask jumps / dropouts (otherwise a warning).", extra_dict={'c2c_section': 'Mask'}),
                     io.Float.Input("seam_ratio_max", default=1.5, min=0.0, max=20.0, step=0.1,
                                    tooltip="With a plate and continuation: the step into this segment may be at most "
                                            "this many times the steps around it, and this many times the plate's own "
-                                           "ratio there (real motion is not a seam). 0 = do not judge.")],
+                                           "ratio there (real motion is not a seam). 0 = do not judge.", extra_dict={'c2c_section': 'Continuity'})],
             outputs=[io.String.Output("qc_report"), io.Boolean.Output("passed"), io.Image.Output("images")],
         )
 
@@ -1217,8 +1217,8 @@ class MiniMaxH3_ReferenceBank(io.ComfyNode):
                     io.String.Input("name", default="refs", tooltip="The bank's folder: output/h3_refs/<name>."),
                     io.String.Input("bank", optional=True, force_input=True,
                                     tooltip="An existing bank to add these images to."),
-                    io.Int.Input("near_max", default=6, min=0, max=32, advanced=True,
-                                 tooltip="Near duplicate: dHash bits that may differ (of 64).")],
+                    io.Int.Input("near_max", default=6, min=0, max=32,
+                                 tooltip="Near duplicate: dHash bits that may differ (of 64).", extra_dict={'c2c_section': 'Bank'})],
             outputs=[io.String.Output("bank", tooltip="h3.reference_bank v1"),
                      io.String.Output("fingerprint", tooltip="Changes when an image or a role changes."),
                      io.Image.Output("gallery", tooltip="Every entry with its id, role and duplicate mark."),

@@ -120,14 +120,14 @@ class MiniMaxH3_SequenceAuditor(io.ComfyNode):
             inputs=[
                 io.String.Input("path", default="", tooltip="A pattern (shot.####.exr, %04d, @@@@, $F4), a folder, or "
                                                             "one frame of the sequence."),
-                io.Int.Input("expected_first", default=-1, min=-1, max=10_000_000, tooltip="-1 = the first frame found."),
-                io.Int.Input("expected_last", default=-1, min=-1, max=10_000_000, tooltip="-1 = the last frame found."),
-                io.Int.Input("expected_width", default=0, min=0, max=32768, tooltip="0 = the first frame's width."),
-                io.Int.Input("expected_height", default=0, min=0, max=32768, tooltip="0 = the first frame's height."),
+                io.Int.Input("expected_first", default=-1, min=-1, max=10_000_000, tooltip="-1 = the first frame found.", extra_dict={'c2c_section': 'Expect'}),
+                io.Int.Input("expected_last", default=-1, min=-1, max=10_000_000, tooltip="-1 = the last frame found.", extra_dict={'c2c_section': 'Expect'}),
+                io.Int.Input("expected_width", default=0, min=0, max=32768, tooltip="0 = the first frame's width.", extra_dict={'c2c_section': 'Expect'}),
+                io.Int.Input("expected_height", default=0, min=0, max=32768, tooltip="0 = the first frame's height.", extra_dict={'c2c_section': 'Expect'}),
                 io.Boolean.Input("checksums", default=False,
                                  tooltip="Hash every file completely (slow on big EXRs). Off: size + first 64 KB, enough "
-                                         "to catch copied frames."),
-                io.Int.Input("contact_frames", default=8, min=0, max=64, tooltip="How many frames to show, spread evenly."),
+                                         "to catch copied frames.", extra_dict={'c2c_section': 'Checks'}),
+                io.Int.Input("contact_frames", default=8, min=0, max=64, tooltip="How many frames to show, spread evenly.", extra_dict={'c2c_section': 'Output'}),
             ],
             outputs=[
                 io.String.Output("manifest_json", tooltip="Contract h3.sequence_manifest v1."),

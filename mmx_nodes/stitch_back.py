@@ -55,16 +55,17 @@ class MiniMaxH3_StitchBack(io.ComfyNode):
                 io.Combo.Input(
                     "paste_region",
                     options=["subject", "subject_ellipse", "full_crop"],
-                    default="subject",
+                    default="subject", extra_dict={"c2c_hide_if_linked": ["paste_mask"]},
                 ),
                 io.Int.Input("mask_dilation", default=8, min=0, max=256, step=2),
                 io.Int.Input("feather_px", default=32, min=0, max=256, step=2),
-                io.Float.Input("colour_match", default=1.0, min=0.0, max=1.0, step=0.05),
-                io.Float.Input("blend", default=1.0, min=0.0, max=1.0, step=0.05),
+                io.Float.Input("colour_match", default=1.0, min=0.0, max=1.0, step=0.05,
+                               extra_dict={"c2c_section": "Blend"}),
+                io.Float.Input("blend", default=1.0, min=0.0, max=1.0, step=0.05, extra_dict={"c2c_section": "Blend"}),
                 io.Combo.Input(
                     "undetected_frames",
                     options=["fade_out", "skip", "composite_anyway"],
-                    default="fade_out",
+                    default="fade_out", extra_dict={"c2c_section": "Blend"},
                 ),
             ],
             outputs=[

@@ -57,18 +57,21 @@ class MiniMaxH3_TemporalDepth(io.ComfyNode):
                     tooltip="Plate-space depth hints for passthrough backend.",
                 ),
                 io.Int.Input("window", default=17, min=1, max=128,
-                             tooltip="Frames the temporal alignment looks back over (1 = no alignment)."),
+                             tooltip="Frames the temporal alignment looks back over (1 = no alignment).",
+                             extra_dict={"c2c_section": "Temporal", "c2c_show_if": {"temporal": ["align (experimental)"]}}),
                 io.Boolean.Input("emit_normals", default=False),
                 # L9.39: appended last so saved workflows keep their widget order
                 io.Combo.Input("temporal", options=["off", "align (experimental)"], default="off", optional=True,
                                tooltip="align: fit each frame's depth scale / offset to the previous `window` frames "
                                        "(removes per-frame normalisation flicker). Experimental: measured to help "
-                                       "per-frame scale jitter, not a clean pan."),
+                                       "per-frame scale jitter, not a clean pan.",
+                                       extra_dict={"c2c_section": "Temporal"}),
                 # L7.100 (owner D7.91): appended last, default off - saved workflows keep their values
                 io.Boolean.Input("allow_download", default=False, optional=True,
                                  tooltip="Let a model backend download its weights (some are many GB; Depth Anything "
                                          "V2 Large and DVD are non-commercial). Off: only installed copies are used "
-                                         "and the error says what is missing."),
+                                         "and the error says what is missing.",
+                                         extra_dict={"c2c_section": "Model setup", "c2c_show_if": {"backend": ["depth_anything_v2", "depth_anything_3", "depth_pro", "depthcrafter", "dvd"]}}),
             ],
             outputs=[
                 io.Image.Output("hints"),

@@ -72,6 +72,7 @@ class MiniMaxH3_PixelRepair(io.ComfyNode):
                     "debug",
                     default=False,
                     tooltip="Include extra per-frame counts in the report JSON.",
+                    extra_dict={'c2c_section': 'Diagnostics'},
                 ),
             ],
             outputs=[

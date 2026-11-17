@@ -50,7 +50,7 @@ class MiniMaxH3_AudioQualityGate(io.ComfyNode):
                     min=0.0,
                     max=2.0,
                     step=0.01,
-                    tooltip="Mean |mel_ref - mel_gen| above this fails.",
+                    tooltip="Mean |mel_ref - mel_gen| above this fails.", extra_dict={"c2c_section": "Thresholds"},
                 ),
                 io.Float.Input(
                     "centroid_drift_hz_max",
@@ -58,7 +58,7 @@ class MiniMaxH3_AudioQualityGate(io.ComfyNode):
                     min=0.0,
                     max=8000.0,
                     step=10.0,
-                    tooltip="Spectral-centroid drift (Hz) above this fails.",
+                    tooltip="Spectral-centroid drift (Hz) above this fails.", extra_dict={"c2c_section": "Thresholds"},
                 ),
                 io.Float.Input(
                     "rms_ratio_min",
@@ -66,7 +66,7 @@ class MiniMaxH3_AudioQualityGate(io.ComfyNode):
                     min=0.0,
                     max=2.0,
                     step=0.01,
-                    tooltip="generated_rms / reference_rms below this fails.",
+                    tooltip="generated_rms / reference_rms below this fails.", extra_dict={"c2c_section": "Thresholds"},
                 ),
                 io.Float.Input(
                     "low_mel_ratio_min",
@@ -75,6 +75,7 @@ class MiniMaxH3_AudioQualityGate(io.ComfyNode):
                     max=2.0,
                     step=0.01,
                     tooltip="Low-mel energy ratio below this fails (bass collapse).",
+                    extra_dict={"c2c_section": "Thresholds"},
                 ),
                 # C2C L9.39: appended. A gate whose bool feeds nothing never ran (not an output node) and could
                 # not stop anything; it is an output node now, and this decides what a failure does.

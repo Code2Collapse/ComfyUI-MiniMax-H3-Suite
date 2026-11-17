@@ -70,6 +70,7 @@ class MiniMaxH3_MotionContext(io.ComfyNode):
                     min=0,
                     max=240,
                     tooltip="Frames of tail audio to pin (0 follows video window).",
+                    extra_dict={"c2c_section": "Audio"},
                 ),
                 io.Image.Input(
                     "context_frames",
@@ -184,12 +185,12 @@ class MiniMaxH3_MotionContextTrim(io.ComfyNode):
                     min=1.0,
                     max=240.0,
                     step=0.001,
-                    tooltip="Frame rate used to convert trim into audio duration.",
+                    tooltip="Frame rate used to convert trim into audio duration.", extra_dict={"c2c_section": "Audio"},
                 ),
                 io.Boolean.Input(
                     "match_tail",
                     default=True,
-                    tooltip="Trim or pad audio tail to match frames/fps exactly.",
+                    tooltip="Trim or pad audio tail to match frames/fps exactly.", extra_dict={"c2c_section": "Audio"},
                 ),
             ],
             outputs=[
@@ -337,6 +338,7 @@ class MiniMaxH3_MotionContextChain(io.ComfyNode):
                     max=9999,
                     step=1,
                     tooltip="Unused: kept so saved workflows load (this node is deprecated).",
+                    extra_dict={"c2c_hidden": True},
                 ),
             ],
             outputs=[
@@ -401,14 +403,14 @@ class MiniMaxH3_MotionContextSeamProbe(io.ComfyNode):
                     default=50.0,
                     min=5.0,
                     max=500.0,
-                    step=1.0,
+                    step=1.0, extra_dict={"c2c_section": "Probe"},
                 ),
                 io.Float.Input(
                     "search_ms",
                     default=40.0,
                     min=5.0,
                     max=500.0,
-                    step=1.0,
+                    step=1.0, extra_dict={"c2c_section": "Probe"},
                 ),
             ],
             outputs=[

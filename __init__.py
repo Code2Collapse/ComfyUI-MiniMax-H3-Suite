@@ -1,5 +1,6 @@
 """ComfyUI-MiniMaxSuite — H3 geometric spine + sampling guards (N1–N7, P1–P11)."""
 
+
 from __future__ import annotations
 
 __version__ = "1.1.0"   # 1.1.0: HDR (A29) + Open-H3 Regenerate STD / 2K IC; see CHANGELOG.md
@@ -701,6 +702,19 @@ def _load_nodes() -> list[type[io.ComfyNode]]:
 
 
 class MiniMaxH3Extension(ComfyExtension):
+    @override
+    async def on_load(self) -> None:
+        # A28: GET /mmx/node_status for the layout engine's c2c_show_if_status (web/mmx_node_layout.js). Guarded: a
+        # route must never cost the nodes.
+        try:
+            from server import PromptServer
+
+            from .mmx_utils.node_status import register_routes
+
+            register_routes(getattr(PromptServer, "instance", None))
+        except Exception as exc:  # noqa: BLE001
+            _LOG.warning("node status route not registered: %s", exc)
+
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         nodes = _load_nodes()

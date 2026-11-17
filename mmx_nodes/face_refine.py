@@ -84,9 +84,10 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                         "short edge and gives the best faces. Ignored when canvas_mode "
                         "is not 'manual'. Cost scales with area: 768 is 2.25x the "
                         "latent tokens of 512."
-                    ),
+                    ), extra_dict={"c2c_show_if": {"canvas_mode": ["manual"]}},
                 ),
-                io.Int.Input("canvas_height", default=512, min=128, max=1344, step=32),
+                io.Int.Input("canvas_height", default=512, min=128, max=1344, step=32,
+                             extra_dict={"c2c_show_if": {"canvas_mode": ["manual"]}}),
                 io.Combo.Input(
                     "canvas_mode",
                     options=["manual", "auto_no_downscale", "auto_capped_768"],
@@ -111,7 +112,7 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                         "Frames of smoothing on the crop CENTRE. 21 at 24fps is ~0.9s. "
                         "Raise if the box still shivers; lower if it lags behind fast "
                         "head movement."
-                    ),
+                    ), extra_dict={"c2c_section": "Smoothing"},
                 ),
                 io.Int.Input(
                     "size_smooth_window",
@@ -124,7 +125,7 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                         "centre: size jitter makes the crop breathe, which changes the "
                         "resample factor every frame and reads as shimmer. Real zoom "
                         "moves are slow, so heavy smoothing here costs nothing."
-                    ),
+                    ), extra_dict={"c2c_section": "Smoothing"},
                 ),
                 io.Combo.Input(
                     "smooth_method",
@@ -134,7 +135,7 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                         "gaussian: best jitter rejection. savgol: preserves the shape of "
                         "a push-in better at large windows. moving_average: the old "
                         "boxcar, leaves residual jitter."
-                    ),
+                    ), extra_dict={"c2c_section": "Smoothing"},
                 ),
                 io.Combo.Input(
                     "size_mode",
@@ -178,7 +179,7 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                         "sits in a different domain - measured similarity between an "
                         "illustration and a render of the same character was only 0.305, "
                         "where same-domain faces score 0.5-0.7."
-                    ),
+                    ), extra_dict={"c2c_section": "Identity"},
                 ),
                 io.Float.Input(
                     "identity_threshold",
@@ -192,7 +193,7 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                         "to the previous position at a similar size), which is what "
                         "carries tracking through profiles and partial occlusion where "
                         "embeddings become unreliable."
-                    ),
+                    ), extra_dict={"c2c_section": "Identity", "c2c_show_if": {"identity_track": [True]}},
                 ),
                 io.Combo.Input(
                     "select",
@@ -201,7 +202,7 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                     tooltip=(
                         "Used only when no identity_reference is connected, and as the "
                         "first-frame tie-break."
-                    ),
+                    ), extra_dict={"c2c_section": "Identity"},
                 ),
                 io.Combo.Input(
                     "fallback_detector",
@@ -213,7 +214,7 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                         "segm\\person_yolov8m-seg.pt gives a real head position from the "
                         "top of the body box, which beats interpolating blindly between "
                         "the last and next face. Set 'none' to interpolate instead."
-                    ),
+                    ), extra_dict={"c2c_section": "Fallback"},
                 ),
                 io.Float.Input(
                     "fallback_head_frac",
@@ -225,7 +226,7 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                         "Head centre as a multiple of face height below the top of the "
                         "person box. 0.5 puts it half a face-height down, which is about "
                         "right for a head seen from behind."
-                    ),
+                    ), extra_dict={"c2c_section": "Fallback", "c2c_show_if": {"fallback_detector": {"not": ["none"]}}},
                 ),
             ],
             outputs=[
@@ -311,7 +312,7 @@ class MiniMaxH3_FaceStitch(io.ComfyNode):
                         "crop exists to give the sampler context, not to be pasted). "
                         "full_crop pastes the whole crop including hair, shoulders and "
                         "background, which risks a visible rectangle if H3 alters them."
-                    ),
+                    ), extra_dict={"c2c_hide_if_linked": ["masks"]},
                 ),
                 io.Int.Input(
                     "mask_dilation",
@@ -354,7 +355,7 @@ class MiniMaxH3_FaceStitch(io.ComfyNode):
                         "replaces. The crop and the full frame went through independent "
                         "passes, so without this the face can come back subtly brighter "
                         "or differently tinted and read as pasted on."
-                    ),
+                    ), extra_dict={"c2c_section": "Blend"},
                 ),
                 io.Float.Input(
                     "blend",
@@ -365,7 +366,7 @@ class MiniMaxH3_FaceStitch(io.ComfyNode):
                     tooltip=(
                         "Global opacity of the refined face. Below 1.0 mixes back toward "
                         "the original - useful to dial back over-sharpening."
-                    ),
+                    ), extra_dict={"c2c_section": "Blend"},
                 ),
                 io.Combo.Input(
                     "undetected_frames",
@@ -381,7 +382,7 @@ class MiniMaxH3_FaceStitch(io.ComfyNode):
                         "skip: hard cut - those frames keep original pixels exactly.\n"
                         "composite_anyway: paste regardless. Risks H3 hallucinating a "
                         "face onto the back of a head."
-                    ),
+                    ), extra_dict={"c2c_section": "Blend"},
                 ),
                 io.Boolean.Input(
                     "feather_scales_with_crop",
@@ -390,7 +391,7 @@ class MiniMaxH3_FaceStitch(io.ComfyNode):
                     tooltip=(
                         "Old behaviour: treat feather as CANVAS pixels, so the blend "
                         "narrows as the crop shrinks. Leave off."
-                    ),
+                    ), extra_dict={"c2c_hidden": True},
                 ),
                 io.Mask.Input(
                     "masks",
@@ -543,7 +544,7 @@ class MiniMaxH3_FaceMaskSAM(io.ComfyNode):
                     tooltip=(
                         "Mirrors FaceDetailer's sam_dilation default of 0. "
                         "SAM masks are accurate, so they rarely need growing."
-                    ),
+                    ), extra_dict={"c2c_section": "Mask"},
                 ),
                 io.Int.Input(
                     "temporal_smooth",
@@ -554,7 +555,7 @@ class MiniMaxH3_FaceMaskSAM(io.ComfyNode):
                     tooltip=(
                         "Frames of averaging across the mask stack. 1 disables it and "
                         "you will likely see the mask edge shimmer."
-                    ),
+                    ), extra_dict={"c2c_section": "Mask"},
                 ),
             ],
             outputs=[

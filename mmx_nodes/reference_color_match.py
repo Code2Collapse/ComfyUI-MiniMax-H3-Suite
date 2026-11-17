@@ -82,6 +82,7 @@ class MiniMaxH3_ReferenceColorMatch(io.ComfyNode):
                         "Also match Oklab L. Leave off so the plate's lighting and shadows "
                         "on the subject are preserved."
                     ),
+                    extra_dict={'c2c_section': 'Colour'},
                 ),
                 io.Int.Input(
                     "temporal_smooth",
@@ -92,6 +93,7 @@ class MiniMaxH3_ReferenceColorMatch(io.ComfyNode):
                         "Median window (frames) for smoothing the correction over time. "
                         "Raise on noisy segments; lower if the subject colour changes on purpose."
                     ),
+                    extra_dict={'c2c_section': 'Temporal'},
                 ),
             ],
             outputs=[

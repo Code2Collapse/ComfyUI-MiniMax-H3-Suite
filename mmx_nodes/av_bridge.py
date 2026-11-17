@@ -131,9 +131,11 @@ class MiniMaxH3_AVBridge(io.ComfyNode):
                 io.Float.Input("start_fps", default=24.0, min=1.0, max=240.0, step=0.001, optional=True,
                                tooltip="Clip A's frame rate. Anything but 24 is converted to H3's 24 fps on the "
                                        "constant-frame-rate grid (frames repeated or dropped, never blended); its "
-                                       "sound keeps its own timing. Assemble converts the same way."),
+                                       "sound keeps its own timing. Assemble converts the same way.",
+                                       extra_dict={"c2c_section": "Frame rate"}),
                 io.Float.Input("end_fps", default=24.0, min=1.0, max=240.0, step=0.001, optional=True,
-                               tooltip="Clip B's frame rate, converted the same way."),
+                               tooltip="Clip B's frame rate, converted the same way.",
+                               extra_dict={"c2c_section": "Frame rate"}),
             ],
             outputs=[
                 io.Latent.Output(display_name="latent"),

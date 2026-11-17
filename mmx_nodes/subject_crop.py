@@ -252,7 +252,8 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
 
 _UPSCALE_MEGAPIXELS = io.Float.Input(
     "upscale_megapixels", default=0.0, min=-16.0, max=16.0, step=0.05,
-    tooltip="Upscale the cropped images/masks to this many megapixels, on the divisible_by grid, using bicubic for images and nearest exact for masks. Set to 0.0 to disable. (Use a negative value to allow scaling down as well as up.)")
+    tooltip="Upscale the cropped images/masks to this many megapixels, on the divisible_by grid, using bicubic for images and nearest exact for masks. Set to 0.0 to disable. (Use a negative value to allow scaling down as well as up.)",
+    extra_dict={"c2c_section": "Output"})
 
 _OUTPUTS = [
     io.Image.Output(display_name="cropped_images", tooltip="Constant-size crops, one per frame."),
@@ -265,9 +266,11 @@ _OUTPUTS = [
 # Head Size Mode (owner 2026-10-13, C2C D8.21): appended after every existing input, so saved workflows keep their values
 _HEAD_INPUTS = [
     io.Combo.Input("head_size_mode", options=list(HEAD_SIZE_MODES), default=HEAD_SIZE_MODES[0], optional=True,
-                   tooltip="match character proportions: room for the new character's own head-to-body ratio (from the poses, or head_scale), anchored at the chin. keep original composition: the original performer's head size and position. Decides the crop room, the mask padding and head_room_masks; the head is never stretched."),
+                   tooltip="match character proportions: room for the new character's own head-to-body ratio (from the poses, or head_scale), anchored at the chin. keep original composition: the original performer's head size and position. Decides the crop room, the mask padding and head_room_masks; the head is never stretched.",
+                   extra_dict={"c2c_section": "Head room"}),
     io.Float.Input("head_scale", default=0.0, min=0.0, max=2.0, step=0.01, optional=True,
-                   tooltip="New head size / original head size. 0 = measure it from original_pose and reference_pose (face width against shoulder width); without poses it is 1. Ignored in keep original composition."),
+                   tooltip="New head size / original head size. 0 = measure it from original_pose and reference_pose (face width against shoulder width); without poses it is 1. Ignored in keep original composition.",
+                   extra_dict={"c2c_section": "Head room", "c2c_show_if": {"head_size_mode": ["match character proportions"]}}),
     io.Custom("POSE_KEYPOINT").Input("original_pose", optional=True,
                                      tooltip="Pose of the original performer, per frame (DWPose / SDPose / OpenPose JSON). Gives the face size, the chin and the shoulders."),
     io.Custom("POSE_KEYPOINT").Input("reference_pose", optional=True,

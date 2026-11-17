@@ -140,6 +140,7 @@ class MiniMaxH3_LatentColorAnchor(io.ComfyNode):
                     "per_frame",
                     default=True,
                     tooltip="Correct each latent frame independently. Off = one correction vector for all T.",
+                    extra_dict={"c2c_section": "Advanced"},
                 ),
                 io.Float.Input(
                     "start_percent",
@@ -148,6 +149,7 @@ class MiniMaxH3_LatentColorAnchor(io.ComfyNode):
                     max=1.0,
                     step=0.01,
                     tooltip="Earliest sampling step (high sigma) where anchoring is active.",
+                    extra_dict={"c2c_section": "Schedule"},
                 ),
                 io.Float.Input(
                     "end_percent",
@@ -158,7 +160,7 @@ class MiniMaxH3_LatentColorAnchor(io.ComfyNode):
                     tooltip=(
                         "Last active step (low sigma). Steps below this are untouched so "
                         "fine detail and grain are not smeared."
-                    ),
+                    ), extra_dict={"c2c_section": "Schedule"},
                 ),
                 io.Float.Input(
                     "min_preserved",
@@ -167,6 +169,7 @@ class MiniMaxH3_LatentColorAnchor(io.ComfyNode):
                     max=1.0,
                     step=0.01,
                     tooltip="Skip frames where fewer than this fraction of cells are preserved.",
+                    extra_dict={"c2c_section": "Advanced"},
                 ),
             ],
             outputs=[

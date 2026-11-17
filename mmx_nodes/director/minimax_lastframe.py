@@ -53,7 +53,7 @@ class MiniMaxH3SaveLastFrame(io.ComfyNode):
                 io.String.Input("filename_prefix", default="MiniMaxH3/lastframe",
                                 tooltip="Prefix for the saved file, under ComfyUI's output "
                                         "folder. Supports the same tokens as Save Image, "
-                                        "e.g. %date:yyyy-MM-dd%."),
+                                        "e.g. %date:yyyy-MM-dd%.", extra_dict={'c2c_show_if': {'save': [True]}}),
             ],
             outputs=[
                 io.Image.Output(display_name="images",

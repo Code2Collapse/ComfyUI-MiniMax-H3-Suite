@@ -52,9 +52,9 @@ class MiniMaxH3_MaskPrep(io.ComfyNode):
                 io.Int.Input("height", default=768, min=32, max=4096, step=32),
                 io.Int.Input("frame_count", default=22, min=5, max=400),
                 io.Float.Input("denoise_strength", default=1.0, min=0.0, max=1.0, step=0.01),
-                io.Int.Input("temporal_clean", default=2, min=0, max=32),
-                io.Int.Input("spatial_dilate", default=0, min=0, max=64),
-                io.Boolean.Input("quantize_soft", default=True),
+                io.Int.Input("temporal_clean", default=2, min=0, max=32, extra_dict={"c2c_section": "Cleanup"}),
+                io.Int.Input("spatial_dilate", default=0, min=0, max=64, extra_dict={"c2c_section": "Cleanup"}),
+                io.Boolean.Input("quantize_soft", default=True, extra_dict={"c2c_section": "Cleanup"}),
             ],
             outputs=[
                 io.Mask.Output("latent_mask"),

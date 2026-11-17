@@ -211,7 +211,8 @@ class MiniMaxH3_NegPiP(io.ComfyNode):
                             "prompt text used to build the conditioning above. "
                             "The node verifies that the prefix rows came back "
                             "unchanged and falls back to standalone, saying so "
-                            "in the report, if they did not."),
+                            "in the report, if they did not.",
+                            extra_dict={"c2c_show_if": {"context_mode": ["prompt_prefix"]}}),
                 io.Float.Input(
                     "start_percent", default=0.0, min=0.0, max=1.0, step=0.01,
                     optional=True,
@@ -219,13 +220,13 @@ class MiniMaxH3_NegPiP(io.ComfyNode):
                             "schedule. Leaving it at 0 applies the terms "
                             "throughout, which is the usual choice - the early "
                             "steps are where layout is decided, so that is "
-                            "where a 'no extra limbs' term earns its keep."),
+                            "where a 'no extra limbs' term earns its keep.", extra_dict={"c2c_section": "Schedule"}),
                 io.Float.Input(
                     "end_percent", default=1.0, min=0.0, max=1.0, step=0.01,
                     optional=True,
                     tooltip="Stop flipping here. Ending around 0.8 lets the "
                             "last steps refine texture without the negative "
-                            "terms still pulling at it."),
+                            "terms still pulling at it.", extra_dict={"c2c_section": "Schedule"}),
             ],
             outputs=[
                 io.Model.Output(display_name="model"),

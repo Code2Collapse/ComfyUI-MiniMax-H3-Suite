@@ -94,9 +94,9 @@ class MiniMaxH3_HDRRoundtrip(io.ComfyNode):
                 io.Image.Input("image"),
                 io.Combo.Input("direction", options=["to_view", "to_scene"], default="to_view"),
                 io.Combo.Input("colorspace", options=colorspaces, default=default_scene),
-                io.Combo.Input("display", options=displays, default=default_display),
-                io.Combo.Input("view", options=views, default=default_view),
-                io.Combo.Input("tag", options=["HDR", "Rec709", "ACEScg"], default="HDR"),
+                io.Combo.Input("display", options=displays, default=default_display, extra_dict={'c2c_show_if': {'code_space': ['off (OCIO view)']}}),
+                io.Combo.Input("view", options=views, default=default_view, extra_dict={'c2c_show_if': {'code_space': ['off (OCIO view)']}}),
+                io.Combo.Input("tag", options=["HDR", "Rec709", "ACEScg"], default="HDR", extra_dict={'c2c_show_if': {'code_space': ['off (OCIO view)']}}),
                 # L9.181 (owner 2026-11-10, HDR in MiniMax): appended last, default off = the node as it always was
                 io.Combo.Input("code_space", options=[CODE_OFF, *CODE_CHOICES], default=CODE_OFF,
                                optional=True, tooltip=CODE_TIP),

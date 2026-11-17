@@ -77,29 +77,29 @@ class MiniMaxH3_PromptWriter(io.ComfyNode):
                                         "does. Only what the brief says is described - nothing is invented."),
                 io.String.Input("subject_name", default="the character"),
                 io.Combo.Input("head_size_mode", options=list(HEAD_SIZE_MODES), default=HEAD_SIZE_MODES[0],
-                               tooltip="Same as on H3 Subject Crop / H3 Family Presets."),
+                               tooltip="Same as on H3 Subject Crop / H3 Family Presets.", extra_dict={'c2c_show_if': {'family': ['replace_keep_composition', 'replace_change_pose', 'replace_keep_pose_change_look', 'expression_transfer', 'replace_masked_subject', 'replace_across_video']}}),
                 io.Boolean.Input("face_closeup_reference", default=False,
-                                 tooltip="A face crop of the character is wired as ref_image_1 (<Picture 2>)."),
+                                 tooltip="A face crop of the character is wired as ref_image_1 (<Picture 2>).", extra_dict={'c2c_show_if': {'family': ['replace_keep_composition', 'replace_change_pose', 'replace_keep_pose_change_look', 'expression_transfer', 'replace_masked_subject', 'replace_across_video']}}),
                 io.Combo.Input("backend", options=list(BACKENDS), default=TEMPLATE,
                                tooltip="template (no LLM): deterministic, offline. The others run OUTSIDE ComfyUI "
                                        "and are reached over HTTP - a crashing model server cannot take ComfyUI "
                                        "down. llama.cpp: run llama-server and pick 'openai-compatible server'."),
                 io.String.Input("base_url", default="", tooltip="Blank = the backend's default "
-                                "(Ollama http://127.0.0.1:11434, llama-server http://127.0.0.1:8080/v1)."),
+                                "(Ollama http://127.0.0.1:11434, llama-server http://127.0.0.1:8080/v1).", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
                 io.String.Input("model", default="", tooltip="Blank = the server's first model (Ollama, "
-                                "OpenAI-compatible). Cloud APIs need a model name."),
+                                "OpenAI-compatible). Cloud APIs need a model name.", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
                 io.String.Input("api_key_env", default="",
                                 tooltip="The NAME of the environment variable that holds the API key (blank = "
                                         "ANTHROPIC_API_KEY / GEMINI_API_KEY / OPENAI_API_KEY). The key itself is "
-                                        "never stored in the workflow."),
-                io.Int.Input("timeout_s", default=90, min=5, max=600, tooltip="Per request."),
+                                        "never stored in the workflow.", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
+                io.Int.Input("timeout_s", default=90, min=5, max=600, tooltip="Per request.", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
                 io.Int.Input("retries", default=1, min=0, max=3,
-                             tooltip="Extra attempts after a timeout, 429 or 5xx (1 s, 2 s apart)."),
-                io.Float.Input("temperature", default=0.4, min=0.0, max=1.5, step=0.05),
-                io.Int.Input("max_tokens", default=1200, min=256, max=8192),
+                             tooltip="Extra attempts after a timeout, 429 or 5xx (1 s, 2 s apart).", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
+                io.Float.Input("temperature", default=0.4, min=0.0, max=1.5, step=0.05, extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
+                io.Int.Input("max_tokens", default=1200, min=256, max=8192, extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
                 io.Combo.Input("on_failure", options=list(ON_FAILURE), default=ON_FAILURE[0],
                                tooltip="What to do when the backend fails: use the deterministic template "
-                                       "(the report says why) or stop the run with the reason."),
+                                       "(the report says why) or stop the run with the reason.", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
             ],
             outputs=[
                 io.String.Output("prompt", display_name="PROMPT"),

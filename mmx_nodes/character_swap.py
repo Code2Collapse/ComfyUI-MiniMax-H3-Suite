@@ -37,13 +37,13 @@ class MiniMaxH3_TemporalDeflicker(io.ComfyNode):
                                    tooltip="How much of the boil is removed."),
                     io.Int.Input("radius", default=0, min=0, max=64,
                                  tooltip="Box radius in pixels that separates boil (fine) from motion (coarse). "
-                                         "0 = 8 px at 704 rows, scaled with the height."),
+                                         "0 = 8 px at 704 rows, scaled with the height.", extra_dict={'c2c_section': 'Motion'}),
                     io.Mask.Input("mask", optional=True,
                                   tooltip="Deflicker only here (1 = deflicker). Outside, the frames are unchanged."),
-                    io.Float.Input("motion_low", default=4.0, min=0.0, max=64.0, step=0.5, advanced=True,
-                                   tooltip="Coarse change (0-255 scale) below which the filter works fully."),
-                    io.Float.Input("motion_high", default=8.0, min=0.5, max=128.0, step=0.5, advanced=True,
-                                   tooltip="Coarse change (0-255 scale) above which the filter is off.")],
+                    io.Float.Input("motion_low", default=4.0, min=0.0, max=64.0, step=0.5,
+                                   tooltip="Coarse change (0-255 scale) below which the filter works fully.", extra_dict={'c2c_section': 'Motion'}),
+                    io.Float.Input("motion_high", default=8.0, min=0.5, max=128.0, step=0.5,
+                                   tooltip="Coarse change (0-255 scale) above which the filter is off.", extra_dict={'c2c_section': 'Motion'})],
             outputs=[io.Image.Output("images"), io.String.Output("report")],
         )
 
@@ -93,9 +93,9 @@ class MiniMaxH3_TemporalMatteChatterCorrector(io.ComfyNode):
                     io.BoundingBox.Input("bboxes", optional=True, force_input=True,
                                          tooltip="Crop boxes (Subject Crop) when the masks are crop-space."),
                     io.Int.Input("plate_width", default=0, min=0, max=16384,
-                                 tooltip="With bboxes: the plate's width (0 = the right edge of the boxes)."),
+                                 tooltip="With bboxes: the plate's width (0 = the right edge of the boxes).", extra_dict={'c2c_section': 'Plate'}),
                     io.Int.Input("plate_height", default=0, min=0, max=16384,
-                                 tooltip="With bboxes: the plate's height (0 = the bottom edge of the boxes)."),
+                                 tooltip="With bboxes: the plate's height (0 = the bottom edge of the boxes).", extra_dict={'c2c_section': 'Plate'}),
                     io.Boolean.Input("bridge_take_ends", default=False,
                                      tooltip="Also close a dropout at the very start or end of the take. Only for a "
                                              "subject that holds still: a moving subject's next 'window' frames of "

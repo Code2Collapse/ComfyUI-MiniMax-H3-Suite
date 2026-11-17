@@ -55,7 +55,7 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
                 ),
                 io.Combo.Input("display", options=displays, default=default_display),
                 io.Combo.Input("view", options=views, default=default_view),
-                io.Float.Input("tolerance", default=1e-4, min=0.0, max=1.0, step=1e-6),
+                io.Float.Input("tolerance", default=1e-4, min=0.0, max=1.0, step=1e-6, extra_dict={'c2c_section': 'Check'}),
                 # C2C L9.39: appended. A gate whose bool feeds nothing never ran (not an output node) and could
                 # not stop anything; it is an output node now, and this decides what a failure does.
                 io.Combo.Input("on_fail", options=["report only", "stop the run"], default="report only",

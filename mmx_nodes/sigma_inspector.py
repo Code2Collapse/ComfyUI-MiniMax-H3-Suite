@@ -43,7 +43,7 @@ class MiniMaxH3_SigmaInspector(io.ComfyNode):
                     optional=True,
                     tooltip="When connected, inspect this schedule. Otherwise synthesised from steps.",
                 ),
-                io.Int.Input("steps", default=20, min=2, max=200),
+                io.Int.Input("steps", default=20, min=2, max=200, extra_dict={"c2c_hide_if_linked": ["sigmas"]}),
                 io.Float.Input("shift_video", default=TRAINED_SHIFT_VIDEO, min=0.01, max=100.0, step=0.01),
                 io.Float.Input("shift_audio", default=TRAINED_SHIFT_AUDIO, min=0.01, max=100.0, step=0.01),
             ],

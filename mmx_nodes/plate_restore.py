@@ -150,6 +150,7 @@ class MiniMaxH3_PlateRestore(io.ComfyNode):
                         "Shifts above this are measured but not applied — check the report "
                         "if the plate still looks offset."
                     ),
+                    extra_dict={'c2c_section': 'Registration', 'c2c_show_if': {'register': ['correct']}},
                 ),
                 io.Combo.Input(
                     "colour",
@@ -169,6 +170,7 @@ class MiniMaxH3_PlateRestore(io.ComfyNode):
                         "Non-zero lag usually means a frame-count bug upstream — this node "
                         "never retimes, it only warns."
                     ),
+                    extra_dict={'c2c_section': 'Checks'},
                 ),
                 io.Boolean.Input(
                     "cast_matte",
@@ -178,6 +180,7 @@ class MiniMaxH3_PlateRestore(io.ComfyNode):
                         "(bigger hair, a wider costume) - where the aligned crop differs from the plate, "
                         "next to the edit. Off keeps the composite inside the edit mask."
                     ),
+                    extra_dict={'c2c_section': 'Cast'},
                 ),
                 io.Float.Input(
                     "cast_reach",
@@ -186,6 +189,7 @@ class MiniMaxH3_PlateRestore(io.ComfyNode):
                     max=0.5,
                     step=0.01,
                     tooltip="How far past the edit mask the cast may reach, as a share of the crop height.",
+                    extra_dict={'c2c_section': 'Cast', 'c2c_show_if': {'cast_matte': [True]}},
                 ),
             ],
             outputs=[

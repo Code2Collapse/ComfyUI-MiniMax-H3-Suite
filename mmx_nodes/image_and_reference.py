@@ -114,7 +114,7 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                             "pixel area. 'max' uses a 2048px short edge for the "
                             "best identity fidelity and is SEVERAL TIMES "
                             "SLOWER - reference tokens ride through every "
-                            "sampling step, not just the first."),
+                            "sampling step, not just the first.", extra_dict={"c2c_section": "References"}),
                 io.Autogrow.Input(
                     "ref_images", optional=True,
                     template=io.Autogrow.TemplateNames(
@@ -156,7 +156,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                             "reaches the model offset by half a token - the report says by how many "
                             "pixels. 'target grid (zero offset)' sizes it to width x height, so "
                             "every token of it lands exactly on the output's token: use it when the "
-                            "reference video is a spatial anchor. Costs more reference tokens."),
+                            "reference video is a spatial anchor. Costs more reference tokens.",
+                            extra_dict={"c2c_section": "References"}),
             ],
             outputs=[
                 io.Conditioning.Output(display_name="positive"),

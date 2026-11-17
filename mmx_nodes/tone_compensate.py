@@ -73,7 +73,7 @@ class MiniMaxH3_ToneCompensate(io.ComfyNode):
                 io.Int.Input(
                     "lut_bins", default=64, min=16, max=512, optional=True,
                     tooltip="Aggregation bins for lut mode only. More bins follow the "
-                            "curve more closely and overfit sooner."),
+                            "curve more closely and overfit sooner.", extra_dict={"c2c_show_if": {"mode": ["lut"]}}),
             ],
             outputs=[
                 io.Image.Output(display_name="images",

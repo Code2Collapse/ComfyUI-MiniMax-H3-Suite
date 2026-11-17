@@ -95,9 +95,9 @@ class MiniMaxH3_ShotBoundaries(io.ComfyNode):
                                tooltip="Higher finds more cuts. Histogram: a cut where the colour correlation is below "
                                        "0.30 + 0.60 x sensitivity. PySceneDetect: content threshold 45 - 35 x sensitivity."),
                 io.Int.Input("min_shot_frames", default=8, min=1, max=1000, tooltip="Shorter shots merge into the one before."),
-                io.Boolean.Input("fades", default=False, tooltip="Also report dips to black or white as transitions."),
-                io.String.Input("add_cuts", default="", tooltip="Rows to cut at anyway, e.g. 12, 40."),
-                io.String.Input("remove_cuts", default="", tooltip="Rows NOT to cut at, e.g. 18."),
+                io.Boolean.Input("fades", default=False, tooltip="Also report dips to black or white as transitions.", extra_dict={'c2c_section': 'Detection'}),
+                io.String.Input("add_cuts", default="", tooltip="Rows to cut at anyway, e.g. 12, 40.", extra_dict={'c2c_section': 'Manual cuts'}),
+                io.String.Input("remove_cuts", default="", tooltip="Rows NOT to cut at, e.g. 18.", extra_dict={'c2c_section': 'Manual cuts'}),
             ],
             outputs=[
                 io.String.Output("shots_json", tooltip="Contract h3.shot_manifest v1: one entry per shot."),

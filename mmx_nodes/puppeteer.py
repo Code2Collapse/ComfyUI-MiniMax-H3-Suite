@@ -39,7 +39,7 @@ class MiniMaxH3_PosePuppeteer(io.ComfyNode):
             ),
             inputs=[
                 io.Image.Input("driving_pose", tooltip="Pose hints IMAGE from N8 StrongestPose."),
-                io.String.Input("keypoints_json", optional=True, multiline=True),
+                io.String.Input("keypoints_json", optional=True, multiline=True, extra_dict={"c2c_hidden": True}),
                 io.Image.Input("character_ref", tooltip="Sets the output size; blended under the pose except with pose_only."),
                 io.Combo.Input("rig_type", options=list(RIG_TYPES), default="human_to_creature",
                                tooltip="pose_only = the clean pose, for a pose ControlNet. human_to_creature / "

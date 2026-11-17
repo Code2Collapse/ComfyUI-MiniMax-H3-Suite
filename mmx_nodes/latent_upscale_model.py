@@ -250,23 +250,31 @@ class MiniMaxH3_LatentUpscaleModel(io.ComfyNode):
                 io.Combo.Input("model_name", options=_model_names(),
                                tooltip=f"Checkpoint in models/latent_upscale_models. Download "
                                        f"minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors from {U.WEIGHTS_URL}. "
-                                       "Pickle files (.pth) are refused."),
+                                       "Pickle files (.pth) are refused.",
+                                       extra_dict={"c2c_section": "Model setup", "c2c_show_if": {"method": ["model"]}}),
                 io.Int.Input("width", default=1280, min=64, max=8192, step=32,
-                             tooltip="Target width in pixels (32 px grid)."),
+                             tooltip="Target width in pixels (32 px grid).",
+                             extra_dict={"c2c_show_if": {"size_by": ["width / height"]}}),
                 io.Int.Input("height", default=704, min=64, max=8192, step=32,
-                             tooltip="Target height in pixels (32 px grid)."),
+                             tooltip="Target height in pixels (32 px grid).",
+                             extra_dict={"c2c_show_if": {"size_by": ["width / height"]}}),
                 io.Combo.Input("device", options=["auto", "cpu"], default="auto",
-                               tooltip="auto: ComfyUI's device (GPU if there is one)."),
+                               tooltip="auto: ComfyUI's device (GPU if there is one).",
+                               extra_dict={"c2c_section": "Model setup", "c2c_show_if": {"method": ["model"]}}),
                 io.Combo.Input("precision", options=["fp16", "bf16", "fp32"], default="fp16",
-                               tooltip="Compute precision on the GPU. On the CPU it always runs fp32."),
-                io.Int.Input("chunk_latent_steps", default=0, min=0, max=4096, advanced=True,
+                               tooltip="Compute precision on the GPU. On the CPU it always runs fp32.",
+                               extra_dict={"c2c_section": "Model setup", "c2c_show_if": {"method": ["model"]}}),
+                io.Int.Input("chunk_latent_steps", default=0, min=0, max=4096,
                              tooltip="0: the whole clip in one pass (exact). > 0: chunks of this many latent steps "
-                                     "(4 pixel frames each), cross-faded; less memory, approximate."),
-                io.Int.Input("chunk_overlap_steps", default=4, min=0, max=64, advanced=True,
-                             tooltip="Latent steps shared by neighbouring chunks, cross-faded."),
-                io.Boolean.Input("offload_model", default=True, advanced=True,
+                                     "(4 pixel frames each), cross-faded; less memory, approximate.",
+                                     extra_dict={"c2c_section": "Performance", "c2c_show_if": {"method": ["model"]}}),
+                io.Int.Input("chunk_overlap_steps", default=4, min=0, max=64,
+                             tooltip="Latent steps shared by neighbouring chunks, cross-faded.",
+                             extra_dict={"c2c_section": "Performance", "c2c_show_if": {"method": ["model"]}}),
+                io.Boolean.Input("offload_model", default=True,
                                  tooltip="Move the upscaler back to the CPU afterwards, so the H3 model and the "
-                                         "upscaler are never both on the GPU."),
+                                         "upscaler are never both on the GPU.",
+                                         extra_dict={"c2c_section": "Performance", "c2c_show_if": {"method": ["model"]}}),
                 # C2C L9.39, appended (saved widgets keep their positions): size by factor or pixel budget as the
                 # reference upscalers do, not only by width / height
                 io.Combo.Input("size_by", options=list(SIZE_BY), default=SIZE_BY[0], optional=True,
@@ -274,26 +282,32 @@ class MiniMaxH3_LatentUpscaleModel(io.ComfyNode):
                                        "'scale'. megapixels: the latent's aspect at about this many megapixels. All "
                                        "snap to H3's 32 px grid."),
                 io.Float.Input("scale", default=2.0, min=0.25, max=8.0, step=0.05, optional=True,
-                               tooltip="size_by = scale: multiply the current size by this."),
+                               tooltip="size_by = scale: multiply the current size by this.",
+                               extra_dict={"c2c_show_if": {"size_by": ["scale"]}}),
                 io.Float.Input("megapixels", default=1.0, min=0.05, max=33.0, step=0.05, optional=True,
-                               tooltip="size_by = megapixels: the target pixel count in millions, aspect kept."),
+                               tooltip="size_by = megapixels: the target pixel count in millions, aspect kept.",
+                               extra_dict={"c2c_show_if": {"size_by": ["megapixels"]}}),
                 # work order 2026-11-14 s7, appended: any aspect ratio, with an explicit fit (never a silent stretch)
                 io.Combo.Input("aspect", options=list(A.ASPECTS), default="source", optional=True,
                                tooltip="Output ratio for size_by = scale / megapixels: the source's own, a preset "
                                        "(portrait, square, landscape, ultrawide) or custom. With width / height the "
-                                       "box sets the ratio and this is ignored."),
+                                       "box sets the ratio and this is ignored.",
+                                       extra_dict={"c2c_show_if": {"size_by": ["scale", "megapixels"]}}),
                 io.String.Input("custom_ratio", default="2.39:1", optional=True,
-                                tooltip="aspect = custom: W:H (e.g. 4:5, 2.39:1) or a decimal; up to 8:1."),
+                                tooltip="aspect = custom: W:H (e.g. 4:5, 2.39:1) or a decimal; up to 8:1.",
+                                extra_dict={"c2c_show_if": {"size_by": ["scale", "megapixels"], "aspect": ["custom"]}}),
                 io.Combo.Input("fit", options=list(A.FITS), default="auto", optional=True,
                                tooltip="How the picture fills the new shape. auto: exact when the ratios match, "
                                        "otherwise stretch as before 2026-11-14 with a WARNING in the report. contain: whole picture, smaller output. crop: fill, "
                                        "cut at 'anchor'. pad: whole picture, border padded (regenerate it). stretch: "
                                        "distort on purpose (the behaviour before 2026-11-14)."),
                 io.Combo.Input("anchor", options=list(A.ANCHORS), default="center", optional=True,
-                               tooltip="crop: which part is kept. pad: where the picture sits."),
+                               tooltip="crop: which part is kept. pad: where the picture sits.",
+                               extra_dict={"c2c_show_if": {"fit": ["crop", "pad"]}}),
                 io.Combo.Input("pad_fill", options=list(A.PAD_FILLS), default="edge", optional=True,
                                tooltip="fit = pad: repeat the border cells, or zero latent. Either way the padded "
-                                       "area is marked in the noise mask for the next sampler pass to generate."),
+                                       "area is marked in the noise mask for the next sampler pass to generate.",
+                                       extra_dict={"c2c_show_if": {"fit": ["pad"]}}),
             ],
             outputs=[io.Latent.Output(display_name="latent"), io.String.Output(display_name="report")],
         )

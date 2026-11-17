@@ -818,7 +818,7 @@ class MuseMinimaxDirector:
                 "audio_vae": ("VAE", {"tooltip": "Needed for final audio decode in both modes — H3 always builds a joint audio+video latent internally, even in First/Last Frame mode."}),
                 "aspect_ratio": (ASPECT_RATIO_OPTIONS, {"default": AspectRatio.WIDESCREEN_H.value}),
                 "megapixels": ("FLOAT", {"default": 0.98, "min": 0.1, "max": 4.0, "step": 0.02}),
-                "multiple": ("INT", {"default": 32, "min": 8, "max": 128, "step": 4, "advanced": True}),
+                "multiple": ("INT", {"default": 32, "min": 8, "max": 128, "step": 4, "c2c_section": "Size"}),
                 "resize_method": (["crop", "pad", "stretch"], {"default": "crop", "tooltip":
                     "How every character/background reference image and First/Last Frame image gets fit to "
                     "the output resolution when its own aspect ratio doesn't match. 'crop' scales up and "
@@ -830,6 +830,7 @@ class MuseMinimaxDirector:
                     "tooltip": "Total length of the finished video. Automatically split into multiple H3 "
                                "generation calls if longer than chunk_duration_seconds, stitched together."}),
                 "chunk_duration_seconds": ("FLOAT", {"default": 10.0, "min": 3.0, "max": 15.0, "step": 0.5,
+                    "c2c_section": "Chunking",
                     "tooltip": "Length of each individual H3 call. H3's own trained range tops out around "
                                "15s per call — longer totals get split into chunks this long (the final "
                                "chunk absorbs whatever's left over, so it may be shorter). Reference mode: "
@@ -839,12 +840,13 @@ class MuseMinimaxDirector:
                                "continuation falls back to the previous chunk's last frame only."}),
                 "ref_image_size": (["match", "max"], {
                     "default": "match",
+                    "c2c_show_if": {"mode": [MODE_REFERENCE]},
                     "tooltip": "'match' scales references down to the generation's pixel area (faster). "
                                "'max' keeps up to a 2048px short edge for stronger identity fidelity, but "
                                "reference tokens ride every sampling step so it's several times slower. "
                                "Reference (Omni) mode only.",
                 }),
-                "hybrid_continuation": ("BOOLEAN", {"default": False, "tooltip":
+                "hybrid_continuation": ("BOOLEAN", {"default": False, "c2c_show_if": {"mode": [MODE_REFERENCE]}, "tooltip":
                     "Reference (Omni) mode only, needs model_fl2va connected. Reference mode's own "
                     "carry-over (ref_video/ref_audio) is a soft reference, not a hard lock — H3 can still "
                     "cut to a new composition at a chunk boundary despite it. When this is on, continuation "
@@ -859,8 +861,8 @@ class MuseMinimaxDirector:
                 "steps": ("INT", {"default": 20, "min": 1, "max": 100}),
                 "sampler_name": (["res_multistep", "euler", "euler_ancestral", "dpmpp_2m"], {"default": "res_multistep"}),
                 "scheduler": (["simple", "normal", "beta", "sgm_uniform"], {"default": "simple"}),
-                "shift_video": ("FLOAT", {"default": 12.0, "min": 0.01, "max": 100.0, "step": 0.01, "advanced": True}),
-                "shift_audio": ("FLOAT", {"default": 3.0, "min": 0.01, "max": 100.0, "step": 0.01, "advanced": True}),
+                "shift_video": ("FLOAT", {"default": 12.0, "min": 0.01, "max": 100.0, "step": 0.01, "c2c_section": "Sampling"}),
+                "shift_audio": ("FLOAT", {"default": 3.0, "min": 0.01, "max": 100.0, "step": 0.01, "c2c_section": "Sampling"}),
                 # ADDED (not upstream). Upstream has no prompt socket: every word
                 # comes from timeline_data, which its canvas timeline writes. This
                 # pack does not ship that front-end, so without this the node
@@ -871,7 +873,7 @@ class MuseMinimaxDirector:
                     "own - then the whole duration is one shot described by this. "
                     "With a timeline loaded the timeline's own shots win and this "
                     "is ignored."}),
-                "timeline_data": ("STRING", {"default": "{}", "multiline": False}),
+                "timeline_data": ("STRING", {"default": "{}", "multiline": False, "c2c_section": "Timeline (raw)"}),
             },
             "optional": {
                 "model_fl2va": ("MODEL", {"tooltip": "The separate First/Last-Frame checkpoint (not the same "

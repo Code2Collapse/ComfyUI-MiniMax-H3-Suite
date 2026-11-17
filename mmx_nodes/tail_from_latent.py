@@ -91,7 +91,7 @@ class MiniMaxH3_TailFromLatent(io.ComfyNode):
                             "the grid a reference video is reinterpreted, not "
                             "refused, and its motion arrives at the wrong "
                             "speed. Only turn this off if something downstream "
-                            "wants an exact length."),
+                            "wants an exact length.", extra_dict={'c2c_section': 'Advanced'}),
             ],
             outputs=[
                 io.Image.Output(

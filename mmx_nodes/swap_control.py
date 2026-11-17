@@ -104,13 +104,14 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                             "motion."),
                 io.Int.Input(
                     "line_width", default=4, min=1, max=32,
-                    tooltip="Body line thickness in pixels."),
+                    tooltip="Body line thickness in pixels.", extra_dict={"c2c_section": "Drawing"}),
                 io.Int.Input(
                     "face_line_width", default=0, min=0, max=32,
                     tooltip="Face line thickness. 0 means half the body width, "
                             "which is the useful default: a thick line closes "
                             "the gap between the lips, and the model then "
-                            "cannot tell an open mouth from a shut one."),
+                            "cannot tell an open mouth from a shut one.",
+                            extra_dict={"c2c_section": "Drawing", "c2c_show_if": {"swap_scope": ["face", "lips", "head", "person"]}}),
                 io.Boolean.Input(
                     "drive_jaw", default=True, optional=True,
                     tooltip="Draw the dupe's jaw contour into the control. ON "
@@ -123,7 +124,8 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                             "OFF removes the contour entirely - the reference "
                             "actor's skull is then unopposed, but a profile "
                             "will read as a front-on face and the mouth cannot "
-                            "open as far."),
+                            "open as far.",
+                            extra_dict={"c2c_section": "Drawing", "c2c_show_if": {"swap_scope": ["face", "lips", "head", "person"]}}),
                 io.Boolean.Input(
                     "drive_mouth", default=True, optional=True,
                     tooltip="Draw the dupe's lips into the control. Leave it ON "
@@ -134,7 +136,8 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                             "nothing is telling it the old lip shape and a "
                             "locked audio track decides instead. With it off "
                             "and no audio locked, the lips have nothing driving "
-                            "them at all."),
+                            "them at all.",
+                            extra_dict={"c2c_section": "Drawing", "c2c_show_if": {"swap_scope": ["face", "lips", "head", "person"]}}),
                 io.Float.Input(
                     "mask_pad", default=-1.0, min=-1.0, max=2.0, step=0.01,
                     optional=True,
@@ -143,16 +146,16 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                             "uses the per-scope default (head pads furthest, "
                             "because hair has no landmarks to find). Padding "
                             "scales about the hull's centroid, so growing it "
-                            "does not move the boundary relative to the face."),
+                            "does not move the boundary relative to the face.", extra_dict={"c2c_section": "Mask"}),
                 io.Int.Input(
                     "mask_feather", default=0, min=0, max=64, optional=True,
                     tooltip="Soften the mask edge, in pixels. Feather in PIXEL "
                             "space here; the latent reduction downstream is "
-                            "where the 32px token grid takes over."),
+                            "where the 32px token grid takes over.", extra_dict={"c2c_section": "Mask"}),
                 io.Int.Input(
                     "person_index", default=0, min=0, max=32, optional=True,
                     tooltip="Which detected person is the dupe, when the frame "
-                            "holds more than one."),
+                            "holds more than one.", extra_dict={"c2c_section": "Input"}),
             ],
             outputs=[
                 io.Image.Output(display_name="control_video",

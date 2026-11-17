@@ -47,7 +47,8 @@ class MiniMaxH3_FrameHandles(io.ComfyNode):
                 ),
                 io.Combo.Input("padding_mode", options=list(PADDING_MODES), default="H3 (17n+5)"),
                 io.Combo.Input("handle_side", options=["head", "tail"], default="head"),
-                io.Float.Input("fps", default=float(FPS), min=1.0, max=120.0, step=0.01),
+                io.Float.Input("fps", default=float(FPS), min=1.0, max=120.0, step=0.01,
+                               extra_dict={"c2c_section": "Audio"}),
                 io.Audio.Input("audio", optional=True),
             ],
             outputs=[

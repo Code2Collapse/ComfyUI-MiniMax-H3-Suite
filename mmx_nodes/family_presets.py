@@ -32,15 +32,15 @@ class MiniMaxH3_FamilyPresets(io.ComfyNode):
                 io.String.Input("subject_name", default="primary subject", multiline=False),
                 io.String.Input("task_notes", default="", multiline=True),
                 io.String.Input("style_notes", default="", multiline=True, tooltip="Style DNA (#16)."),
-                io.String.Input("references_manifest", default="", multiline=True),
+                io.String.Input("references_manifest", default="", multiline=True, extra_dict={'c2c_section': 'References'}),
                 io.Int.Input("frame_count", default=22, min=5, max=512),
                 # C2C D8.21: appended; only the six replace_* / expression families read it
                 io.Combo.Input("head_size_mode", options=list(HEAD_SIZE_MODES), default=HEAD_SIZE_MODES[0],
                                optional=True,
-                               tooltip="Character replacement families: how big the new head is - match character proportions (the reference's own head-to-body ratio) or keep original composition (the original head's size and position). Set the same mode on H3 Subject Crop."),
+                               tooltip="Character replacement families: how big the new head is - match character proportions (the reference's own head-to-body ratio) or keep original composition (the original head's size and position). Set the same mode on H3 Subject Crop.", extra_dict={'c2c_show_if': {'family': ['replace_keep_composition', 'replace_change_pose', 'replace_keep_pose_change_look', 'expression_transfer', 'replace_masked_subject', 'replace_across_video']}}),
                 # C2C L8.22 BUILD (prompt helper): appended, default off = the prompt is unchanged
                 io.Boolean.Input("face_closeup_reference", default=False, optional=True,
-                                 tooltip="Character replacement families: you also wire a tight face crop of the character as ref_image_1 (e.g. H3 Face Track + Crop on the character image). The prompt then names it <Picture 2>, the authority for facial identity. Ignored by expression_transfer. Experimental: not A/B-tested on H3 weights."),
+                                 tooltip="Character replacement families: you also wire a tight face crop of the character as ref_image_1 (e.g. H3 Face Track + Crop on the character image). The prompt then names it <Picture 2>, the authority for facial identity. Ignored by expression_transfer. Experimental: not A/B-tested on H3 weights.", extra_dict={'c2c_show_if': {'family': ['replace_keep_composition', 'replace_change_pose', 'replace_keep_pose_change_look', 'expression_transfer', 'replace_masked_subject', 'replace_across_video']}}),
             ],
             outputs=[
                 io.String.Output("prompt"),

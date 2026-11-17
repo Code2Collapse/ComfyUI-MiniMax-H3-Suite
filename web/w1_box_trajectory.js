@@ -254,8 +254,11 @@ function buildDom(node) {
   node[ST_KEY] = st;
 
   const panelWidget = mountPanel(node, "mmx_box_trajectory", root, { minHeight: PANEL_MIN });
+  // fe 1.53 _arrangeWidgets calls computeSize() with NO width: without the fallback the height was NaN and every
+  // widget after the panel (the A28 section bar) got y = NaN and was never drawn (measured 2026-11-17, A28 MMX part A)
   panelWidget.computeSize = (w) => {
-    return [w, CHROME_H + stageHeightFor(st, w) + 8];
+    const width = Number.isFinite(w) ? w : (node.size?.[0] || 380);
+    return [width, CHROME_H + stageHeightFor(st, width) + 8];
   };
   panelWidget.onPanelResize = () => { syncStage(st, node); paintFrame(node); };
   st.zoomOff = installZoomRepaint(node, () => paintFrame(node), "_c2cW1Zoom");

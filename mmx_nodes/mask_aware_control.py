@@ -344,7 +344,7 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                     tooltip="ComfyUI's control stream also adds a residual to the "
                             "TEXT rows, because it starts as a copy of the whole "
                             "sequence. Off here: a depth map should not be editing "
-                            "the prompt. Turn it on to match core exactly."),
+                            "the prompt. Turn it on to match core exactly.", extra_dict={"c2c_section": "Advanced"}),
                 io.Image.Input(
                     "control_video", optional=True,
                     tooltip="The hint - depth, pose, edges. Optional if you are "
@@ -378,10 +378,10 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                             "that is VAE-encoded for the sampler."),
                 io.Float.Input(
                     "sigma_start", default=1.0, min=0.0, max=1.0, step=0.01,
-                    optional=True, advanced=True),
+                    optional=True, extra_dict={"c2c_section": "Schedule"}),
                 io.Float.Input(
                     "sigma_end", default=0.0, min=0.0, max=1.0, step=0.01,
-                    optional=True, advanced=True),
+                    optional=True, extra_dict={"c2c_section": "Schedule"}),
                 # A16 Part III, appended: where this control applies, how its strength runs, crop alignment
                 io.Mask.Input(
                     "control_region", optional=True,
@@ -392,7 +392,8 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                     "schedule", options=list(SCHEDULES), default=SCHEDULES[0], optional=True,
                     tooltip="Strength over the steps inside the sigma window. constant: as before. fade out: full "
                             "at the start, nothing at the end - the control sets the layout and leaves the detail "
-                            "to the model. fade in: the reverse. smooth fade out: eased."),
+                            "to the model. fade in: the reverse. smooth fade out: eased.",
+                            extra_dict={"c2c_section": "Schedule"}),
                 io.BoundingBox.Input(
                     "crop_bboxes", optional=True, force_input=True,
                     tooltip="Subject Crop's boxes. With them, a PLATE-sized control video / source video / mask / "

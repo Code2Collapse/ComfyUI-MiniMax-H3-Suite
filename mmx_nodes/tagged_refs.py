@@ -133,11 +133,12 @@ class MiniMaxH3_TaggedReferenceToVideo(io.ComfyNode):
                              tooltip="Frame count at 24 fps (17k + 5)."),
                 io.Combo.Input("ref_image_size", options=["match", "max"], default="match",
                                tooltip="As core: match scales pictures to the generation's area, max keeps up to "
-                                       "2048 px on the short edge (slower)."),
+                                       "2048 px on the short edge (slower).", extra_dict={"c2c_section": "References"}),
                 io.Combo.Input("compliance", options=list(TR.COMPLIANCE), default="strict",
                                tooltip="strict: an unknown @tag or too many references stop the run. soft: they "
                                        "become warnings, unknown @tags stay in the prompt, the first references in "
-                                       "chain order are kept. disabled: @tags are left as written."),
+                                       "chain order are kept. disabled: @tags are left as written.",
+                                       extra_dict={"c2c_section": "References"}),
                 io.Vae.Input("vae", optional=True, tooltip="H3 video VAE (without it references only reach the "
                                                            "text encoder)."),
                 io.Vae.Input("audio_vae", optional=True, tooltip="H3 audio VAE."),

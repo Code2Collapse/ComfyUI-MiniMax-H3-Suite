@@ -48,7 +48,8 @@ class MiniMaxH3_ContextWindowSampling(io.ComfyNode):
                                tooltip="global: every window keeps the clip's own time positions, so it predicts "
                                        "what the whole clip would there (recommended). local (experimental): every "
                                        "window is laid out as a clip of its own, keyframes inside it re-indexed and "
-                                       "the others left out - for A/B tests only."),
+                                       "the others left out - for A/B tests only.",
+                                       extra_dict={"c2c_section": "Advanced"}),
             ],
             outputs=[
                 io.Model.Output(display_name="model", tooltip="The patched model: feed it to an H3 sampler."),

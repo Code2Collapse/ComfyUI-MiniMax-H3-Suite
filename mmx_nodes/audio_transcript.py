@@ -366,7 +366,7 @@ class DenoAudioTranscript:
                 "language": (list(LANGUAGE_CHOICES), {"default": "auto"}),
                 "model_after_run": (
                     list(MODEL_AFTER_RUN_CHOICES),
-                    {"default": "Unload after run"},
+                    {"default": "Unload after run", "c2c_section": "Memory"},
                 ),
             },
             "optional": {

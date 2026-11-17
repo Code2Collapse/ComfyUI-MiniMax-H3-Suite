@@ -96,19 +96,20 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
                     "ref_path",
                     default="",
                     tooltip="Optional full path override (use for GGUF in unet/).",
+                    extra_dict={"c2c_section": "Paths"},
                 ),
                 io.Combo.Input("fl_name", options=ckpt_names, default=ckpt_names[0]),
-                io.String.Input("fl_path", default=""),
+                io.String.Input("fl_path", default="", extra_dict={"c2c_section": "Paths"}),
                 io.Combo.Input("sing_name", options=ckpt_names, default=ckpt_names[0]),
-                io.String.Input("sing_path", default=""),
+                io.String.Input("sing_path", default="", extra_dict={"c2c_section": "Paths"}),
                 io.Int.Input("rank", default=256, min=8, max=512),
                 io.Boolean.Input(
                     "fl_projection",
                     default=True,
                     tooltip="ON: H = (S-R) - a(F-R). OFF: H = S-R plain delta.",
                 ),
-                io.Int.Input("block_start", default=25, min=0, max=49),
-                io.Int.Input("block_end", default=49, min=0, max=49),
+                io.Int.Input("block_start", default=25, min=0, max=49, extra_dict={"c2c_section": "Blocks"}),
+                io.Int.Input("block_end", default=49, min=0, max=49, extra_dict={"c2c_section": "Blocks"}),
                 io.Float.Input(
                     "edge_margin",
                     default=1.1,
@@ -118,12 +119,12 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
                     tooltip=(
                         "Marchenko-Pastur edge multiplier when quantisation noise floor is known "
                         "(int8/bf16/fp16). Singular values above edge are kept."
-                    ),
+                    ), extra_dict={"c2c_section": "Blocks"},
                 ),
                 io.Combo.Input(
                     "device",
                     options=["auto", "cpu", "cuda"],
-                    default="auto",
+                    default="auto", extra_dict={"c2c_section": "Performance"},
                 ),
                 io.String.Input(
                     "output_name",
@@ -136,13 +137,14 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
                     optional=True,
                     tooltip="Also extract weights that belong to no DiT block (embeddings, refiner, output heads). "
                             "On = the previous behaviour: the block range never filtered them.",
+                            extra_dict={"c2c_section": "Blocks"},
                 ),
                 io.Boolean.Input(
                     "full_hash",
                     default=False,
                     optional=True,
                     tooltip="Hash the whole source checkpoints for the provenance report (slow on 30+ GB files). "
-                            "Off: the first MiB is hashed.",
+                            "Off: the first MiB is hashed.", extra_dict={"c2c_section": "Output"},
                 ),
             ],
             outputs=[

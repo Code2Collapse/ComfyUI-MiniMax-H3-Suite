@@ -281,9 +281,11 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
                 io.Combo.Input("temporal_method", options=["max", "min", "mean", "first", "last"], default="max",
                                tooltip="How a group of frames reduces to one latent frame. max marks the frame if any grouped frame is masked."),
                 io.Int.Input("grow_spatial", default=0, min=-256, max=256,
-                             tooltip="Grow (+) or shrink (-) the mask this many pixels before reduction."),
+                             tooltip="Grow (+) or shrink (-) the mask this many pixels before reduction.",
+                             extra_dict={"c2c_section": "Grow"}),
                 io.Int.Input("grow_temporal", default=0, min=-64, max=64,
-                             tooltip="Grow (+) or shrink (-) the mask this many frames before reduction."),
+                             tooltip="Grow (+) or shrink (-) the mask this many frames before reduction.",
+                             extra_dict={"c2c_section": "Grow"}),
                 io.Int.Input("grow_tokens", default=0, min=0, max=32,
                              optional=True,
                              tooltip="Grow the mask by whole TOKENS, after reduction "
@@ -299,7 +301,7 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
                                      "to stay put relative to the face. One token is 32 "
                                      "pixels. It still moves once the grown mask reaches "
                                      "a frame edge, because the shape is then genuinely "
-                                     "lopsided."),
+                                     "lopsided.", extra_dict={"c2c_section": "Grow"}),
                 io.Float.Input("coverage_threshold", default=0.05, min=0.0, max=1.0, step=0.01,
                                optional=True,
                                tooltip="Only for spatial_method=coverage. The fraction of a token block "
@@ -307,7 +309,8 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
                                        "rejects stray pixels and antialiased boundaries while keeping "
                                        "anything genuinely inside; raise it to pull the mask tighter, lower "
                                        "it towards max behaviour. 0 marks a block if any pixel at all is "
-                                       "masked, which is what max does."),
+                                       "masked, which is what max does.",
+                                       extra_dict={"c2c_show_if": {"spatial_method": ["coverage"]}}),
             ],
             outputs=[
                 io.Mask.Output(display_name="mask", tooltip="Latent-resolution mask for Set Latent Noise Mask."),

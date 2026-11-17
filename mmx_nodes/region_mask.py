@@ -99,7 +99,8 @@ class MiniMaxH3_RegionMask(io.ComfyNode):
                 ),
                 io.Combo.Input("mode", options=list(REGION_MODES), default="sky"),
                 io.Mask.Input("painted_mask", optional=True),
-                io.Float.Input("horizon_bias", default=0.0, min=-1.0, max=1.0, step=0.01),
+                io.Float.Input("horizon_bias", default=0.0, min=-1.0, max=1.0, step=0.01,
+                               extra_dict={"c2c_show_if": {"mode": ["sky", "ground"]}}),
                 io.Int.Input("feather_px", default=4, min=0, max=128),
             ],
             outputs=[

@@ -42,10 +42,11 @@ class MiniMaxH3_SigmaShiftLocked(io.ComfyNode):
                     default=TRAINED_SHIFT_AUDIO,
                     min=0.01,
                     max=100.0,
-                    step=0.01,
+                    step=0.01, extra_dict={"c2c_show_if": {"ratio_lock": [False]}},
                 ),
                 io.Boolean.Input("ratio_lock", default=True),
-                io.Float.Input("ratio", default=TRAINED_SHIFT_RATIO, min=0.1, max=100.0, step=0.01),
+                io.Float.Input("ratio", default=TRAINED_SHIFT_RATIO, min=0.1, max=100.0, step=0.01,
+                               extra_dict={"c2c_show_if": {"ratio_lock": [True]}}),
             ],
             outputs=[
                 io.Model.Output("model"),

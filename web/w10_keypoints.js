@@ -538,22 +538,12 @@ function loadFromWidget(st, node) {
   st.frame = Math.min(st.frame, Math.max(0, st.previewDoc.frames.length - 1));
 }
 
-/** The editor authors keypoints_json, so its raw text box only clutters the
- *  node (same rule as Paint's canvas_data). The widget stays: it still
- *  serialises with the workflow and its input socket still takes a link. */
-function hideRawJson(node) {
-  const w = widgetByName(node, "keypoints_json");
-  if (!w) return;
-  if (!w.options) w.options = {};
-  w.options.hidden = true;
-  w.hidden = true;
-  w.computeSize = () => [0, -4];
-  if (w.element) w.element.style.display = "none";
-}
+// keypoints_json is authored by this editor, so its raw text box is hidden: declared in Python (c2c_hidden), applied
+// with a real resize by the A28 layout engine (web/mmx_node_layout.js). The widget still serialises with the workflow
+// and its input socket still takes a link (a linked widget is never hidden).
 
 function build(node) {
   disposeState(node, STATE);
-  hideRawJson(node);
 
   const root = document.createElement("div");
   root.style.display = "flex";
