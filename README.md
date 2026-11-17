@@ -759,6 +759,12 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
   the key in the request URL, where a connection error could carry it into the error text and the log). Any
   error text it returns is cleaned of the key.
 
+## Sigma Inspector: save the plot (2026-11-18)
+
+The **H3 Sigma Inspector** plot now has **Save PNG** and **Save JSON** buttons next to Copy CSV. The PNG includes a
+legend and the shifts used, so the file makes sense on its own. The JSON holds the shifts and every step. The plot
+also comes back when you run an unchanged graph again: before, a re-run served from the cache left it empty.
+
 ## Color QC: per-frame trends and a JSON output (2026-11-18)
 
 **H3 Color QC** now also measures, frame by frame:
