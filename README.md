@@ -1226,3 +1226,9 @@ Ported utilities carry upstream licence headers and `# PORTED FROM:` provenance 
 The sliders, number boxes, drop-downs, colour pickers and switches in this pack's node panels now carry their row
 label, so screen readers announce them by name. Typing 0 into a number box whose range starts below zero keeps 0
 (it used to jump to the minimum).
+
+## Auto-continue switch in Settings (2026-11-18)
+
+Whether long H3 jobs (H3 Job Controller, Subject Track) may queue their next run by themselves is now a setting:
+*Settings > C2C > MiniMax > Jobs* (default on, as before; each node's own `auto_continue` option must also be on).
+`H3_AUTO_CONTINUE=0` still switches it off when set. Works without CustomNodePacks installed.
