@@ -74,13 +74,28 @@ N2 produces the video-side latent mask. N4 writes `latent["noise_mask"] = Nested
 6. **MiniMaxH3_SigmaShiftLocked** — ratio-locked shift pair (default 12 / 3, ratio 4). Core `MiniMaxH3SigmaShift` is fine if you do not need ratio lock.
 7. **P10 / P11** — guards pass MODEL through; workflow fails loud on illegal dit patches or cache conflicts.
 8. **SamplerCustomAdvanced** + **BasicGuider** — full denoise pass produces video; N5 exterior pixels match plate (`torch.equal` outside mask).
-9. **N3 hints** — no consumer yet; geometry-only until Union apply exists.
+9. **N3 hints** — consumed by core `MiniMaxH3FunControlNetApply` (control_video) in `h3_masked_face_pipeline.json`
+   (core 0.39 ships it; it needs an H3 Fun ControlNet model patch).
 
-## Unconnected / placeholder
+## Wired end to end (2026-11-18, L8.52)
 
-- Load Image / Load Video inputs — connect your plate clip at node 1.
-- Checkpoint / VAE / CLIP loaders — connect your H3 weights.
-- Sampler output → VAE decode → link decoded frames into N5 `crops` input (post-sampler path).
+`h3_full_spine_pipeline.json` and `h3_masked_face_pipeline.json` are complete graphs now (they were wiring skeletons):
+
+- **Source:** Load Video → Get Video Components → N7 Frame Handles (images and audio).
+- **Models:** UNET Loader (H3 Ref2VA), CLIP Loader (type `minimax`), and video and audio VAE Loaders, wired to
+  Reference to Video, Masked Replace and the decoders. Pick your own files; the names are the Suite's defaults.
+- **Sampling:** Random Noise and KSampler Select feed Sampler Custom Advanced.
+- **Back to the plate:** the sampler output is decoded and the **generated** crops go into N5 Stitch Back `crops`
+  (the skeleton had the original crops there). The plate goes into N5 and N6, and N6 gets N5's composite mask.
+- **Output:** Create Video (24 fps, decoded audio) → Save Video.
+- **Full spine only:** N8 and N9 read the plate; N10 Region Mask reads the crops (crop space). N11 Drift QC compares
+  the plate with the result inside N5's composite mask.
+- **Masked face only:** a Load Image (as Mask) node, titled "Face mask - crop space", feeds N2. Paint the mask or
+  replace the file. N3 Control Hints → `MiniMaxH3FunControlNetApply` → Sigma Shift → guider and scheduler.
+
+Built and serialised by the frontend itself (core 0.39.0 / frontend 1.53.10). The C2C workspace build script is
+`docs/evidence/L8.52/wire_workflows_live.py`. **Not run end to end:** there are no H3 weights on the authoring
+machine. The CPU wiring tests (graph loads, types match, validators pass) do run on both.
 
 ## Node index (workflow file)
 
