@@ -31,6 +31,7 @@ if str(_PKG) not in sys.path:
 from mmx_utils import body_double as BD  # noqa: E402
 from mmx_utils import h3_job as J  # noqa: E402
 from mmx_utils import subject_track as ST  # noqa: E402
+from mmx_utils._c2c_saved_setting import get as _c2c_setting  # noqa: E402
 from mmx_vendor.c2c_core.video import reader as _reader  # noqa: E402
 
 from . import h3_job_nodes as HJ  # noqa: E402
@@ -762,8 +763,9 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
     def _auto(cls, t: Track, auto_continue: bool, max_auto_runs: int) -> str:
         if t.s["status"] != "tracking":
             return ""
-        if os.environ.get("H3_AUTO_CONTINUE", "").strip() == "0":
-            return "auto-continue is switched off (H3_AUTO_CONTINUE=0) - queue again for the next window"
+        if not _auto_continue_allowed():
+            return ("auto-continue is switched off (Settings > C2C > MiniMax, or H3_AUTO_CONTINUE=0) - "
+                    "queue again for the next window")
         if not auto_continue:
             return "auto-continue is off - queue again for the next window"
         chain = int(t.s.get("auto_chain", 0))
@@ -852,3 +854,10 @@ NODE_CLASS_MAPPINGS = {
     "MiniMaxH3_SubjectReIdentification": MiniMaxH3_SubjectReIdentification,
     "MiniMaxH3_TemporalSubjectTracker": MiniMaxH3_TemporalSubjectTracker,
 }
+
+
+def _auto_continue_allowed() -> bool:
+    """Global auto-continue switch (L3.02): setting c2c.minimax.autoContinue (C2C > MiniMax > Jobs, default on);
+    the environment variable H3_AUTO_CONTINUE=0 still switches it off and wins when set."""
+    return bool(_c2c_setting("c2c.minimax.autoContinue", True, env="H3_AUTO_CONTINUE",
+                             parse=lambda raw: raw.strip() != "0"))

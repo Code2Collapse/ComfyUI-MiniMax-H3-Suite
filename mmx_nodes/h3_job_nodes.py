@@ -41,6 +41,7 @@ if str(_PKG) not in sys.path:
 
 from mmx_utils import h3_constants as HC  # noqa: E402
 from mmx_utils import h3_job as J  # noqa: E402
+from mmx_utils._c2c_saved_setting import get as _c2c_setting  # noqa: E402
 from mmx_utils.h3_session import frame_stats  # noqa: E402
 from mmx_vendor.c2c_core.timeline import ledger as L  # noqa: E402
 from mmx_vendor.c2c_core.video import media as _media  # noqa: E402
@@ -838,8 +839,8 @@ _POSTER = post_prompt                                          # tests replace i
 
 
 def auto_continue(j: J.Job, spec: dict, seg: dict, prompt: dict | None, extra_pnginfo) -> str:
-    if os.environ.get("H3_AUTO_CONTINUE", "").strip() == "0":
-        return "auto-continue is switched off (H3_AUTO_CONTINUE=0)"
+    if not _auto_continue_allowed():
+        return "auto-continue is switched off (Settings > C2C > MiniMax, or H3_AUTO_CONTINUE=0)"
     if not spec.get("auto_continue"):
         return "auto-continue is off in the task spec - queue the next run yourself"
     if j.state in J.STOPPED or j.state in ("ASSEMBLING",) or j.next_segment() is None:
@@ -1360,3 +1361,10 @@ NODE_CLASS_MAPPINGS = {
     "MiniMaxH3_ReferenceBank": MiniMaxH3_ReferenceBank,
     "MiniMaxH3_SubjectMemory": MiniMaxH3_SubjectMemory,
 }
+
+
+def _auto_continue_allowed() -> bool:
+    """Global auto-continue switch (L3.02): setting c2c.minimax.autoContinue (C2C > MiniMax > Jobs, default on);
+    the environment variable H3_AUTO_CONTINUE=0 still switches it off and wins when set."""
+    return bool(_c2c_setting("c2c.minimax.autoContinue", True, env="H3_AUTO_CONTINUE",
+                             parse=lambda raw: raw.strip() != "0"))
