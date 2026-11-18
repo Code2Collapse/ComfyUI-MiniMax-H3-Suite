@@ -759,6 +759,13 @@ cannot rebind `<Video 1>` or invent a `<Picture 3>`.
   the key in the request URL, where a connection error could carry it into the error text and the log). Any
   error text it returns is cleaned of the key.
 
+## Example workflows: full spine and masked face are complete (2026-11-18)
+
+`h3_full_spine_pipeline.json` and `h3_masked_face_pipeline.json` used to be wiring skeletons. They are now complete
+graphs: video in, H3 loaders, sampler, the generated crops stitched back onto the plate, and video out with audio.
+The masked-face graph also feeds Control Hints into core's H3 Fun ControlNet. Pick your own model files. Details
+are in `workflows/README.md`. Neither graph has been run end to end without H3 weights.
+
 ## Sigma Inspector: save the plot (2026-11-18)
 
 The **H3 Sigma Inspector** plot now has **Save PNG** and **Save JSON** buttons next to Copy CSV. The PNG includes a
