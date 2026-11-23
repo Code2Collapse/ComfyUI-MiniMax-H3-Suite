@@ -27,6 +27,29 @@ def interp_gaps(vals: np.ndarray, valid: np.ndarray) -> np.ndarray:
     return np.interp(idx, idx[valid], vals[valid])
 
 
+def long_gap_mask(valid: np.ndarray, max_gap: int) -> np.ndarray:
+    """Frames inside a low-confidence run longer than max_gap that has a confident frame on BOTH sides.
+
+    Those runs are not interpolated (max_gap > 0); runs at the clip ends are held, as before. max_gap <= 0 = no limit.
+    """
+    valid = np.asarray(valid, dtype=bool)
+    t = len(valid)
+    out = np.zeros(t, dtype=bool)
+    if max_gap <= 0:
+        return out
+    i = 0
+    while i < t:
+        if valid[i]:
+            i += 1
+            continue
+        j0 = i
+        while i < t and not valid[i]:
+            i += 1
+        if j0 > 0 and i < t and (i - j0) > max_gap:
+            out[j0:i] = True
+    return out
+
+
 def smooth_keypoints_one_euro(
     keypoints: np.ndarray,
     *,
@@ -36,10 +59,12 @@ def smooth_keypoints_one_euro(
     min_cutoff: float = 1.0,
     beta: float = 0.05,
     enabled: bool = True,
+    max_gap: int = 0,
 ) -> np.ndarray:
     """
     Per-keypoint One Euro smoothing on [T, K, 3] (x, y, conf).
-    Low-confidence frames are gap-filled before smoothing.
+    Low-confidence frames are gap-filled before smoothing. Frames in a gap longer than max_gap (> 0, see
+    long_gap_mask) keep their input x/y in the output; the filter still runs through them on the filled values.
     """
     kps = np.asarray(keypoints, dtype=np.float64).copy()
     if kps.ndim != 3 or kps.shape[0] < 2 or not enabled:
@@ -51,6 +76,7 @@ def smooth_keypoints_one_euro(
 
     for j in range(k):
         valid = conf[:, j] >= float(confidence_gate)
+        keep = long_gap_mask(valid, max_gap)
         for axis in (0, 1):
             series = kps[:, j, axis].copy()
             filled = interp_gaps(series, valid)
@@ -58,6 +84,7 @@ def smooth_keypoints_one_euro(
             smoothed = np.empty(t, dtype=np.float64)
             for i in range(t):
                 smoothed[i] = filt(float(filled[i]))
+            smoothed[keep] = series[keep]
             out[:, j, axis] = smoothed
         out[:, j, 2] = np.maximum(out[:, j, 2], conf[:, j])
 
@@ -70,25 +97,21 @@ def fill_keypoint_gaps(
     confidence_gate: float = 0.3,
     max_gap: int = 0,
 ) -> np.ndarray:
-    """Interpolate x/y for frames below confidence; optional max_gap limits span."""
+    """Interpolate x/y for frames below confidence; optional max_gap limits span.
+
+    A gap longer than max_gap (> 0) between two confident frames keeps its own x/y (long_gap_mask). The old
+    loop set already-invalid frames invalid again, so max_gap had no effect (L9.312).
+    """
     kps = np.asarray(keypoints, dtype=np.float32).copy()
     t, k, _ = kps.shape
     for j in range(k):
         valid = kps[:, j, 2] >= float(confidence_gate)
-        if max_gap > 0:
-            # Invalidate short runs only when surrounded by valid frames.
-            i = 0
-            while i < t:
-                if valid[i]:
-                    i += 1
-                    continue
-                j0 = i
-                while i < t and not valid[i]:
-                    i += 1
-                if (j0 > 0 and i < t and (i - j0) > max_gap):
-                    valid[j0:i] = False
+        keep = long_gap_mask(valid, max_gap)
         for axis in (0, 1):
-            kps[:, j, axis] = interp_gaps(kps[:, j, axis].astype(np.float64), valid).astype(np.float32)
+            raw = kps[:, j, axis].astype(np.float64)
+            filled = interp_gaps(raw, valid)
+            filled[keep] = raw[keep]
+            kps[:, j, axis] = filled.astype(np.float32)
     return kps
 
 

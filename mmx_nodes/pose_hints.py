@@ -75,9 +75,10 @@ class MiniMaxH3_StrongestPose(io.ComfyNode):
                                          "each keypoint's x/y over time, in plate space, before warping to the crop.",
                                  extra_dict={"c2c_show_if": {"mode": ["inhouse_vitpose"]}}),
                 io.Int.Input("gap_fill", default=3, min=0, max=30,
-                             tooltip="inhouse_vitpose: meant as the longest low-confidence gap (frames) to "
-                                     "interpolate. Current code interpolates x/y across every gap whatever this "
-                                     "value; filled points keep their low score, so they are not drawn.",
+                             tooltip="inhouse_vitpose: longest low-confidence gap (frames, between two confident "
+                                     "detections) whose x/y is interpolated; a longer gap keeps the detector's "
+                                     "own x/y. 0 = interpolate every gap. Filled points keep their low score, so "
+                                     "they are not drawn; this changes keypoints_json, not the hints image.",
                              extra_dict={"c2c_show_if": {"mode": ["inhouse_vitpose"]}}),
             ],
             outputs=[
@@ -172,6 +173,7 @@ class MiniMaxH3_StrongestPose(io.ComfyNode):
                 kps_plate,
                 confidence_gate=float(confidence),
                 enabled=bool(temporal_smooth),
+                max_gap=int(gap_fill),
             )
             kps_crop = warp_keypoints_to_crop(kps_plate, boxes[:b], (cw, ch))
             hints = render_pose_hints(kps_crop, (cw, ch), confidence_gate=float(confidence))

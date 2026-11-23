@@ -7,6 +7,10 @@
   It was applied twice (mask x mask x strength), so a 0.5 mask with strength 0.5 gave 0.125 instead of 0.25. Saved
   workflows that feed this node a latent which already has a noise mask now get a weaker mask reduction (higher
   values) than before; without an incoming mask nothing changes.
+- H3 Strongest Pose: `gap_fill` now works. A low-confidence gap longer than `gap_fill` frames (between two
+  confident detections) keeps the detector's own x/y instead of being interpolated; 0 interpolates every gap. Before,
+  every gap was interpolated whatever the value. Only `keypoints_json` changes (for points with score 0 inside such
+  gaps); the hints image is unchanged because those points are not drawn.
 
 ## 1.2.0 - 2026-11-23
 
