@@ -16,6 +16,11 @@
   - Source AV Latent, Masked Replace and the native audio lock pad the soundtrack to whole 1/40 s ticks before the
     audio VAE: core cut up to 12.5 ms off the head (8.3 ms for 121 frames).
   - The OpenCV fast paths of mask dilate / grow move a mask to the CPU before `.numpy()`.
+  - Subject Crop: appended optional `bboxes` / `bboxes_first_frame` - crop at given boxes, one plan for a whole job
+    (each window planned on its own moved the crop between segments).
+  - Face Stitch no longer fades the face out for one missed detection (the old face ghosted through ~9 frames).
+  - Temporal Subject Tracker keeps the soft mask edge until the plate-size matte (4K edge error 8.0 -> 2.6 px).
+  - Matte Chatter's dropout bridge uses 1 byte per cell instead of 9 (bit-exact).
 - Compact-node layout engine: a node removed right after it was created (paste then undo, a script that adds and
   removes) is no longer kept alive by the engine (about 185 KB each, measured in CNP). Same fix as CNP's engine (L9.01).
 

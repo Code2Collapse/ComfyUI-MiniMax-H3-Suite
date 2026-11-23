@@ -50,6 +50,15 @@ pasted region, phase correlation (cross-check), interior mean / max |diff| x 255
 | Z5 | Source AV Latent, Masked Replace, native audio lock | core's audio VAE centre-cropped the waveform to whole 800-sample ticks: the kept sound sat early | 121 frames (161333 samples): **266 samples = 8.3 ms**; up to 399 samples (12.5 ms) | tick 0 = samples 0-799 | pad the waveform at the END to whole ticks before encoding (`h3_geometry.pad_waveform_to_audio_hop`); trimmed to the frame count as before |
 | D1 | `mask_clean._dilate_cv2`, `plate_restore._rect_morph_cv2` (coordinator L8.33) | `.numpy()` without `.cpu()` | guarded by `device.type != "cpu"` already (a CUDA mask never reached `.numpy()`; meta-device test) | `.to(device="cpu")` before `.numpy()`, result back on the input's device | hardening |
 
+**Found by the replace-quality agent (2026-11-23), fixed here:**
+
+| # | Node | Fault | Before | After | Fix |
+|---|---|---|---|---|---|
+| G1 | Subject Crop in a job (one run per window) | each window planned on its own: the crop moved between segments, the continuation context landed elsewhere | two windows gave different boxes for the same frame (test) | window crops = the whole-clip crops, bit for bit | appended optional `bboxes` + `bboxes_first_frame`: crop exactly at given boxes (Subject Crop on the whole clip, or one box); saved workflows unchanged |
+| G2 | Face Stitch (`mmx_utils/face_refine.py`) | one missed detection dipped the composite weight for ~9 frames: the old face ghosted through | min weight < 0.9 over 5+ frames | 1.0 | misses of up to 6 frames with detections on both sides are bridged before smoothing; real dropouts and track ends still fade |
+| G3 | Temporal Subject Tracker matte | proxy masks stored 0/255, then enlarged and thresholded: the proxy's pixel steps on the plate | disc edge error **8.0 px** at 4K (256x144 proxy) | **2.6 px** | masks keep their soft 8-bit edge (0.5 decision preserved exactly for every binary reader), thresholded only at plate size; matte cache re-renders once |
+| G4 | Matte Chatter (`body_double.steady_masks`) | bool + int64 per frame x cell: ~2 GB at 1080p without bboxes, > 8 GB at 4K | 9 bytes / cell (test peak 5.4 MB) | 1 byte / cell (1.2 MB), bit-exact | capped uint8 distance code |
+
 **Already exact (measured, no change needed):**
 
 - Exterior outside every crop box: **0/0/0** in every chain, both stand-ins, all sizes, before and after.
@@ -86,5 +95,9 @@ pasted region, phase correlation (cross-check), interior mean / max |diff| x 255
 ## 4. Evidence
 
 - Bench: `PY tools/h3_zero_offset_bench.py --json <out>` (before on origin/main 75db635, after on branch
-  `zero-offset`; tables in the commit message of the docs commit).
-- Tests (local, never pushed): `tests/test_zero_offset.py` - every fix has a measured bar and a must-fail twin.
+  `zero-offset`). Tables and JSON: workspace `docs/evidence/zero_offset_2026-11-23/bench_{before,after}.{txt,json}`
+  (ComfyUI core 0.39.0, CPU). The after table measures Subject Uncrop `feathered box` inside the wired mask (the
+  blend follows `cropped_masks`; a dot straddling the mask edge mixes plate and edit, which read as 0.10 px before).
+- Tests (local, never pushed): `tests/test_zero_offset.py` (21 tests for Z1-Z5/D1, then 6 more for G1-G4: 27) - every fix has a measured bar and a must-fail
+  twin. On this branch 21 passed; the same file against origin/main: 13 failed (every fixed behaviour), 8 passed
+  (pure-function checks and the twins). Full suite `run_tests.py`: 3901 passed, 3 skipped, 1 xfailed.

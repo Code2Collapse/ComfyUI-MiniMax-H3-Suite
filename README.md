@@ -454,6 +454,10 @@ stand-in with core's geometry); details and numbers in `docs/PLAN_h3_zero_offset
 - **Detail Reinject** returns an unchanged region unchanged (it used to double the plate's detail).
 - **Sound in sync.** The kept soundtrack is no longer encoded up to 12.5 ms early.
 - Outside the edit, every chain returns the plate bit-exact (measured 0/255 before and after).
+- **One crop for a whole job.** H3 Subject Crop has two new optional inputs, `bboxes` and `bboxes_first_frame`: wire
+  the boxes of a Subject Crop run on the whole clip and every window is cut at exactly the same place.
+- **Face Stitch** keeps the new face through a single missed detection; the **Temporal Subject Tracker** matte keeps a
+  smooth edge at 4K; **Matte Chatter** needs a ninth of the memory.
 
 ### Fixed 2026-11-23: removed nodes no longer stay in memory
 
