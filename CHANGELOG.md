@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Compact-node layout engine: a node removed right after it was created (paste then undo, a script that adds and
+  removes) is no longer kept alive by the engine (about 185 KB each, measured in CNP). Same fix as CNP's engine (L9.01).
+
 ## 1.1.0 - 2026-11-17
 
 ### Added
