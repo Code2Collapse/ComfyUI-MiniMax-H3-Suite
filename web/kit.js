@@ -64,14 +64,18 @@ function buildStrip(stage) {
   const badge = document.createElement("span");
   if (stage) {
     badge.textContent = stage;
-    // a ghost chip: the stage hue as text and edge over a faint tint of it -
-    // a solid pastel pill read as a stock tag on the night body
+    // a ghost chip: the stage hue tints the text, edge and ground of the chip -
+    // a solid pastel pill read as a stock tag on the night body.
+    // L9.321 (matrix R4): the text was the bare hue at 9 px over a 14 % see-through tint (4.1-4.4:1 on the night
+    // body, 1.1-1.9:1 on core's light palette). Now an opaque C2C ground and the hue mixed into the C2C ink:
+    // >= 8:1 for every family hue (computed), 10 px.
     const hue = stageColor(stage);
+    const ink = "var(--c2c-fg, #e8e6f7)", ground = "var(--c2c-bg2, #0c0d23)";
     badge.style.cssText =
-      "flex:0 0 auto;padding:0 6px;border-radius:4px;font-size:9px;font-weight:600;" +
-      `letter-spacing:.06em;text-transform:uppercase;line-height:12px;color:${hue};` +
-      `background:color-mix(in srgb, ${hue} 14%, transparent);` +
-      `border:1px solid color-mix(in srgb, ${hue} 45%, transparent);`;
+      "flex:0 0 auto;padding:0 6px;border-radius:4px;font-size:10px;font-weight:600;" +
+      `letter-spacing:.06em;text-transform:uppercase;line-height:12px;color:color-mix(in srgb, ${hue} 40%, ${ink});` +
+      `background:color-mix(in srgb, ${hue} 20%, ${ground});` +
+      `border:1px solid color-mix(in srgb, ${hue} 55%, ${ground});`;
   }
 
   const status = document.createElement("span");

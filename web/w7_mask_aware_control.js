@@ -135,8 +135,11 @@ function buildChannelChips() {
 
 function updateChannelChips(st, ch) {
   const on = { control: ch.hasControl, vis: true, masked: ch.hasMask };
+  // L9.321 (matrix D12): an absent channel is dimmed, not hidden; 0.18 left its name at 1.5:1. 0.55 keeps it >= 3:1
+  // and aria-disabled says it is inactive.
   for (const [id, chip] of Object.entries(st.channelChips)) {
-    chip.style.opacity = on[id] ? "1" : "0.18";
+    chip.style.opacity = on[id] ? "1" : "0.55";
+    chip.setAttribute("aria-disabled", String(!on[id]));
   }
 }
 

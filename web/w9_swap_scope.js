@@ -30,6 +30,8 @@ import {
   app,
   chainOnRemoved,
   disposeState,
+  vueFitNodeHeight,
+  vueNodesActive,
   widgetByName,
 } from "./shared.js";
 import {
@@ -37,11 +39,16 @@ import {
   statusLine,
   installZoomRepaint,
   canvasBackingScale,
+  measureRootContent,
 } from "./c2c_ui/index.js";
 
 const NODE_ID = "MiniMaxH3_SwapControl";
 const STATE = "_mmxSwapScope";
 const PANEL_MIN = 220;
+const PANEL_MARGIN = 4;          // mountPanel's default margin
+// L9.321 (matrix D12): a group the scope does not drive is dimmed, not hidden; 0.22 left its name at 1.6:1. 0.55 keeps
+// it >= 3:1 (computed on the night body and on core's light palette) and aria-disabled says it is inactive.
+const OFF_OPACITY = "0.55";
 const NODE_MIN_W = 380;
 const PANEL_H = 148;
 
@@ -110,7 +117,8 @@ function syncLegend(st, active) {
     const chip = st.legendChips[g];
     if (!chip) continue;
     const on = active.has(g);
-    chip.style.opacity = on ? "1" : "0.22";
+    chip.style.opacity = on ? "1" : OFF_OPACITY;
+    chip.setAttribute("aria-disabled", String(!on));
     chip.querySelector(".c2c-ui-chart__chip-dot").style.opacity = on ? "1" : "0.4";
   }
 }
@@ -144,7 +152,7 @@ function paint(st, node) {
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
   const ink = resolveCu(st.root, "--cu-ink", "#e8e6f7");
-  const dim = resolveCu(st.root, "--cu-ink-dim", "#6f6d9b");
+  const dim = resolveCu(st.root, "--cu-ink-dim", "#9593c4");
   const w = cssW;
   const h = cssH;
 
@@ -238,6 +246,7 @@ function paint(st, node) {
     ? " drive_mouth is off: the lips are still masked, so they can change, but nothing is drawing them — lock an audio track or they have nothing to follow."
     : "";
   st.caption.setText(`${jl}. ${SCOPE_NOTE[scope] || ""}${jawNote}${mouthNote}`, "default");
+  st.fit?.();
 }
 
 function build(node) {
@@ -296,7 +305,23 @@ function build(node) {
 
   st.paint = () => paint(st, node);
 
-  const panelWidget = mountPanel(node, "mmx_swap_scope", root, { minHeight: PANEL_MIN });
+  const panelWidget = mountPanel(node, "mmx_swap_scope", root, { minHeight: PANEL_MIN, margin: PANEL_MARGIN });
+  // L9.321 (matrix D1): the caption under the face is one to six lines (scope + drive notes) and the legend wraps on a
+  // narrow node, so a fixed 220 px panel let the caption run 25 px past the node and over the "More" chips. The panel
+  // reserves its measured content instead (measured after each paint, never per frame) and the node grows to it.
+  let need = PANEL_MIN;
+  panelWidget.computeSize = (w) => [w, need + 2 * PANEL_MARGIN];
+  panelWidget.options.getMinHeight = () => need + 2 * PANEL_MARGIN;
+  st.fit = () => {
+    if (!root.isConnected || root.offsetParent === null) return;      // hidden, collapsed or below the LOD zoom
+    const h = Math.max(PANEL_MIN, Math.ceil(measureRootContent(root)));
+    if (Math.abs(h - need) < 2) return;
+    need = h;
+    if (vueNodesActive()) { vueFitNodeHeight(node); return; }
+    const min = node.computeSize?.();
+    if (min && node.size[1] < min[1]) node.setSize([node.size[0], min[1]]);   // grow only: a taller user size stays
+    node.setDirtyCanvas?.(true, true);
+  };
   panelWidget.onPanelResize = () => st.paint();
   st.zoomOff = installZoomRepaint(node, () => st.paint(), "_c2cW9Zoom");
 
