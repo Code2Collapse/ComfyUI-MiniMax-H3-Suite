@@ -1346,3 +1346,9 @@ widget to read it. Node ids, inputs, defaults and behaviour are unchanged, so sa
 Per-Frame Denoise, Strongest Pose gap fill, Region Mask (painted masks per frame; sky / ground without depth), Track +
 Crop auto canvas, Color Round-Trip QC (every frame), Vision REF_IMAGES (a list again) and the capture / reset nodes now
 do what their descriptions say. Saved workflows load unchanged; CHANGELOG.md says how each result changes.
+
+## Readable in light and dark themes (2026-11-23)
+
+Node panels from this pack were checked in both renderers, light and dark themes, two display scales and three zoom
+levels. Dim text, badges and chips now reach the WCAG contrast of 4.5:1, and the C2C colours apply wherever a panel is
+shown. Saved workflows are unchanged.
