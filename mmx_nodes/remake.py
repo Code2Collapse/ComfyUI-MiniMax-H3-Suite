@@ -33,6 +33,7 @@ if str(_PKG) not in sys.path:
 
 from mmx_utils import remake as R  # noqa: E402
 from mmx_utils.family_presets import build_six_section_prompt  # noqa: E402
+from mmx_utils.resample import common_upscale_float  # noqa: E402
 
 _IMPORT_ERROR: Exception | None = None
 try:
@@ -60,7 +61,9 @@ def _err(who: str, exc: Exception) -> ValueError:
 # ── shared builders (one implementation for the faithful node and the adapter) ─────────────────────────────────────
 
 def _resize(image: torch.Tensor, width: int, height: int, method: str = "lanczos", crop: str = "disabled"):
-    return comfy.utils.common_upscale(image.movedim(-1, 1), int(width), int(height), method, crop).movedim(1, -1)
+    # L8.57: Lanczos in float (mmx_utils/resample.py) - core's goes through 8-bit PIL, clipping HDR above 1.0 and
+    # quantising (docs/PLAN_h3_zero_offset.md, Z2). Same sampling geometry as the reference; other methods are core's.
+    return common_upscale_float(image.movedim(-1, 1), int(width), int(height), method, crop).movedim(1, -1)
 
 
 def _cover(image: torch.Tensor, width: int, height: int) -> torch.Tensor:
