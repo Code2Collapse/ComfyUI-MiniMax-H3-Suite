@@ -74,7 +74,7 @@ class MiniMaxH3_TimelineMapper(io.ComfyNode):
             outputs=[
                 io.String.Output("ledger_json", tooltip="Contract h3.frame_ledger v1."),
                 io.String.Output("report", tooltip="The first and last rows of the map, the operations, and any problem."),
-                io.Int.Output("frame_count"),
+                io.Int.Output("frame_count", tooltip="Output frames in the ledger after trim, retime and reverse."),
             ],
         )
 

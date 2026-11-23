@@ -97,7 +97,10 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
                         "handles, seed, retries, the QC and approval policy, auto-continue. Fingerprints the source "
                         "and references, so a changed source makes only the segments that used it stale.",
             inputs=[
-                io.Combo.Input("task", options=list(TASKS), default=TASKS[0]),
+                io.Combo.Input("task", options=list(TASKS), default=TASKS[0],
+                               tooltip="edit (source-driven): the job works over a source plate - connect 'media' "
+                                       "(the validator errors without it). generate (source-free): no plate; the "
+                                       "length comes from 'count' or the shot plan."),
                 io.Int.Input("first", default=-1, min=-1, max=10_000_000,
                              tooltip="First GLOBAL frame number of the job. -1 = the media's first frame number."),
                 io.Int.Input("count", default=0, min=0, max=10_000_000, tooltip="Frames. 0 = to the media's end."),
@@ -112,18 +115,33 @@ class MiniMaxH3_TaskSpec(io.ComfyNode):
                 io.Int.Input("seed", default=0, min=0, max=2**31 - 1,
                              control_after_generate=io.ControlAfterGenerate.fixed,
                              tooltip="The job's base seed: segment k's first attempt uses seed + k, retries add 1000."),
-                io.Int.Input("max_retries", default=2, min=0, max=20, extra_dict={'c2c_section': 'Automation'}),
+                io.Int.Input("max_retries", default=2, min=0, max=20,
+                             tooltip="Extra attempts a segment gets after it is rejected (each with a new seed: "
+                                     "+1000 per attempt). When they are used up the segment waits for review. "
+                                     "0 = no retry.", extra_dict={'c2c_section': 'Automation'}),
                 io.Combo.Input("approval", options=list(APPROVAL), default=APPROVAL[0],
                                tooltip="QC decides: a failed segment is retried with a new seed (up to max_retries, "
                                        "then it waits for review). review when QC fails: a failed segment waits for "
                                        "you at once. review every segment: every segment waits for you."),
                 io.Boolean.Input("auto_continue", default=True,
                                  tooltip="After each committed segment, queue the next run automatically."),
-                io.Int.Input("max_auto_runs", default=100, min=1, max=10000, extra_dict={'c2c_section': 'Automation', 'c2c_show_if': {'auto_continue': [True]}}),
-                io.Float.Input("fps", default=24.0, min=1.0, max=240.0, extra_dict={'c2c_hide_if_linked': ['media']}),
-                io.Combo.Input("deliver_codec", options=["h264", "prores", "ffv1"], default="prores"),
+                io.Int.Input("max_auto_runs", default=100, min=1, max=10000,
+                             tooltip="Most runs one auto-continue chain queues by itself; then it stops and says so "
+                                     "in the status (queue again to go on). A run you queue by hand starts a new "
+                                     "chain.", extra_dict={'c2c_section': 'Automation', 'c2c_show_if': {'auto_continue': [True]}}),
+                io.Float.Input("fps", default=24.0, min=1.0, max=240.0,
+                               tooltip="The job's frame rate, kept as an exact rate (23.976 = 24000/1001) and used "
+                                       "for the final movie. Ignored when 'media' is connected (the plate's rate "
+                                       "wins). The validator warns when it is not 24 (H3's rate).", extra_dict={'c2c_hide_if_linked': ['media']}),
+                io.Combo.Input("deliver_codec", options=["h264", "prores", "ffv1"], default="prores",
+                               tooltip="Codec of the final movie H3 Job Commit assembles in the job folder: h264 "
+                                       "(.mp4, 8-bit, even size), prores (.mov, 10-bit, even size), ffv1 (.mkv, "
+                                       "10-bit)."),
                 C2C_VIDEO.Input("media", optional=True, tooltip="The source plate (edit tasks)."),
-                io.String.Input("prompt", default="", optional=True, multiline=True),
+                io.String.Input("prompt", default="", optional=True, multiline=True,
+                                tooltip="The job's prompt, shared by every segment: H3 Job Controller's prompt is "
+                                        "this, then the segment's shot prompt when a shot plan is connected. Its "
+                                        "hash is part of the spec's fingerprints."),
                 io.String.Input("references", default="", optional=True,
                                 tooltip="Reference identity (any text / JSON that changes when they change) - e.g. "
                                         "H3 Reference Bank's fingerprint."),
@@ -246,11 +264,24 @@ class MiniMaxH3_CompatibilityValidator(io.ComfyNode):
             description="Checks a task spec against its inputs before anything runs: the 17k + 5 grid, sizes in "
                         "multiples of 32, 24 fps, the frame range inside the media, the context length. strict "
                         "stops the run with the reasons; otherwise they are reported.",
-            inputs=[io.String.Input("task_spec", force_input=True), C2C_VIDEO.Input("media", optional=True),
-                    io.Model.Input("model", optional=True), io.Vae.Input("vae", optional=True),
-                    io.Boolean.Input("strict", default=True)],
+            inputs=[io.String.Input("task_spec", force_input=True,
+                                    tooltip="h3.task_spec JSON from H3 Task Spec: segment length on the 17k + 5 grid, "
+                                            "context + blend shorter than a segment, context 5/22/39/56, 24 fps."),
+                    C2C_VIDEO.Input("media", optional=True,
+                                    tooltip="The source plate: its width and height must be multiples of 32 and the "
+                                            "job's frame range must lie inside it. An edit task without it is an "
+                                            "error."),
+                    io.Model.Input("model", optional=True,
+                                   tooltip="Only checked for presence: unconnected adds a warning. Not used otherwise."),
+                    io.Vae.Input("vae", optional=True,
+                                 tooltip="Only checked for presence: unconnected adds a warning. Not used otherwise."),
+                    io.Boolean.Input("strict", default=True,
+                                     tooltip="On: any error stops the run with the reasons. Off: errors are only "
+                                             "reported (report / ok) and the spec is passed on anyway.")],
             outputs=[io.String.Output("task_spec", tooltip="Passed through when it is valid."),
-                     io.String.Output("report"), io.Boolean.Output("ok")],
+                     io.String.Output("report", tooltip="h3.validation JSON: ok, errors (list of text), warnings "
+                                                        "(list of text)."),
+                     io.Boolean.Output("ok", tooltip="True when there are no errors (warnings do not count).")],
         )
 
     @classmethod
@@ -289,9 +320,15 @@ class MiniMaxH3_SegmentPlanner(io.ComfyNode):
             node_id="MiniMaxH3_SegmentPlanner", display_name="H3 Segment Planner", category="MiniMax H3/Job",
             description="Splits the job's range into H3 segments. Context, blend, tracking handles and grid padding "
                         "stay separate fields; the accepted ranges tile the range exactly (checked).",
-            inputs=[io.String.Input("task_spec", force_input=True)],
+            inputs=[io.String.Input("task_spec", force_input=True,
+                                    tooltip="h3.task_spec JSON (H3 Task Spec or the validator's pass-through). With "
+                                            "a shot plan in it the segments follow the shots; a plan that does not "
+                                            "tile the range exactly stops the run.")],
             outputs=[io.String.Output("segment_plan", tooltip="h3.segment_plan v1 (with an h3.frame_ledger)."),
-                     io.String.Output("table"), io.Int.Output("segments")],
+                     io.String.Output("table", tooltip="Text, one line per segment: shot and transition, model frame "
+                                                       "range (held frames, grid padding), context frames, accepted "
+                                                       "range, cross-fade."),
+                     io.Int.Output("segments", tooltip="Number of segments in the plan.")],
         )
 
     @classmethod
@@ -362,12 +399,29 @@ class MiniMaxH3_JobController(io.ComfyNode):
                         "source window, seed and ranges. With auto-continue the Commit queues the next run itself - "
                         "one click runs the whole job. Nothing left to do: the generation is skipped.",
             inputs=[
-                io.String.Input("task_spec", force_input=True),
-                io.String.Input("segment_plan", force_input=True),
-                io.String.Input("job", default="h3_job"),
-                io.Combo.Input("action", options=list(ACTIONS), default="run"),
-                io.Int.Input("action_segment", default=0, min=0, max=100000, extra_dict={'c2c_show_if': {'action': ['retry segment (new seed)', 'rollback to segment', 'choose take', 'generate alternate take']}}),
-                io.String.Input("action_take", default="", extra_dict={'c2c_show_if': {'action': ['choose take', 'generate alternate take']}}),
+                io.String.Input("task_spec", force_input=True,
+                                tooltip="h3.task_spec JSON. Stored in the job's job.json; a changed spec updates "
+                                        "the job."),
+                io.String.Input("segment_plan", force_input=True,
+                                tooltip="h3.segment_plan JSON from H3 Segment Planner. A plan that differs from the "
+                                        "job's replaces it; an accepted segment whose entry (and context source) is "
+                                        "unchanged stays accepted."),
+                io.String.Input("job", default="h3_job",
+                                tooltip="Job name = its folder output/h3_jobs/<name> (job.json, segment frames, "
+                                        "final movie). Created on the first run; the same name resumes the job. "
+                                        "Characters other than letters, digits, . _ - become _."),
+                io.Combo.Input("action", options=list(ACTIONS), default="run",
+                               tooltip="run: take the next segment. pause / cancel / resume: set the job's state. "
+                                       "approve / reject held segment: the first segment waiting for review. retry: "
+                                       "redo action_segment and later ones. rollback: keep up to action_segment. "
+                                       "choose take / alternate take: see action_take. Auto-queued runs use run."),
+                io.Int.Input("action_segment", default=0, min=0, max=100000,
+                             tooltip="Segment id (as in H3 Segment Planner's table) for retry, rollback, choose take "
+                                     "and generate alternate take.", extra_dict={'c2c_show_if': {'action': ['retry segment (new seed)', 'rollback to segment', 'choose take', 'generate alternate take']}}),
+                io.String.Input("action_take", default="",
+                                tooltip="Take name. choose take: an existing take of action_segment to use (later "
+                                        "segments are redone). generate alternate take: the name of the new take of "
+                                        "an accepted segment; empty = take<N>.", extra_dict={'c2c_show_if': {'action': ['choose take', 'generate alternate take']}}),
                 C2C_VIDEO.Input("media", optional=True, tooltip="The source plate (edit tasks)."),
                 C2C_VIDEO.Input("matte", optional=True,
                                 tooltip="A matte clip frame-aligned with the plate: matte_window is cut exactly like "
@@ -380,10 +434,13 @@ class MiniMaxH3_JobController(io.ComfyNode):
                 C2C_VIDEO.Output("window", tooltip="The plate frames this segment generates over (edit tasks)."),
                 C2C_VIDEO.Output("track_window", tooltip="The same, with the tracking handles."),
                 io.Image.Output("context_images", tooltip="The accepted frames this segment continues from."),
-                io.Int.Output("seed"),
+                io.Int.Output("seed", tooltip="This attempt's seed: the spec's seed + segment id + 1000 per earlier "
+                                              "attempt. Wire it to the sampler."),
                 io.Int.Output("frames", tooltip="Model frames of this segment (17k + 5)."),
                 io.String.Output("segment", tooltip="Feed H3 QC Gate and H3 Job Commit."),
-                io.String.Output("status"),
+                io.String.Output("status", tooltip="One line of text: job, segment k of N, attempt, seed, shot and any "
+                                                   "action note - or why nothing runs (paused, waiting for review, "
+                                                   "completed ...)."),
                 io.String.Output("prompt", tooltip="This segment's prompt: the task spec's prompt, then its shot's "
                                                    "prompt when the job has a shot plan."),
                 io.Latent.Output("context_latent",
@@ -742,12 +799,28 @@ class MiniMaxH3_QCGate(io.ComfyNode):
             description="Judges the generated segment: frame count, finite values, no black frames, not frozen, "
                         "continues the accepted frames at the context, optionally the difference from the source (an "
                         "H3 Sequence Diff report). The verdict decides commit / retry / review in H3 Job Commit.",
-            inputs=[io.String.Input("segment", force_input=True), io.Image.Input("images"),
-                    io.Image.Input("context_images", optional=True),
-                    io.String.Input("diff_report", default="", optional=True, force_input=True),
-                    io.Float.Input("min_mean", default=0.01, min=0.0, max=1.0, step=0.001),
-                    io.Float.Input("freeze_max", default=0.5, min=0.0, max=1.0, step=0.01),
-                    io.Float.Input("seam_max", default=0.08, min=0.0, max=1.0, step=0.001, extra_dict={'c2c_section': 'Continuity'}),
+            inputs=[io.String.Input("segment", force_input=True,
+                                    tooltip="H3 Job Controller's segment JSON. The report is also recorded in that "
+                                            "job's job.json."),
+                    io.Image.Input("images",
+                                   tooltip="This segment's generated frames, the whole model window (held head frames "
+                                           "and grid padding included); the content checks judge the accepted frames."),
+                    io.Image.Input("context_images", optional=True,
+                                   tooltip="H3 Job Controller's context_images: compared with the segment's first "
+                                           "frames (after held frames) for seam_max. Used only when their count and "
+                                           "size match the plan."),
+                    io.String.Input("diff_report", default="", optional=True, force_input=True,
+                                    tooltip="H3 Sequence Diff's JSON report: its 'max' is judged against diff_max "
+                                            "(only when diff_max > 0)."),
+                    io.Float.Input("min_mean", default=0.01, min=0.0, max=1.0, step=0.001,
+                                   tooltip="An accepted frame whose mean RGB (0-1) is below this counts as black; the "
+                                           "check fails when more than 5% of them are black. 0 = never black."),
+                    io.Float.Input("freeze_max", default=0.5, min=0.0, max=1.0, step=0.01,
+                                   tooltip="Largest share (0-1) of frame-to-frame steps in the accepted frames that "
+                                           "may be still (mean change < 0.0001). 1 = never fail."),
+                    io.Float.Input("seam_max", default=0.08, min=0.0, max=1.0, step=0.001,
+                                   tooltip="Largest mean absolute difference (0-1) between context_images and the "
+                                           "segment's frames at the same place. Needs context_images.", extra_dict={'c2c_section': 'Continuity'}),
                     io.Float.Input("diff_max", default=0.0, min=0.0, max=1.0, step=0.001,
                                    tooltip="0 = do not judge the difference report.", extra_dict={'c2c_section': 'Difference'}),
                     io.String.Input("memory", default="", optional=True, force_input=True,
@@ -772,7 +845,11 @@ class MiniMaxH3_QCGate(io.ComfyNode):
                                    tooltip="With a plate and continuation: the step into this segment may be at most "
                                            "this many times the steps around it, and this many times the plate's own "
                                            "ratio there (real motion is not a seam). 0 = do not judge.", extra_dict={'c2c_section': 'Continuity'})],
-            outputs=[io.String.Output("qc_report"), io.Boolean.Output("passed"), io.Image.Output("images")],
+            outputs=[io.String.Output("qc_report", tooltip="h3.qc_report JSON: segment, attempt, verdict (pass / "
+                                                           "fail) and every check with its value. Feed H3 Job "
+                                                           "Commit's qc_report."),
+                     io.Boolean.Output("passed", tooltip="True when every check passed."),
+                     io.Image.Output("images", tooltip="The input images, unchanged (wire on to H3 Job Commit).")],
         )
 
     @classmethod
@@ -949,13 +1026,29 @@ class MiniMaxH3_JobCommit(io.ComfyNode):
                         "new seed, or held for review - by the QC verdict and the approval policy, or your "
                         "decision. When every segment is accepted it assembles the movie. With auto-continue it "
                         "queues the next run itself.",
-            inputs=[io.String.Input("segment", force_input=True), io.Image.Input("images"),
-                    io.String.Input("qc_report", default="", optional=True, force_input=True),
-                    io.Combo.Input("decision", options=list(DECISIONS), default=DECISIONS[0]),
+            inputs=[io.String.Input("segment", force_input=True,
+                                    tooltip="H3 Job Controller's segment JSON: the job, segment and attempt to record."),
+                    io.Image.Input("images",
+                                   tooltip="The whole model window. The accepted frames (and the blend tail) are saved "
+                                           "as 16-bit PNGs frame_<global>.png in output/h3_jobs/<job>/segments/"
+                                           "seg_NNNN_aNN/; too few frames is an error."),
+                    io.String.Input("qc_report", default="", optional=True, force_input=True,
+                                    tooltip="H3 QC Gate's qc_report. Empty = a pass. Used only by decision auto."),
+                    io.Combo.Input("decision", options=list(DECISIONS), default=DECISIONS[0],
+                                   tooltip="auto: the QC verdict and the spec's approval policy decide (pass = accept; "
+                                           "fail = retry or hold). accept / reject (retry) / hold for review force "
+                                           "that outcome for this segment."),
                     io.Latent.Input("latent", optional=True,
                                     tooltip="The sampler's latent: kept with the accepted frames and handed to the "
                                             "next segment as context_latent.")],
-            outputs=[io.String.Output("status"), io.String.Output("job_json"), io.String.Output("final_path")],
+            outputs=[io.String.Output("status", tooltip="One line: what was recorded (accepted, retry, waiting for "
+                                                        "review), job completion and the auto-continue result. Also "
+                                                        "shown on the node."),
+                     io.String.Output("job_json", tooltip="JSON summary: job, state, segment count, count per status, "
+                                                          "next segment, auto runs, path of job.json."),
+                     io.String.Output("final_path", tooltip="Path of the assembled movie (output/h3_jobs/<job>/<job>"
+                                                            ".mov / .mp4 / .mkv, with the plate's sound when it has "
+                                                            "any) once every segment is accepted; empty until then.")],
             hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo],
             is_output_node=True,
         )
@@ -1054,8 +1147,11 @@ class MiniMaxH3_ShotPlanner(io.ComfyNode):
                                             "\"cut\"}, ...]."),
                     io.Float.Input("fps", default=24.0, min=1.0, max=240.0,
                                    tooltip="The job's rate (H3 generates at 24): seconds become whole frames.")],
-            outputs=[io.String.Output("shot_plan", tooltip="h3.shot_plan v1"), io.String.Output("table"),
-                     io.Int.Output("shots"), io.Int.Output("frames")],
+            outputs=[io.String.Output("shot_plan", tooltip="h3.shot_plan v1"),
+                     io.String.Output("table", tooltip="Text, one line per shot: shot, scene, transition, frame range "
+                                                       "(frame count), the prompt's first 70 characters."),
+                     io.Int.Output("shots", tooltip="Number of shots."),
+                     io.Int.Output("frames", tooltip="Total frames of the timeline at fps (end of the last shot).")],
         )
 
     @classmethod
@@ -1211,7 +1307,10 @@ class MiniMaxH3_ReferenceBank(io.ComfyNode):
                         "...), marks exact and near duplicates, and saves each once. Chain banks to add more. Its "
                         "fingerprint feeds H3 Task Spec's references; identity feeds the model's reference inputs; "
                         "H3 Subject Memory reads the bank.",
-            inputs=[io.Image.Input("images"),
+            inputs=[io.Image.Input("images",
+                                   tooltip="Reference images to add. Each is saved once as a 16-bit PNG (named by its "
+                                           "pixel hash) in output/h3_refs/<name>/; exact and near duplicates are "
+                                           "marked, not dropped."),
                     io.String.Input("roles", default="identity",
                                     tooltip="One role for every image, or one per image, comma-separated: "
                                             + ", ".join(ROLES) + "."),
@@ -1354,7 +1453,9 @@ class MiniMaxH3_SubjectMemory(io.ComfyNode):
                                             "subject is left out.")],
             outputs=[io.Image.Output("anchors", tooltip="Identity images, then approved frames of this scene."),
                      io.String.Output("memory", tooltip="h3.subject_memory v1 (also written to <job>/memory.json)."),
-                     io.String.Output("notes")],
+                     io.String.Output("notes", tooltip="Text: what went into anchors (identity images, approved "
+                                                       "anchors and frames, scene) and warnings (no bank, empty "
+                                                       "scene, subject not in a frame).")],
         )
 
     @classmethod

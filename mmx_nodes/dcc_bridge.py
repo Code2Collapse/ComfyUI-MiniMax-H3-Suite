@@ -43,15 +43,28 @@ class MiniMaxH3_DCCBridge(io.ComfyNode):
                 "HDR values above 1.0 are preserved (16f/32f). No solver — missing EXR raises."
             ),
             inputs=[
-                io.String.Input("exr_sequence", default="", multiline=False),
-                io.Combo.Input("sim_type", options=list(SIM_TYPES), default="fluid"),
-                io.Combo.Input("interaction_mode", options=list(INTERACTION_MODES), default="fully_preserved"),
-                io.Float.Input("fps", default=24.0, min=1.0, max=120.0, step=0.01),
+                io.String.Input("exr_sequence", default="", multiline=False,
+                                tooltip="Rendered EXR frames to load: a folder (every .exr / .sxr, sorted), a glob "
+                                        "such as D:/sim/smoke.*.exr, or one file. Read with OpenImageIO; empty or "
+                                        "no match is an error."),
+                io.Combo.Input("sim_type", options=list(SIM_TYPES), default="fluid",
+                               tooltip="Kind of simulation. Only written as text into retention_json and the report "
+                                       "(\"<Video 1>: <type> sim reference\"); it does not change the frames."),
+                io.Combo.Input("interaction_mode", options=list(INTERACTION_MODES), default="fully_preserved",
+                               tooltip="Only written as text into retention_json (the 'camera: <mode>' line) and the "
+                                       "report; it does not change the frames."),
+                io.Float.Input("fps", default=24.0, min=1.0, max=120.0, step=0.01,
+                               tooltip="Rate of the external sim, only recorded in retention_json ('timing' line and "
+                                       "fps field); frames are not retimed."),
             ],
             outputs=[
-                io.Image.Output("reference_video"),
-                io.String.Output("retention_json"),
-                io.String.Output("report"),
+                io.Image.Output("reference_video", tooltip="The EXR frames as an IMAGE batch, one per file in sorted "
+                                                           "order, linear float with values above 1.0 kept "
+                                                           "(no clamp); 1-channel EXRs become grey RGB."),
+                io.String.Output("retention_json", tooltip="JSON: video_label <Video 1>, sim_type, interaction_mode, "
+                                                           "fps and retention_analysis_lines (four text lines: "
+                                                           "sim, camera, environment, timing)."),
+                io.String.Output("report", tooltip="Text: frames loaded, size, peak value, sim type and mode."),
             ],
         )
 

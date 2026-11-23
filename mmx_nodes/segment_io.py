@@ -60,10 +60,13 @@ class MiniMaxH3_SegmentWriter(io.ComfyNode):
             ),
             is_output_node=True,
             inputs=[
-                io.Image.Input("images"),
+                io.Image.Input("images", tooltip="This segment's frames (IMAGE batch), encoded 16 at a time into "
+                                                 "seg_<segment>.<ext> and passed on unchanged."),
                 io.String.Input("job_dir", default="h3_jobs/job", tooltip="A folder inside ComfyUI's output folder."),
                 io.Int.Input("segment", default=0, min=0, max=99999, tooltip="This segment's number (file seg_00012)."),
-                io.Float.Input("fps", default=24.0, min=1.0, max=240.0, step=0.001),
+                io.Float.Input("fps", default=24.0, min=1.0, max=240.0, step=0.001,
+                               tooltip="Frame rate written into the segment file and its .json note. Every segment "
+                                       "of a job needs the same rate for the assembler's remux."),
                 io.Combo.Input("codec", options=list(_EXT), default="h264",
                                tooltip="h264 (.mp4, even size), prores 422 HQ 10-bit (.mov), ffv1 lossless (.mkv)."),
                 io.Int.Input("quality", default=90, min=0, max=100, tooltip="h264 only: higher = better, bigger.", extra_dict={'c2c_show_if': {'codec': ['h264']}}),
@@ -125,14 +128,17 @@ class MiniMaxH3_SequenceAssembler(io.ComfyNode):
                                 tooltip="File name in the job folder; its extension must match the segments' container."),
                 io.Int.Input("expect_count", default=0, min=0, max=99999, tooltip="0 = any number of segments.", extra_dict={'c2c_section': 'Checks'}),
                 io.Boolean.Input("allow_gaps", default=False, tooltip="Join even if a segment number is missing.", extra_dict={'c2c_section': 'Checks'}),
-                io.Boolean.Input("overwrite", default=True, extra_dict={'c2c_section': 'Checks'}),
+                io.Boolean.Input("overwrite", default=True,
+                                 tooltip="Replace output_name if it already exists in the job folder; off = stop "
+                                         "with an error instead.", extra_dict={'c2c_section': 'Checks'}),
                 io.String.Input("wait_for", optional=True, force_input=True,
                                 tooltip="Connect H3 Segment Writer's chunk_json to assemble in the same run, after it."),
             ],
             outputs=[
-                io.String.Output("path"),
-                io.String.Output("report"),
-                io.Int.Output("frame_count"),
+                io.String.Output("path", tooltip="Full path of the joined video in the job folder."),
+                io.String.Output("report", tooltip="Text: segments joined (first..last number), output name, frames, "
+                                                   "codec, size, rate, and any allowed gaps."),
+                io.Int.Output("frame_count", tooltip="Frames in the joined video."),
             ],
         )
 

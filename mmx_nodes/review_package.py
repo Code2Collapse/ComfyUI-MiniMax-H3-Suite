@@ -183,30 +183,52 @@ class MiniMaxH3_ReviewPackage(io.ComfyNode):
                 "contact sheet, an A | B movie and a JSON manifest with checksums. Self-contained, no network."
             ),
             inputs=[
-                C2C_VIDEO.Input("original", optional=True),
-                C2C_VIDEO.Input("generated", optional=True),
-                io.Image.Input("original_images", optional=True),
-                io.Image.Input("generated_images", optional=True),
+                C2C_VIDEO.Input("original", optional=True,
+                                tooltip="Version A (a C2C video, read lazily). Its frame numbers label the cells and "
+                                        "its rate wins over fps. Connect this or original_images."),
+                C2C_VIDEO.Input("generated", optional=True,
+                                tooltip="Version B (a C2C video, read lazily), resized to A's size where they differ. "
+                                        "Connect this or generated_images."),
+                io.Image.Input("original_images", optional=True,
+                               tooltip="Version A as an IMAGE batch, used when 'original' is not connected."),
+                io.Image.Input("generated_images", optional=True,
+                               tooltip="Version B as an IMAGE batch, used when 'generated' is not connected. The "
+                                       "shorter of A and B sets how many frames are compared."),
                 io.String.Input("version_manifest", default="", optional=True, tooltip="JSON: which versions these are.", extra_dict={'c2c_section': 'Data'}),
                 io.String.Input("qc", default="", optional=True,
                                 tooltip='JSON: {"passed": true} / {"verdict": "fail", "checks": [{"name", "ok", "frames"}]}', extra_dict={'c2c_section': 'Data'}),
                 io.String.Input("annotations", default="", optional=True,
                                 tooltip='JSON list: [{"frame": 12, "text": "fix the cuff"}] (frame = position).', extra_dict={'c2c_section': 'Data'}),
-                io.String.Input("job_dir", default="h3_jobs/review"),
-                io.String.Input("title", default="H3 review"),
+                io.String.Input("job_dir", default="h3_jobs/review",
+                                tooltip="A folder inside ComfyUI's output folder; every run writes a new "
+                                        "review_<date>_<time> folder in it (PNGs, contact_sheet.png, ab.mp4, "
+                                        "review.html, manifest.json)."),
+                io.String.Input("title", default="H3 review",
+                                tooltip="Heading and page title of review.html (HTML-escaped); also stored in the "
+                                        "manifest."),
                 io.Int.Input("contact_every", default=12, min=1, max=10000, tooltip="A contact cell every N frames."),
                 io.String.Input("frames", default="", tooltip="Positions to show instead, e.g. 0, 12, 40."),
-                io.Combo.Input("difference", options=["ssim", "pixel", "none"], default="ssim"),
+                io.Combo.Input("difference", options=["ssim", "pixel", "none"], default="ssim",
+                               tooltip="Heatmap per shown frame (a third contact-sheet column and a page image): "
+                                       "ssim = 1 - block SSIM on luma, pixel = mean |A - B|. none = no heatmaps."),
                 io.Boolean.Input("timecode", default=True, tooltip="Burn the frame position and timecode into the cells.", extra_dict={'c2c_section': 'Output'}),
-                io.Boolean.Input("include_qc", default=True, extra_dict={'c2c_section': 'Output'}),
-                io.Boolean.Input("include_annotations", default=True, extra_dict={'c2c_section': 'Output'}),
+                io.Boolean.Input("include_qc", default=True,
+                                 tooltip="Show the 'qc' verdict and checks on the page and the 'QC failed here' "
+                                         "label on failing frames. The manifest keeps the QC summary either way.", extra_dict={'c2c_section': 'Output'}),
+                io.Boolean.Input("include_annotations", default=True,
+                                 tooltip="Show the 'annotations' notes on the page (a Notes list and under their "
+                                         "frames).", extra_dict={'c2c_section': 'Output'}),
                 io.Boolean.Input("ab_movie", default=True, tooltip="Write the A | B side-by-side movie (h264).", extra_dict={'c2c_section': 'Output'}),
                 io.Float.Input("fps", default=24.0, min=1.0, max=240.0, tooltip="For IMAGE inputs and timecodes.", extra_dict={'c2c_hide_if_linked': ['original']}),
             ],
             outputs=[
-                io.String.Output("html_path"),
-                io.Image.Output("contact_sheet"),
-                io.String.Output("ab_path"),
+                io.String.Output("html_path", tooltip="Full path of the written review.html (open it in a browser; "
+                                                      "its images sit next to it)."),
+                io.Image.Output("contact_sheet", tooltip="One IMAGE: a row per shown frame, original | generated "
+                                                         "(| difference), 256 px wide cells; also saved as "
+                                                         "contact_sheet.png."),
+                io.String.Output("ab_path", tooltip="Path of ab.mp4, the A | B side-by-side H.264 movie of every "
+                                                    "compared frame; empty when ab_movie is off."),
                 io.String.Output("manifest", tooltip="h3.review_package v1: files with sha256, counts, QC verdict."),
             ],
         )

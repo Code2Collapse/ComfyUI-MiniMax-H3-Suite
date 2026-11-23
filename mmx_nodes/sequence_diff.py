@@ -190,7 +190,10 @@ class MiniMaxH3_SequenceDiff(io.ComfyNode):
                 io.Image.Input("b_images", optional=True, tooltip="Version B as an IMAGE batch instead."),
                 io.String.Input("frame_map_a", default="", optional=True, multiline=False,
                                 tooltip="h3.frame_ledger of A: with B's, frames are paired by SOURCE frame number.", extra_dict={'c2c_section': 'Alignment'}),
-                io.String.Input("frame_map_b", default="", optional=True, multiline=False, extra_dict={'c2c_section': 'Alignment'}),
+                io.String.Input("frame_map_b", default="", optional=True, multiline=False,
+                                tooltip="h3.frame_ledger of B (one entry per B frame). Only used together with "
+                                        "frame_map_a: frames are paired where both show the same SOURCE frame "
+                                        "number; otherwise they pair by position.", extra_dict={'c2c_section': 'Alignment'}),
                 io.Mask.Input("mask", optional=True, tooltip="1 = compare here (one mask for all, or one per frame)."),
                 io.Combo.Input("method", options=list(METHODS), default="ssim",
                                tooltip="pixel: mean |A - B|. ssim: 1 - block SSIM. ms-ssim: 1 - multi-scale SSIM "

@@ -138,8 +138,10 @@ class MiniMaxH3_MediaProbe(io.ComfyNode):
             outputs=[
                 C2C_VIDEO.Output("media", tooltip="Lazy handle: no pixels yet. Feed H3 Frame Window Reader."),
                 io.String.Output("info_json", tooltip="Streams, frames, fps, VFR, size, colour tags, audio."),
-                io.Int.Output("frame_count"),
-                io.Float.Output("fps"),
+                io.Int.Output("frame_count", tooltip="Frames in the handle's selection (after core Load Video's "
+                                                     "trim), read without decoding."),
+                io.Float.Output("fps", tooltip="The media's frame rate as a float (info_json's fps_exact keeps the "
+                                               "exact fraction, e.g. 24000/1001)."),
             ],
         )
 

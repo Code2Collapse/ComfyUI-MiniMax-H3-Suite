@@ -132,24 +132,41 @@ class MiniMaxH3_ShotPublisher(io.ComfyNode):
             inputs=[
                 io.String.Input("media_path", default="", tooltip="A file or folder inside ComfyUI's output folder "
                                                                  "(e.g. the Sequence Assembler's output)."),
-                io.String.Input("show", default="show"),
-                io.String.Input("seq", default="seq"),
-                io.String.Input("shot", default="sh010"),
-                io.String.Input("task", default="comp"),
-                io.Combo.Input("stage", options=list(STAGES), default="wip"),
+                io.String.Input("show", default="show",
+                                tooltip="Show name: first folder under publish_root and the {show} naming field. "
+                                        "Letters, digits, '.', '_' or '-' (max 64)."),
+                io.String.Input("seq", default="seq",
+                                tooltip="Sequence name: folder under the show and the {seq} naming field. Letters, "
+                                        "digits, '.', '_' or '-'."),
+                io.String.Input("shot", default="sh010",
+                                tooltip="Shot name: folder under the sequence and the {shot} naming field. Letters, "
+                                        "digits, '.', '_' or '-'."),
+                io.String.Input("task", default="comp",
+                                tooltip="Task name (e.g. comp, anim): folder under the shot that holds the v### "
+                                        "versions, and the {task} naming field."),
+                io.Combo.Input("stage", options=list(STAGES), default="wip",
+                               tooltip="wip / review / final: written into the file name ({stage}) and the "
+                                       "manifest. A label only - it changes no other behaviour."),
                 io.String.Input("naming", default=DEFAULT_TEMPLATE,
                                 tooltip="Fields: {show} {seq} {shot} {task} {stage} {version:03d} {ext} (a folder "
                                         "is published as a folder of that name).", extra_dict={'c2c_section': 'Naming'}),
                 io.Int.Input("version", default=0, min=0, max=9999, tooltip="0 = the next free version."),
                 io.String.Input("qc", default="", optional=True, tooltip="QC JSON (as H3 Review Package reads it).", extra_dict={'c2c_section': 'Safety'}),
-                io.Combo.Input("require_qc", options=["none", "pass"], default="none"),
-                io.Combo.Input("overwrite", options=["never", "same version"], default="never", extra_dict={'c2c_section': 'Safety'}),
+                io.Combo.Input("require_qc", options=["none", "pass"], default="none",
+                               tooltip="pass: refuse to publish (nothing is written) unless the 'qc' JSON has a "
+                                       "passing verdict. none: publish anyway; the verdict is still recorded."),
+                io.Combo.Input("overwrite", options=["never", "same version"], default="never",
+                               tooltip="never: an existing version number is an error. same version: re-publish "
+                                       "into the existing v### folder named by 'version' (files of the same name "
+                                       "are replaced). Version 0 always takes a new one.", extra_dict={'c2c_section': 'Safety'}),
                 io.Boolean.Input("checksum", default=True, tooltip="sha256 every file and verify the copies.", extra_dict={'c2c_section': 'Safety'}),
                 io.String.Input("publish_root", default="publish", tooltip="Inside ComfyUI's output folder.", extra_dict={'c2c_section': 'Naming'}),
                 io.String.Input("metadata", default="", optional=True, tooltip="Extra JSON kept in the manifest.", extra_dict={'c2c_section': 'Naming'}),
             ],
             outputs=[
-                io.String.Output("published_path"),
+                io.String.Output("published_path", tooltip="Full path of the published file (or folder, for a "
+                                                           "folder source) inside .../<task>/v###/; a "
+                                                           "<name>.publish.json manifest sits next to it."),
                 io.String.Output("manifest", tooltip="h3.publish_manifest v1."),
                 io.String.Output("delivery_paths", tooltip="JSON list of every published file."),
                 io.String.Output("status", tooltip="The publish checklist."),

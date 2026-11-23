@@ -118,7 +118,9 @@ class MiniMaxH3_ProxyManager(io.ComfyNode):
             ),
             inputs=[
                 C2C_VIDEO.Input("media", tooltip="From H3 Media Probe / Media Conform, or Load Video (C2C)."),
-                io.Combo.Input("scale", options=list(SCALES), default="1/2"),
+                io.Combo.Input("scale", options=list(SCALES), default="1/2",
+                               tooltip="Proxy size: 1/2, 1/4 or 1/8 of the source width and height (rounded), or "
+                                       "custom (custom_width / custom_height). h264 / prores round to an even size."),
                 io.Int.Input("custom_width", default=0, min=0, max=16384, tooltip="scale custom: 0 = keep aspect.", extra_dict={'c2c_show_if': {'scale': ['custom']}}),
                 io.Int.Input("custom_height", default=0, min=0, max=16384, tooltip="scale custom: 0 = keep aspect.", extra_dict={'c2c_show_if': {'scale': ['custom']}}),
                 io.Combo.Input("codec", options=list(EXT), default="h264",
@@ -135,7 +137,8 @@ class MiniMaxH3_ProxyManager(io.ComfyNode):
                                                        "frame number); scale_x / scale_y back to the source."),
                 io.String.Output("manifest", tooltip="h3.proxy_manifest v1: source, settings, file, sha256, status."),
                 io.Image.Output("compare", tooltip="Source and proxy first frames, side by side at proxy size."),
-                io.String.Output("report"),
+                io.String.Output("report", tooltip="Text: cache status (cached / written / rebuilt) and file name, "
+                                                   "source and proxy frames / size / codec / audio, size notes."),
             ],
         )
 

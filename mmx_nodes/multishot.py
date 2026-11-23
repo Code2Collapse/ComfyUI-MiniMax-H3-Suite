@@ -63,12 +63,17 @@ class MiniMaxH3_ScriptSplit(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.String.Output("shot_1"),
-                io.String.Output("shot_2"),
-                io.String.Output("shot_3"),
-                io.String.Output("shot_4"),
-                io.Int.Output("shot_count"),
-                io.String.Output("report"),
+                io.String.Output("shot_1", tooltip="Prompt of shot 1 (wire to the first shot's text encoder)."),
+                io.String.Output("shot_2", tooltip="Prompt of shot 2; the last script prompt again when the "
+                                                   "script has fewer shots."),
+                io.String.Output("shot_3", tooltip="Prompt of shot 3; the last script prompt again when the "
+                                                   "script has fewer shots."),
+                io.String.Output("shot_4", tooltip="Prompt of shot 4; the last script prompt again when the "
+                                                   "script has fewer shots."),
+                io.Int.Output("shot_count", tooltip="Number of shots after parsing (and after shot_count padding "
+                                                    "or truncation)."),
+                io.String.Output("report", tooltip="Text: shots parsed, prompts dropped or repeated for a 3-shot "
+                                                   "graph."),
             ],
         )
 
@@ -91,37 +96,72 @@ class MiniMaxH3_MultishotSampler(io.ComfyNode):
                 "one node so the canvas stays legible."
             ),
             inputs=[
-                io.Model.Input("model"),
-                io.Clip.Input("clip"),
-                io.Vae.Input("video_vae"),
-                io.Vae.Input("audio_vae"),
+                io.Model.Input("model", tooltip="The H3 model. Each shot is sampled with BasicGuider (no negative), "
+                                                "the res_multistep sampler and the simple scheduler."),
+                io.Clip.Input("clip", tooltip="The H3 text encoder: encodes each shot's prompt with the previous "
+                                              "shot's last frame (and, for shot 1, the reference). It is unloaded "
+                                              "and VRAM freed before each shot samples."),
+                io.Vae.Input("video_vae", tooltip="Encodes the keyframes and the reference image; decodes each "
+                                                  "shot's video latent to frames."),
+                io.Vae.Input("audio_vae", tooltip="Decodes each shot's generated audio; with exact_audio it encodes "
+                                                  "the shot's audio slice into the latent instead."),
                 io.String.Input(
                     "script",
                     multiline=True,
                     default="Shot 1 prompt goes here.\n---\n"
                     "Shot 2 prompt goes here.\n---\n"
                     "Shot 3 prompt goes here.",
+                    tooltip="One prompt per shot, separated by --- on its own line, or JSON {\"prompts\": [...]} "
+                    "/ a JSON list (unclosed brackets are auto-repaired).",
                 ),
-                io.Int.Input("shot_count", default=0, min=0, max=64),
-                io.Int.Input("width", default=768, min=32, max=4096, step=32),
-                io.Int.Input("height", default=1344, min=32, max=4096, step=32),
-                io.Float.Input("seconds_per_shot", default=5.0, min=0.25, max=15.0, step=0.25),
-                io.Int.Input("seed", default=0, min=0, max=0xFFFFFFFFFFFFFFFF, control_after_generate=True),
-                io.Int.Input("steps", default=20, min=1, max=50),
-                io.Boolean.Input("seed_per_shot", default=True, extra_dict={"c2c_section": "Seeds"}),
-                io.Image.Input("start_image", optional=True),
-                io.Audio.Input("exact_audio", optional=True),
-                io.Image.Input("reference_image", optional=True),
+                io.Int.Input("shot_count", default=0, min=0, max=64,
+                             tooltip="Shots to render. 0 = one per script prompt (with exact_audio: as many as "
+                                     "cover the audio). Fewer prompts than shots repeats the last prompt; more "
+                                     "drops the extras."),
+                io.Int.Input("width", default=768, min=32, max=4096, step=32,
+                             tooltip="Frame width in pixels (step 32); also sets the reference size in 'match'."),
+                io.Int.Input("height", default=1344, min=32, max=4096, step=32,
+                             tooltip="Frame height in pixels (step 32); also sets the reference size in 'match'."),
+                io.Float.Input("seconds_per_shot", default=5.0, min=0.25, max=15.0, step=0.25,
+                               tooltip="Length of each shot in seconds at 24 fps, snapped to the nearest H3 length "
+                                       "(17k + 5 frames). Shots after the first drop one seam frame."),
+                io.Int.Input("seed", default=0, min=0, max=0xFFFFFFFFFFFFFFFF, control_after_generate=True,
+                             tooltip="Base noise seed. With seed_per_shot, shot k (from 0) uses seed + k."),
+                io.Int.Input("steps", default=20, min=1, max=50,
+                             tooltip="Sampling steps per shot (simple scheduler, res_multistep)."),
+                io.Boolean.Input("seed_per_shot", default=True,
+                                 tooltip="On: shot k samples with seed + k. Off: every shot uses the same seed.",
+                                 extra_dict={"c2c_section": "Seeds"}),
+                io.Image.Input("start_image", optional=True,
+                               tooltip="Image-to-video start: its first image, centre-cropped to width x height, is "
+                                       "shot 1's frame-0 keyframe. Every later shot starts from the previous shot's "
+                                       "last frame either way."),
+                io.Audio.Input("exact_audio", optional=True,
+                               tooltip="A soundtrack to lock: each shot's slice of its first channel (resampled to "
+                                       "32 kHz, short tail zero-padded) is encoded into the shot's latent and used "
+                                       "as its audio; the master is trimmed to the soundtrack's length."),
+                io.Image.Input("reference_image", optional=True,
+                               tooltip="A reference image for shot 1 only (Ref2VA): the first image, resized to "
+                                       "multiples of 32, VAE-encoded and given with shot 1's prompt."),
                 io.Combo.Input("reference_image_size", options=["match", "max"], default="match",
+                               tooltip="match: shrink the reference to about width x height pixels. max: shrink it "
+                                       "so its short edge is 2048. Never enlarged.",
                                extra_dict={"c2c_section": "References"}),
                 io.String.Input("checkpoint_prefix", default="video/H3_CHAINED_CHECKPOINTS", optional=True,
+                                tooltip="Each finished shot is also saved as an H.264 MP4 (CRF 18, 24 fps, with its "
+                                        "audio) to output/<prefix>/chain_NN_*.mp4. Empty = no files.",
                                 extra_dict={"c2c_section": "Output"}),
             ],
             outputs=[
-                io.Image.Output("master_frames"),
-                io.Audio.Output("master_audio"),
-                io.Int.Output("shots_rendered"),
-                io.String.Output("report"),
+                io.Image.Output("master_frames", tooltip="Every shot joined, IMAGE batch at 24 fps (later shots "
+                                                         "drop their first, shared frame); trimmed to exact_audio's "
+                                                         "length when given."),
+                io.Audio.Output("master_audio", tooltip="exact_audio (resampled, trimmed) when given; otherwise each "
+                                                        "shot's generated audio joined with a 40 ms equal-power "
+                                                        "cross-fade."),
+                io.Int.Output("shots_rendered", tooltip="Number of shots sampled."),
+                io.String.Output("report", tooltip="Text: shots, frames, seconds at 24 fps, and notes (prompt "
+                                                   "padding, reference size, audio resampling, checkpoint paths)."),
             ],
         )
 
@@ -332,30 +372,56 @@ class MiniMaxH3_MultishotMemorySampler(io.ComfyNode):
                 "frame for smooth seams."
             ),
             inputs=[
-                io.Model.Input("model"),
-                io.Clip.Input("clip"),
-                io.Vae.Input("video_vae"),
-                io.Vae.Input("audio_vae"),
+                io.Model.Input("model", tooltip="The H3 model. Each shot is sampled with BasicGuider (no negative), "
+                                                "the res_multistep sampler and the simple scheduler."),
+                io.Clip.Input("clip", tooltip="The H3 text encoder: encodes each shot's prompt with the memory "
+                                              "images (anchor + recent shot-end frames). It is unloaded and VRAM "
+                                              "freed before each shot samples."),
+                io.Vae.Input("video_vae", tooltip="Encodes the continuation keyframe; decodes each shot's video "
+                                                  "latent to frames."),
+                io.Vae.Input("audio_vae", tooltip="Decodes each shot's generated audio."),
                 io.String.Input(
                     "script",
                     multiline=True,
                     default="Shot 1 prompt goes here.\n---\nShot 2 prompt goes here.",
+                    tooltip="One prompt per shot, separated by --- on its own line, or JSON {\"prompts\": [...]} "
+                    "/ a JSON list (unclosed brackets are auto-repaired).",
                 ),
-                io.Int.Input("shot_count", default=0, min=0, max=64),
-                io.Int.Input("width", default=960, min=32, max=4096, step=16),
-                io.Int.Input("height", default=544, min=32, max=4096, step=16),
-                io.Int.Input("frames_per_shot", default=243, min=5, max=1000),
-                io.Int.Input("seed", default=0, min=0, max=0xFFFFFFFFFFFFFFFF),
-                io.Int.Input("steps", default=20, min=1, max=50),
-                io.Int.Input("memory_frames", default=2, min=0, max=6, extra_dict={"c2c_section": "Memory"}),
-                io.Int.Input("anchor_frames", default=1, min=0, max=2, extra_dict={"c2c_section": "Memory"}),
-                io.Image.Input("start_image", optional=True),
+                io.Int.Input("shot_count", default=0, min=0, max=64,
+                             tooltip="Shots to render. 0 = one per script prompt. Fewer prompts than shots repeats "
+                                     "the last prompt; more drops the extras."),
+                io.Int.Input("width", default=960, min=32, max=4096, step=16,
+                             tooltip="Frame width in pixels; memory and keyframe images are resized to it."),
+                io.Int.Input("height", default=544, min=32, max=4096, step=16,
+                             tooltip="Frame height in pixels; memory and keyframe images are resized to it."),
+                io.Int.Input("frames_per_shot", default=243, min=5, max=1000,
+                             tooltip="Frames sampled per shot; the H3 latent rounds it up to the next 17k + 5 "
+                                     "length. Shots after the first drop their first (seam) frame."),
+                io.Int.Input("seed", default=0, min=0, max=0xFFFFFFFFFFFFFFFF,
+                             tooltip="Base noise seed: shot k (from 0) uses seed + k."),
+                io.Int.Input("steps", default=20, min=1, max=50,
+                             tooltip="Sampling steps per shot (simple scheduler, res_multistep)."),
+                io.Int.Input("memory_frames", default=2, min=0, max=6,
+                             tooltip="How many recent shot-end frames (the last frame of each earlier shot) the "
+                                     "text encoder gets as images for the next shot. 0 still gives the latest one.",
+                             extra_dict={"c2c_section": "Memory"}),
+                io.Int.Input("anchor_frames", default=1, min=0, max=2,
+                             tooltip="0 = no identity anchor. 1 or 2 (same effect): one anchor image - start_image, "
+                                     "else shot 1's first frame - is given to the encoder for every shot.",
+                             extra_dict={"c2c_section": "Memory"}),
+                io.Image.Input("start_image", optional=True,
+                               tooltip="The identity anchor and shot 1's frame-0 keyframe (first image, resized to "
+                                       "width x height, no crop). Later shots continue from the previous shot's "
+                                       "last frame."),
             ],
             outputs=[
-                io.Image.Output("master_frames"),
-                io.Audio.Output("master_audio"),
-                io.Int.Output("shots_rendered"),
-                io.String.Output("report"),
+                io.Image.Output("master_frames", tooltip="Every shot joined, IMAGE batch at 24 fps (later shots "
+                                                         "drop their first, shared frame)."),
+                io.Audio.Output("master_audio", tooltip="Each shot's generated audio joined end to end (one frame of "
+                                                        "audio trimmed at each seam, no cross-fade)."),
+                io.Int.Output("shots_rendered", tooltip="Number of shots sampled."),
+                io.String.Output("report", tooltip="Text: shots, frames, seconds at 24 fps, and notes (prompt "
+                                                   "padding, anchor source)."),
             ],
         )
 
