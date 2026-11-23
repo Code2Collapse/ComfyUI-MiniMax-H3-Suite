@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-__version__ = "1.1.0"   # 1.1.0: HDR (A29) + Open-H3 Regenerate STD / 2K IC; see CHANGELOG.md
+__version__ = "1.2.0"   # 1.2.0: H3 Prompt Writer node, Viggle Remake replacement, zero-offset V2V; see CHANGELOG.md
 
 from pathlib import Path
 

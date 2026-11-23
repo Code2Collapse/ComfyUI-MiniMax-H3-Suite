@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 - 2026-11-23
 
 ### Fixed (replacement, round 2 - docs/PLAN_h3_replacement_quality.md s9)
 - The six character-replacement workflows put the plate (`<Video 1>`) on the target grid: node 15 migrated in place
