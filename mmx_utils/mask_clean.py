@@ -53,12 +53,12 @@ def _dilate_cv2(mask: torch.Tensor, radius: int):
     except Exception:  # noqa: BLE001 - OpenCV is optional here: the torch path below is the reference
         return None
     k = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
-    arr = mask.detach().to(torch.float32).contiguous().numpy()
+    arr = mask.detach().to(device="cpu", dtype=torch.float32).contiguous().numpy()  # never .numpy() off-CPU
     out = np.empty_like(arr)
     for i in range(arr.shape[0]):
         out[i] = cv2.dilate(arr[i], k, iterations=int(radius), borderType=cv2.BORDER_CONSTANT,
                             borderValue=-float("inf"))
-    return torch.from_numpy(out).to(mask.dtype)
+    return torch.from_numpy(out).to(device=mask.device, dtype=mask.dtype)
 
 
 def spatial_dilate(mask: torch.Tensor, radius: int) -> torch.Tensor:

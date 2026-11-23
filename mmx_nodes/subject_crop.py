@@ -24,15 +24,18 @@ if str(_PKG) not in sys.path:
 from mmx_utils.head_room import MODES as HEAD_SIZE_MODES, head_room
 from mmx_utils.plate_restore import PROTECT_MODES, ledger_report, protected_paste_frames
 from mmx_utils.pose_interop import pose_keypoint_to_wholebody
+from mmx_utils.resample import common_upscale_float
 from mmx_utils.subject_crop_planner import plan
 
 CATEGORY = "MiniMax H3/Crop"
 
 
 def _resize_image(img_hwc, w, h, method="lanczos"):
+    # Lanczos in float (mmx_utils/resample.py): core's lanczos is 8-bit PIL - it clipped HDR above 1.0 and quantised
+    # the plate inside every crop (measured 129/255 on an HDR x1.5 plate; docs/PLAN_h3_zero_offset.md, Z2).
     if img_hwc.shape[0] == h and img_hwc.shape[1] == w:
         return img_hwc
-    return comfy.utils.common_upscale(
+    return common_upscale_float(
         img_hwc.movedim(-1, 0).unsqueeze(0), w, h, method, "disabled"
     ).squeeze(0).movedim(0, -1)
 
@@ -142,10 +145,43 @@ def _debug_summary(binary, boxes, scale, sel, info, output_size):
     return "\n".join(lines)
 
 
+def given_boxes(bboxes, first_frame: int, n: int, img_w: int, img_h: int):
+    """(boxes, crop size or None) from a ``bboxes`` input: one box for every frame, or a per-frame list (from Subject
+    Crop on the whole clip) read from ``first_frame`` on - the last box is held past its end. G1 (zero-offset plan):
+    a job runs Subject Crop on each window, and planning each window on its own moved the crop between segments."""
+    if isinstance(bboxes, dict):
+        frames = [bboxes] * n
+    elif isinstance(bboxes, list) and bboxes and all(isinstance(f, list) and f for f in bboxes):
+        first = int(first_frame)
+        if first >= len(bboxes):
+            raise ValueError(f"H3 Subject Crop: bboxes_first_frame {first} is past the end of the {len(bboxes)} "
+                             "boxes given - wire the window's first frame (its position in the whole clip).")
+        frames = [f[0] for f in bboxes[first:first + n]]
+        frames += [frames[-1]] * (n - len(frames))
+    else:
+        raise ValueError("H3 Subject Crop: bboxes must be one box or a per-frame list of boxes (from Subject Crop).")
+    out = []
+    for i, b in enumerate(frames):
+        x, y, w, h = (int(round(float(b[k]))) for k in ("x", "y", "width", "height"))
+        if w <= 0 or h <= 0 or x < 0 or y < 0 or x + w > img_w or y + h > img_h:
+            raise ValueError(f"H3 Subject Crop: given box {i} ({x},{y} {w}x{h}) does not fit in the "
+                             f"{img_w}x{img_h} frames - the boxes must come from frames of this size.")
+        out.append({"x": x, "y": y, "width": w, "height": h})
+    meta = frames[0].get("metadata") if isinstance(frames[0], dict) else None
+    size = meta.get("mmx_crop_size") if isinstance(meta, dict) else None
+    if isinstance(size, (list, tuple)) and len(size) == 2:
+        size = (int(size[0]), int(size[1]))
+    else:
+        size = None
+    return out, size
+
+
 def _plan_and_crop(original_images, masks, sel, p, divisible_by,
-                   mask_threshold, upscale_megapixels=0.0, plan_masks=None, room_masks=None, head_line=""):
+                   mask_threshold, upscale_megapixels=0.0, plan_masks=None, room_masks=None, head_line="",
+                   fixed=None):
     """plan_masks: what the planner keeps in the window (default: masks). room_masks: cropped like the masks and
-    returned last (Head Size Mode, C2C D8.21)."""
+    returned last (Head Size Mode, C2C D8.21). fixed: (boxes, size or None) from given_boxes - no planning, the
+    crops are cut exactly there (one plan for a whole job)."""
     if original_images.shape[0] != masks.shape[0]:
         raise ValueError(
             f"original_images ({original_images.shape[0]}) and masks "
@@ -160,7 +196,11 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
     full_frame = p["crop_scale"] <= 0.0
 
     binary = (plan_masks if plan_masks is not None else masks).detach().cpu().numpy() > mask_threshold
-    if full_frame:
+    if fixed is not None:
+        full_frame = False
+        boxes = fixed[0]
+        info = {"aspect": boxes[0]["width"] / max(1, boxes[0]["height"])}
+    elif full_frame:
         img_h, img_w = masks.shape[1], masks.shape[2]
         boxes = [{"x": 0, "y": 0, "width": img_w, "height": img_h}
                  for _ in range(masks.shape[0])]
@@ -174,7 +214,13 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
     bh = max(b["height"] for b in boxes)
     size = None
     img_method, mask_method = "lanczos", "bilinear"
-    if full_frame:
+    if fixed is not None:
+        sizes = {(b["width"], b["height"]) for b in boxes}
+        if fixed[1] is not None and (len(sizes) > 1 or fixed[1] != (bw, bh)):
+            size = fixed[1]
+        elif len(sizes) > 1:
+            size = (bw, bh)
+    elif full_frame:
         gw = math.ceil(bw / divisible_by) * divisible_by
         gh = math.ceil(bh / divisible_by) * divisible_by
         if (gw, gh) != (bw, bh):
@@ -182,18 +228,23 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
     elif sel == "zoomed":
         th = math.ceil(bh / divisible_by) * divisible_by
         size = (math.ceil(th * info["aspect"] / divisible_by) * divisible_by, th)
-    if upscale_megapixels != 0:
+    if upscale_megapixels != 0 and not (fixed is not None and fixed[1] is not None):
         up = _upscale_size(*(size or (bw, bh)), upscale_megapixels, divisible_by)
         if up is not None:
             size = up
             img_method, mask_method = "bicubic", "nearest-exact"
 
     report = _debug_summary(binary, boxes, p["crop_scale"],
-                            f"{sel} (full frame)" if full_frame else sel,
+                            f"{sel} (full frame)" if full_frame else ("given boxes" if fixed is not None else sel),
                             info, size or (bw, bh))
     if head_line:
         report = f"{report}\n{head_line}"
     room = room_masks if room_masks is not None else (masks > mask_threshold).float()
+    out_w, out_h = (int(size[0]), int(size[1])) if size else (int(bw), int(bh))
+    if out_w % 16 or out_h % 16:
+        report = (f"{report}\nH3 VAE grid: the crops are {out_w}x{out_h}, not a multiple of 16 - the VAE cuts "
+                  f"{out_w % 16} px of width and {out_h % 16} px of height (centred). Subject Uncrop / Plate Restore "
+                  f"put those margins back from the plate (no stretch, no offset); divisible_by 16 or 32 avoids it.")
 
     if size is not None:
         tw, th = size
@@ -245,8 +296,11 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
         "mode": f"{sel} (full frame)" if full_frame else str(sel),
         "crop_scale": float(p.get("crop_scale", 0.0) or 0.0),
     })
+    # The emitted crop size rides along with every box (core's BoundingBoxes use the same "metadata" key), so the
+    # composite knows what the VAE was given and can undo its centre cut exactly (zero-offset plan, Z1).
+    out_boxes = [[{**b, "metadata": {**(b.get("metadata") or {}), "mmx_crop_size": [out_w, out_h]}}] for b in boxes]
     return io.NodeOutput(cropped_images, cropped_masks,
-                         [[b] for b in boxes], report, cropped_room.to(cropped_masks.dtype),
+                         out_boxes, report, cropped_room.to(cropped_masks.dtype),
                          ui={"mmx_crop_plan": [plan_json]})
 
 
@@ -346,6 +400,16 @@ class MiniMaxH3_SubjectCrop(io.ComfyNode):
                              tooltip="Crop width and height are rounded up to a multiple of this. Match the model's resolution requirement."),
                 _UPSCALE_MEGAPIXELS,
                 *_HEAD_INPUTS,
+                # G1 (zero-offset plan), appended last: one crop plan for a whole job instead of one per window
+                io.BoundingBox.Input("bboxes", optional=True, force_input=True,
+                                     tooltip="Optional: crop exactly at these boxes instead of planning - wire the "
+                                             "bboxes of a Subject Crop run on the WHOLE clip (or one box). A job "
+                                             "that runs Subject Crop per window otherwise plans each window on its "
+                                             "own and the crop moves between segments."),
+                io.Int.Input("bboxes_first_frame", default=0, min=0, max=10_000_000, optional=True,
+                             tooltip="Which of the given per-frame boxes is this batch's first frame (the window's "
+                                     "start in the whole clip). Ignored for a single box.",
+                             extra_dict={"c2c_section": "Given boxes"}),
             ],
             outputs=_OUTPUTS,
         )
@@ -353,7 +417,7 @@ class MiniMaxH3_SubjectCrop(io.ComfyNode):
     @classmethod
     def execute(cls, original_images, masks, mode, divisible_by, upscale_megapixels=0.0,
                 head_size_mode=HEAD_SIZE_MODES[0], head_scale=0.0, original_pose=None,
-                reference_pose=None) -> io.NodeOutput:
+                reference_pose=None, bboxes=None, bboxes_first_frame=0) -> io.NodeOutput:
         sel = mode["mode"]
         if sel == "combined":
             p = {"crop_scale": mode["crop_scale"],
@@ -361,8 +425,12 @@ class MiniMaxH3_SubjectCrop(io.ComfyNode):
         else:
             p = _cell_params(mode)
         plan_masks, room, line = _head_room_args(masks, head_size_mode, head_scale, original_pose, reference_pose)
+        fixed = None
+        if bboxes is not None:
+            fixed = given_boxes(bboxes, int(bboxes_first_frame or 0), int(original_images.shape[0]),
+                                int(original_images.shape[2]), int(original_images.shape[1]))
         return _plan_and_crop(original_images, masks, sel, p,
-                              divisible_by, 0.1, upscale_megapixels, plan_masks, room, line)
+                              divisible_by, 0.1, upscale_megapixels, plan_masks, room, line, fixed=fixed)
 
 
 class MiniMaxH3_SubjectCropAdvanced(io.ComfyNode):

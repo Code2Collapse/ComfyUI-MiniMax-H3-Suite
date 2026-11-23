@@ -33,8 +33,11 @@ class MiniMaxH3_DetailReinject(io.ComfyNode):
             description=(
                 "Transfer plate micro-texture onto the regenerated region so the texture seam "
                 "dies even when geometry is perfect.\n\n"
-                "divide: lighting-invariant (plate/(blur+eps) * generated).\n"
-                "subtract: plate - blur added to generated.\n\n"
+                "Frequency separation: the region keeps the generated image's own low band (lighting, colour) "
+                "and takes the plate's fine detail.\n"
+                "divide: blur(generated) * plate/(blur(plate)+eps) (lighting-invariant).\n"
+                "subtract: blur(generated) + (plate - blur(plate)).\n"
+                "An unchanged region comes back unchanged.\n\n"
                 "Mask-limited with strength 0–1. Exterior pixels are the generated image "
                 "(mask=0 outside region)."
             ),

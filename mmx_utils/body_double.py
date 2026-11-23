@@ -272,24 +272,31 @@ def steady_masks(masks, rects, plate_size: tuple[int, int], gap: int = 24, scale
     W, H = plate_size
     pw, ph = max(1, round(W * scale)), max(1, round(H * scale))
     n = len(rects)
-    cover = np.zeros((n, ph, pw), bool)
+    # G4 (zero-offset plan): this held a bool cover AND an int64 frame index per frame x cell (9 bytes; ~2 GB at
+    # 1080p over 2000 frames, > 8 GB at 4K). Distances beyond `gap` never bridge, so one small code per cell is
+    # enough: 0 = covered, else 1 + min(frames since the last cover, gap + 1). Same result, bit for bit.
+    cap = int(gap) + 1
+    code_t = np.uint8 if cap + 1 <= 255 else (np.uint16 if cap + 1 <= 65535 else np.int64)
+    code = np.empty((n, ph, pw), code_t)
     shapes = []
+    never = 10 ** 9
+    seen = np.full((ph, pw), 0 if ends else -never, np.int64)
     for i in range(n):
         m = _np(masks[i])
         shapes.append(m.shape[:2])
+        cov = np.zeros((ph, pw), bool)
         x0, y0, x1, y1 = _box(rects[i], pw, ph, scale)
         if x1 > x0 and y1 > y0:
-            cover[i, y0:y1, x0:x1] = resize2d(m.astype(np.float32), y1 - y0, x1 - x0) > 0.5
-    never = 10 ** 9
-    seen = np.full((ph, pw), 0 if ends else -never, np.int64)
-    last = np.empty((n, ph, pw), np.int64)
-    for i in range(n):
-        seen = np.where(cover[i], i, seen)
-        last[i] = seen
-    seen = np.full((ph, pw), n - 1 if ends else never, np.int64)
+            cov[y0:y1, x0:x1] = resize2d(m.astype(np.float32), y1 - y0, x1 - x0) > 0.5
+        seen = np.where(cov, i, seen)
+        code[i] = np.where(cov, 0, 1 + np.minimum(i - seen, cap)).astype(code_t)
+    nxt = np.full((ph, pw), n - 1 if ends else never, np.int64)
     for i in reversed(range(n)):
-        seen = np.where(cover[i], i, seen)
-        last[i] = (seen - last[i] <= gap) & ~cover[i]                                  # the newly bridged pixels
+        cov = code[i] == 0
+        nxt = np.where(cov, i, nxt)
+        since = code[i].astype(np.int64) - 1                                          # i - last cover (capped)
+        code[i] = (~cov & (since + (nxt - i) <= gap)).astype(code_t)                    # the newly bridged pixels
+    last = code
     for i in range(n):
         h, w = shapes[i]
         x0, y0, x1, y1 = _box(rects[i], pw, ph, scale)

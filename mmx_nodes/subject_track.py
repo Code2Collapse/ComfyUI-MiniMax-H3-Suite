@@ -391,8 +391,23 @@ class _Source:
 
 
 def _png(path: str, m) -> None:
+    """8-bit mask PNG that keeps the SOFT edge (G3): core SAM 3 hands back a bilinear-upsampled mask, and saving it as
+    0/255 threw away the sub-pixel edge, so the plate-size matte later showed the proxy's pixel steps. The 0.5
+    decision is kept exactly: inside values are stored >= 128, outside <= 127, so ``_load`` (> 127) reads the same
+    binary mask as before."""
     from PIL import Image
-    Image.fromarray(((BD._np(m) > 0.5) * 255).astype(np.uint8)).save(path)
+    a = BD._np(m)
+    if a.ndim == 3:
+        a = a[0]
+    v = np.clip(np.rint(np.nan_to_num(a, nan=0.0) * 255.0), 0, 255)
+    inside = a > 0.5
+    v = np.where(inside, np.maximum(v, 128), np.minimum(v, 127)).astype(np.uint8)
+    Image.fromarray(v).save(path)
+
+
+def _load_soft(path: str) -> np.ndarray:
+    from PIL import Image
+    return np.asarray(Image.open(path).convert("L"), dtype=np.float32) / 255.0
 
 
 def _load(path: str) -> np.ndarray:
@@ -405,6 +420,18 @@ def _resize_mask(m, h: int, w: int) -> np.ndarray:
     if a.ndim == 3:
         a = a[0]
     return a if a.shape == (h, w) else (BD.resize2d(a, h, w) > 0.5).astype(np.float32)
+
+
+def soft_upscale_mask(m, h: int, w: int) -> np.ndarray:
+    """A SOFT proxy-size mask enlarged to h x w, thresholded at 0.5 only at the plate size (G3, zero-offset plan).
+    Thresholding at the proxy first and enlarging the 0/1 mask put the proxy's pixel steps on the plate (~4 px at 4K
+    from a 1K proxy). Still binary (white = subject); same-size masks are just thresholded."""
+    a = BD._np(m)
+    if a.ndim == 3:
+        a = a[0]
+    if a.shape == (h, w):
+        return (a > 0.5).astype(np.float32)
+    return (BD.resize2d(a.astype(np.float32), h, w) > 0.5).astype(np.float32)
 
 
 def _track_root(job: str) -> Path:
@@ -597,11 +624,11 @@ def matte_handle(t: Track, src: _Source):
     s = t.s
     d = t.root / "matte"
     stamp = d / "complete.json"
-    want = {"frames": int(s["n"]), "size": [src.w, src.h], "updated": s.get("updated")}
+    want = {"frames": int(s["n"]), "size": [src.w, src.h], "updated": s.get("updated"), "edge": "soft-v1"}
     if not stamp.is_file() or json.loads(stamp.read_text(encoding="utf-8")) != want:
         d.mkdir(exist_ok=True)
         for i in range(int(s["n"])):
-            _png(str(d / f"{i:06d}.png"), _resize_mask(_load(t.mask_path(i)), src.h, src.w))
+            _png(str(d / f"{i:06d}.png"), soft_upscale_mask(_load_soft(t.mask_path(i)), src.h, src.w))
         J._atomic_json(str(stamp), want)
     fps = float(getattr(src.media, "fps", 0) or 0) if src.media is not None else 0.0
     h, _facts = _media.probe_media(str(d / "%06d.png"), mode="image sequence", sequence_fps=fps or 24.0)

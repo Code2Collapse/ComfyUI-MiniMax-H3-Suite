@@ -438,6 +438,27 @@ In 22-25 the generation hears each window's own sound (H3 Frame Window Reader's 
   `candidate`, `props` / `locked_props`.
 - Its outputs: job, track, anchor and prop statuses, the gallery, the track preview and the anchor sheet.
 
+### Fixed 2026-11-23: no pixel offset on V2V
+
+Measured with `tools/h3_zero_offset_bench.py` (odd-sized synthetic plates, the real nodes, the VAE replaced by a
+stand-in with core's geometry); details and numbers in `docs/PLAN_h3_zero_offset.md`.
+
+- **The H3 VAE's silent crop is undone.** Core's VAE cuts each side of a frame to a multiple of 16. A crop that was
+  not on that grid (Subject Crop with `divisible_by` 8, a full odd-sized frame, an off-grid Track + Crop canvas) came
+  back smaller and was stretched into the box: up to 5 px off. Subject Uncrop, Plate Restore and Stitch Back now put
+  it back where the VAE took it from, with the cut edges from the plate (0.0005 px).
+- **Float resizing.** Lanczos resizes no longer go through 8-bit images: HDR values above 1.0 and 10/16-bit levels
+  survive the crop round trip.
+- **Masks on the right cells.** Mask Prep and Mask To Latent Space use the same cells as the VAE for frames off the
+  16 px grid, so no masked pixel is left un-regenerated.
+- **Detail Reinject** returns an unchanged region unchanged (it used to double the plate's detail).
+- **Sound in sync.** The kept soundtrack is no longer encoded up to 12.5 ms early.
+- Outside the edit, every chain returns the plate bit-exact (measured 0/255 before and after).
+- **One crop for a whole job.** H3 Subject Crop has two new optional inputs, `bboxes` and `bboxes_first_frame`: wire
+  the boxes of a Subject Crop run on the whole clip and every window is cut at exactly the same place.
+- **Face Stitch** keeps the new face through a single missed detection; the **Temporal Subject Tracker** matte keeps a
+  smooth edge at 4K; **Matte Chatter** needs a ninth of the memory.
+
 ### Fixed 2026-11-23: removed nodes no longer stay in memory
 
 The compact-node layout engine kept a node alive when it was removed right after being created (paste then undo, or a

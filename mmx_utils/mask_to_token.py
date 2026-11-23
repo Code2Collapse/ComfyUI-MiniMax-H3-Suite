@@ -10,6 +10,21 @@ import torch.nn.functional as F
 from .h3_grid import h3_pixel_frame_groups, snap_frame_count
 
 
+def vae_centre_crop(mask: torch.Tensor, factor: int) -> torch.Tensor:
+    """[..., H, W] cropped the way core's VAE crops a frame before encoding (comfy/sd.py vae_encode_crop_pixels):
+    each side to a multiple of ``factor``, (size % factor) // 2 off the top / left. Latent cell k then covers exactly
+    the pixels it was encoded from. On-grid masks are returned as they are (zero-offset plan, Z3)."""
+    factor = int(factor)
+    if factor <= 1:
+        return mask
+    h, w = int(mask.shape[-2]), int(mask.shape[-1])
+    kh, kw = h // factor * factor, w // factor * factor
+    if (kh == h and kw == w) or kh == 0 or kw == 0:
+        return mask
+    top, left = (h % factor) // 2, (w % factor) // 2
+    return mask[..., top:top + kh, left:left + kw]
+
+
 def _spatial_downsample_max(mask: torch.Tensor, factor: int) -> torch.Tensor:
     """[T,H,W] -> [T, H//factor, W//factor] via max pool."""
     if factor <= 1:
@@ -88,6 +103,9 @@ def pixel_mask_to_h3_latent(
     vae_factor = 16
     lat_h = max(1, height // vae_factor)
     lat_w = max(1, width // vae_factor)
+    # off the 16 px grid the VAE encodes the CENTRE-cropped frame; pooling from the top-left edge put masked pixels
+    # into kept cells (measured: up to 182 cells on 1922x1081). Crop the mask exactly like the frame.
+    x = vae_centre_crop(x, vae_factor)
     x = _spatial_downsample_max(x, vae_factor)
     if x.shape[-2] != lat_h or x.shape[-1] != lat_w:
         x = F.interpolate(x.unsqueeze(1), size=(lat_h, lat_w), mode="nearest-exact").squeeze(1)
