@@ -20,7 +20,6 @@ from mmx_utils.affine_transform import affine_crop_batch
 from mmx_utils.crop_planner_tv import plan_tracked_crop_tv
 from mmx_utils.device import run_with_cpu_fallback
 from mmx_utils.detection import merge_detection_sources
-from mmx_utils.h3_constants import adapt_canvas
 from mmx_utils.jitterless_boxes import build_jitterless_boxes, lock_anchor_size, smooth_centers
 from mmx_utils.transform_types import H3Transform, H3TransformType
 
@@ -68,8 +67,9 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
                     options=["manual", "auto_no_downscale", "auto_capped_768"],
                     default="manual",
                     tooltip="Pixel size the crops are resampled to. manual: canvas_width x canvas_height. "
-                            "auto_no_downscale / auto_capped_768: H3's adapt_canvas on the square crop size, "
-                            "which yields 768x768 (the cap only clamps the value fed to adapt_canvas).",
+                            "auto_no_downscale: a square canvas the size of the largest crop in the clip (rounded "
+                            "up to 32, 128-1344), so no frame is downscaled. auto_capped_768: the same, at most "
+                            "768x768.",
                 ),
                 io.Int.Input("canvas_width", default=512, min=128, max=1344, step=32,
                              tooltip="manual canvas_mode: crop output width in pixels (step 32, the H3 canvas "
@@ -244,10 +244,14 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
         if canvas_mode == "manual":
             cw, ch = int(canvas_width), int(canvas_height)
         else:
-            need = int(np.ceil(max(b[3] for b in boxes)))
-            cap = 768 if canvas_mode == "auto_capped_768" else 10_000
-            need = min(max(need, 128), cap)
-            cw, ch = adapt_canvas(need, need)
+            # Square canvas = the largest crop snapped up to 32, so no frame is downscaled; auto_capped_768 clamps
+            # it to 768 (FaceTrackCrop's definition of the same options). adapt_canvas(need, need) returned 768x768
+            # for any 1:1 input, so both auto modes ignored the crop size (L9.312).
+            need = float(max(max(b[2], b[3]) for b in boxes))
+            snapped = int(np.ceil(need / 32.0) * 32)
+            if canvas_mode == "auto_capped_768":
+                snapped = min(snapped, 768)
+            cw = ch = max(128, min(snapped, 1344))
 
         # R5: the crop is the first heavy step of the spine and was running with no
         # OOM path at all — on an 8 GB card it hard-failed here before any other node

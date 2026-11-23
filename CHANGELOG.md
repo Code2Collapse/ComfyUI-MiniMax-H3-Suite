@@ -17,6 +17,10 @@
 - H3 Region Mask: with no depth wired, `sky` is now the top of the frame and `ground` the bottom (a level, centred
   horizon, as the report says). They were swapped. Saved workflows that use sky or ground mode without depth get the
   opposite half from before; with depth wired nothing changes.
+- H3 Track + Crop: `canvas_mode` auto_no_downscale now sizes the square canvas from the largest crop (rounded up
+  to 32, 128-1344) and auto_capped_768 does the same but stops at 768, as in H3 Face Track Crop. Both always gave
+  768x768 before. Saved workflows that use an auto mode get a different crop size (output frames and transform
+  canvas) unless the largest crop rounds to 768.
 
 ## 1.2.0 - 2026-11-23
 
