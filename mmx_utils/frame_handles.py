@@ -202,3 +202,67 @@ def format_handle_report(
     if padding_mode != "disabled":
         lines.append(f"padding_mode={padding_mode}")
     return "\n".join(lines)
+
+
+# ── L8.56: trim the handles back after the model (frame-exact, sound included) ─────────────────────────────────────
+
+HANDLES_CONTRACT = "h3.frame_handles v1"
+
+
+def handles_record(*, original_frames: int, final_frames: int, head_pad: int, tail_pad: int, fps: float,
+                   padding_mode: str) -> dict:
+    """What a Frame Handles pass did, for the trim-back pass (its ``undo_handles`` input)."""
+    return {"contract": HANDLES_CONTRACT, "original_frames": int(original_frames), "final_frames": int(final_frames),
+            "head_pad": int(head_pad), "tail_pad": int(tail_pad), "fps": float(fps), "padding_mode": str(padding_mode)}
+
+
+def parse_handles_record(text: str) -> dict:
+    import json
+    try:
+        rec = json.loads(text)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("H3 Frame Handles: undo_handles is not the 'handles' output of another H3 Frame Handles "
+                         f"node ({exc}).") from exc
+    if not isinstance(rec, dict) or rec.get("contract") != HANDLES_CONTRACT:
+        raise ValueError("H3 Frame Handles: undo_handles must come from the 'handles' output of the H3 Frame Handles "
+                         "node that padded these frames.")
+    return rec
+
+
+def undo_frame_handles(images: torch.Tensor, audio: Optional[dict], rec: dict) -> tuple[torch.Tensor, Optional[dict], str]:
+    """Remove exactly the frames (and the sound) a Frame Handles pass ADDED, so the delivered clip starts on the
+    plate's first frame. Frames it trimmed are gone and are not invented back (said in the report)."""
+    head = max(0, int(rec["head_pad"]))
+    tail = max(0, int(rec["tail_pad"]))
+    keep = int(rec["original_frames"]) if head or tail else int(images.shape[0])
+    if int(rec["head_pad"]) < 0 or int(rec["tail_pad"]) < 0:
+        keep = int(rec["final_frames"])
+    n = int(images.shape[0])
+    if head + keep > n:
+        raise ValueError(f"H3 Frame Handles: {n} frames came back but the padding pass made {rec['final_frames']} "
+                         f"({head} added at the head, {tail} at the tail) - the frames were shortened in between, "
+                         "so the head pad cannot be removed exactly.")
+    out_images = images[head:head + keep]
+    notes = [f"undo: removed {head} head / {n - head - keep} tail frame(s): {n} -> {keep} frames"]
+    if n != int(rec["final_frames"]):
+        notes.append(f"note: the padding pass made {rec['final_frames']} frames, {n} came back")
+    if int(rec["head_pad"]) < 0 or int(rec["tail_pad"]) < 0:
+        notes.append("frames the padding pass trimmed are not restored")
+    out_audio = None
+    if audio is not None:
+        wf2, sr, was_3d, batch = _audio_waveform_2d(audio)
+        fps = float(rec.get("fps") or FPS)
+        start = max(0, round(head / fps * sr))
+        length = max(0, round(keep / fps * sr))
+        mid = wf2[:, start:start + length]
+        if mid.shape[1] < length:
+            mid = torch.cat([mid, torch.zeros(mid.shape[0], length - mid.shape[1], dtype=mid.dtype,
+                                              device=mid.device)], dim=1)
+        if was_3d:
+            mid = mid.unsqueeze(0).repeat(batch, 1, 1)
+        elif audio["waveform"].ndim == 1:
+            mid = mid.squeeze(0)
+        out_audio = {"waveform": mid, "sample_rate": sr}
+        notes.append(f"sound: {start} samples removed at the head, {length} kept ({keep / fps:.3f} s)")
+    return out_images, out_audio, "\n".join(notes)
+
