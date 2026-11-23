@@ -783,6 +783,44 @@ Wire it after the model loader (after H3 Mask-Aware ControlNet if you use one) a
 `docs/character_replacement.md`. Measure it with `tools/h3_replace_bench.py` before you rely on it. Tested on CPU:
 the bias equals a dense-mask attention to 1e-5, and through core's own H3 attention module to 1e-4.
 
+## H3 Prompt Writer (node, 2026-11-23)
+
+A workflow node that writes a MiniMax H3 prompt in the official format, looking at what you connect. It replaces the
+floating window of the H3 Prompt Writer extension (MIT, ported; see CREDITS.md). Prompt Writer v2 below is unchanged.
+
+- **Modes:** T2VA, I2VA (first frame), FL2VA (first and last frame), L2VA (last frame), Reference, and three
+  fixed-task reference modes: V2V edit, Replacement (the plate keeps composition, motion and sound; the pictures give
+  only the new subject's look) and Continuation.
+- **Inputs:** `images`, `images_2`, `images_3` (every batch item is the next `<Picture N>`), `video` (`<Video 1>`),
+  `video_frames` (an IMAGE sequence, the next `<Video N>`), `audio` (`<Audio 1>`). A video reaches the model as one
+  ordered contact sheet (`video_samples` frames), never every frame. In V2V edit / Replacement / Continuation the
+  plate's own sound becomes an audio reference (`keep_plate_audio`).
+- **Providers:** `template (no LLM)` (offline, deterministic, passes the format audit), `huggingface transformers
+  (local)` with any repo id you type (Qwen3-VL, Gemma 4, community models such as `Jackrong/Qwopus3.5-4B-v3`) or a
+  local folder, with device / dtype / 8-bit / 4-bit and `trust_remote_code` (off by default); `gguf llama.cpp
+  (local)` (run in a child process, so a llama.cpp crash cannot take ComfyUI down); Ollama; any OpenAI-compatible
+  server; the OpenAI, Anthropic and Gemini APIs. `model_preset` lists tested models; `model_id` wins.
+- **Media per model:** what a model can take is checked before the call. A model that cannot see images or hear audio
+  stops with a sentence naming the input and the way out (`media_to_model`: send all, images and video only, labels
+  only).
+- **Quality checks:** the written prompt is audited against the official format (sections and order, instruction
+  line, task label, `[Shot 1]`, timestamps, speaker IDs, reference tags); one repair pass fixes objective failures.
+- **Outputs:** `prompt`, `negative` (yours, or a short default) and `report` (provider, model, download, guide source,
+  references and what was sent, audit, repair, tokens, time).
+- **Downloads:** never at import. A missing local model is downloaded into `models/LLM/` only when the node runs, with
+  progress text, and only if `downloads` allows it and the C2C setting "Never download models" is off
+  (`C2C_NO_DOWNLOADS=1` and `MMX_PROMPT_WRITER_OFFLINE=1` also stop it).
+- **Keys:** the same rules as Prompt Writer v2: the key comes from the environment variable you name, is sent only to
+  localhost, its own service or `MMX_PROMPT_WRITER_HOSTS`, and never appears in the workflow, outputs or report.
+- **Guides:** the official MiniMax guides are not shipped (licence, see CREDITS.md). Put
+  `VIDEO_PROMPT_WRITING_GUIDE_base_en.md` and `VIDEO_PROMPT_WRITING_GUIDE_ref_en.md` in `models/LLM/h3_prompt_guides/`,
+  or let a run fetch them (pinned revision, SHA-256 checked); without them a built-in format summary is used and the
+  report says so.
+- Example: `workflows/h3_prompt_writer_reference.json`. Design: `docs/PLAN_h3_prompt_writer_node.md`.
+- Tested here: unit tests on CPU (template for all modes, audit and repair, provider payloads on recorded HTTP, key
+  rules, download gate, a tiny random transformers model). Not tested here: real cloud APIs, large local models, prompt
+  quality on real H3 renders.
+
 ## MiniMax H3 Prompt Writer v2
 
 Writes the structured H3 prompt for any H3 Family Presets task from a plain-language brief. It plans 8 fields (scene

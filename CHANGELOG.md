@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **H3 Prompt Writer** node (`MiniMaxH3_H3PromptWriter`, category `MiniMax H3/Prompt`; design
+  `docs/PLAN_h3_prompt_writer_node.md`): the H3 Prompt Writer extension's prompt logic (MIT, ported) as a workflow node
+  with image / video / image-sequence / audio sockets, eight modes, and any provider - offline template, local Hugging
+  Face transformers (any repo id), local GGUF (child process), Ollama, OpenAI-compatible, OpenAI, Anthropic, Gemini.
+  Official-format audit plus one repair pass. Prompt, negative and report outputs. Example workflow
+  `workflows/h3_prompt_writer_reference.json`.
+- Prompt Writer v2: its description points to the new node (no input change; saved workflows load unchanged).
 - **Viggle Remake on H3** (category `MiniMax H3/Replace`; design `docs/PLAN_h3_replacement_quality.md`): H3 Remake
   Conditioning (Viggle), H3 Remake Keyframe Until, H3 Remake Noise, H3 Remake Prefix - ported from the reference
   nodes (Apache-2.0, CREDITS.md) - and **H3 Remake Replace**, the adapter from an approved anchor + a plate window to

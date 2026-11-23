@@ -1,0 +1,270 @@
+{
+  "models": [
+    {
+      "id": "qwen3-vl-2b-instruct",
+      "display_name": "Qwen3-VL 2B Instruct (HF)",
+      "provider": "hf",
+      "repo": "Qwen/Qwen3-VL-2B-Instruct",
+      "revision": "89644892e4d85e24eaac8bacfd4f463576704203",
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "qwen3-vl-4b-instruct",
+      "display_name": "Qwen3-VL 4B Instruct (HF)",
+      "provider": "hf",
+      "repo": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "ebb281ec70b05090aa6165b016eac8ec08e71b17",
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "qwen3-vl-8b-instruct",
+      "display_name": "Qwen3-VL 8B Instruct (HF)",
+      "provider": "hf",
+      "repo": "Qwen/Qwen3-VL-8B-Instruct",
+      "revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "gemma-4-e2b-it",
+      "display_name": "Gemma 4 E2B it (HF)",
+      "provider": "hf",
+      "repo": "google/gemma-4-E2B-it",
+      "revision": "4adf15748de9e1a0097b6274cee9c15836c41c37",
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": true
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "gemma-4-e4b-it",
+      "display_name": "Gemma 4 E4B it (HF)",
+      "provider": "hf",
+      "repo": "google/gemma-4-E4B-it",
+      "revision": "4ecc2ba63bcac23ba4a767fc87025b1450f84c9c",
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": true
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "qwopus3.5-0.8b-v3",
+      "display_name": "Qwopus 3.5 0.8B v3 (HF)",
+      "provider": "hf",
+      "repo": "Jackrong/Qwopus3.5-0.8B-v3",
+      "revision": "7d8c5dbfef873126210a30a4e2e6489491d6b651",
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "qwopus3.5-2b-v3",
+      "display_name": "Qwopus 3.5 2B v3 (HF)",
+      "provider": "hf",
+      "repo": "Jackrong/Qwopus3.5-2B-v3",
+      "revision": "2d7b7c5f19a4dd142e18bca6ac60c22dd86cf819",
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "qwopus3.5-4b-v3",
+      "display_name": "Qwopus 3.5 4B v3 (HF)",
+      "provider": "hf",
+      "repo": "Jackrong/Qwopus3.5-4B-v3",
+      "revision": "99e41a88ff18e15cf49e30b054046513a676c9ba",
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "smolvlm2-2.2b-instruct",
+      "display_name": "SmolVLM2 2.2B Instruct (HF)",
+      "provider": "hf",
+      "repo": "HuggingFaceTB/SmolVLM2-2.2B-Instruct",
+      "revision": "be92141c8d0ceb98596a923c308ac2bbb4a7c466",
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "qwen3-4b-instruct-2507",
+      "display_name": "Qwen3 4B Instruct 2507, text only (HF)",
+      "provider": "hf",
+      "repo": "Qwen/Qwen3-4B-Instruct-2507",
+      "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+      "capabilities": {
+        "images": false,
+        "video_frames": false,
+        "audio": false
+      },
+      "notes": "repo id and revision verified on the Hugging Face API 2026-11-23; capabilities are re-read from the processor at run time"
+    },
+    {
+      "id": "gemma-4-E4B-it-Q3_K_M-GGUF",
+      "display_name": "Gemma 4 E4B Q3_K_M (GGUF)",
+      "provider": "gguf",
+      "repo": "unsloth/gemma-4-E4B-it-GGUF",
+      "revision": "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+      "files": [
+        "gemma-4-E4B-it-Q3_K_M.gguf",
+        "mmproj-BF16.gguf"
+      ],
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "from the H3 Prompt Writer catalog (MIT); vision needs a llama-cpp-python chat handler for this architecture, else use llama-server + 'openai-compatible server'"
+    },
+    {
+      "id": "gemma-4-12b-it-Q4_K_S-GGUF",
+      "display_name": "Gemma 4 12B Q4_K_S (GGUF)",
+      "provider": "gguf",
+      "repo": "unsloth/gemma-4-12b-it-GGUF",
+      "revision": "fc034cfff751157913579611efad8462ac1be606",
+      "files": [
+        "gemma-4-12b-it-Q4_K_S.gguf",
+        "mmproj-BF16.gguf"
+      ],
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "from the H3 Prompt Writer catalog (MIT); vision needs a llama-cpp-python chat handler for this architecture, else use llama-server + 'openai-compatible server'"
+    },
+    {
+      "id": "gemma-4-12b-it-GGUF",
+      "display_name": "Gemma 4 12B Q5_K_M (GGUF)",
+      "provider": "gguf",
+      "repo": "unsloth/gemma-4-12b-it-GGUF",
+      "revision": "fc034cfff751157913579611efad8462ac1be606",
+      "files": [
+        "gemma-4-12b-it-Q5_K_M.gguf",
+        "mmproj-BF16.gguf"
+      ],
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "from the H3 Prompt Writer catalog (MIT); vision needs a llama-cpp-python chat handler for this architecture, else use llama-server + 'openai-compatible server'"
+    },
+    {
+      "id": "gemma-4-26B-A4B-it-GGUF",
+      "display_name": "Gemma 4 26B-A4B Q4_K_M (GGUF)",
+      "provider": "gguf",
+      "repo": "unsloth/gemma-4-26B-A4B-it-GGUF",
+      "revision": "c099eb48e663fd284577b04978a94ffccb261841",
+      "files": [
+        "gemma-4-26B-A4B-it-UD-Q4_K_M.gguf",
+        "mmproj-BF16.gguf"
+      ],
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "from the H3 Prompt Writer catalog (MIT); vision needs a llama-cpp-python chat handler for this architecture, else use llama-server + 'openai-compatible server'"
+    },
+    {
+      "id": "gemma-4-31B-it-GGUF",
+      "display_name": "Gemma 4 31B Q4_K_XL (GGUF)",
+      "provider": "gguf",
+      "repo": "unsloth/gemma-4-31B-it-GGUF",
+      "revision": "c1ac76e99d5513b141e8adde7288b85c3f9c32ec",
+      "files": [
+        "gemma-4-31B-it-UD-Q4_K_XL.gguf",
+        "mmproj-BF16.gguf"
+      ],
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "from the H3 Prompt Writer catalog (MIT); vision needs a llama-cpp-python chat handler for this architecture, else use llama-server + 'openai-compatible server'"
+    },
+    {
+      "id": "qwen3.8-27b-ud-q4-k-xl-gguf",
+      "display_name": "Qwen 3.8 27B UD-Q4_K_XL (GGUF)",
+      "provider": "gguf",
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "revision": "4ca720788d1e01f1bff70c033e0d0028fd02e502",
+      "files": [
+        "Qwen3.8-27B-UD-Q4_K_XL.gguf",
+        "mmproj-BF16.gguf"
+      ],
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "from the H3 Prompt Writer catalog (MIT); vision needs a llama-cpp-python chat handler for this architecture, else use llama-server + 'openai-compatible server'"
+    },
+    {
+      "id": "qwen3-vl-8b-instruct-q4-k-m-gguf",
+      "display_name": "Qwen3-VL 8B Instruct Q4_K_M (GGUF)",
+      "provider": "gguf",
+      "repo": "Qwen/Qwen3-VL-8B-Instruct-GGUF",
+      "revision": "f982a07559d4a2f6c8744d840bf6fccab30eea96",
+      "files": [
+        "Qwen3VL-8B-Instruct-Q4_K_M.gguf",
+        "mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
+      ],
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "from the H3 Prompt Writer catalog (MIT); vision needs a llama-cpp-python chat handler for this architecture, else use llama-server + 'openai-compatible server'"
+    },
+    {
+      "id": "qwopus3.8-27b-flash-v2-q4-k-m-gguf",
+      "display_name": "Qwopus 3.8 27B Flash V2 Q4_K_M (GGUF)",
+      "provider": "gguf",
+      "repo": "Jackrong/Qwopus3.8-27B-Flash-V2-GGUF",
+      "revision": "86c0e7b169e5c8a24a95f031513e14441f24617a",
+      "files": [
+        "Qwopus3.8-27B-Flash-V2-MTP-Q4_K_M.gguf",
+        "mmproj-F32.gguf"
+      ],
+      "capabilities": {
+        "images": true,
+        "video_frames": true,
+        "audio": false
+      },
+      "notes": "community Qwen 3.8 fine-tune (Apache-2.0), repo verified 2026-11-23; vision needs a newer llama.cpp than llama-cpp-python 0.3.23: run llama-server and use 'openai-compatible server'"
+    }
+  ]
+}

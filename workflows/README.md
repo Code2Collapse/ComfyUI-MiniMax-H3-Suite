@@ -211,3 +211,11 @@ Track C: any SDR clip to real HDR with the side-by-side In-Context LoRA (`h3_hdr
 
 Both graphs were built and serialized in the real frontend (core 0.39.0 + frontend 1.53.10): every widget was set by
 name and read back, and every required input is linked. Not run on a GPU yet.
+
+# H3 Prompt Writer — `h3_prompt_writer_reference.json`
+
+Load Image -> **H3 Prompt Writer** (mode Reference, provider `template (no LLM)`) -> two Preview as Text nodes (PROMPT and
+REPORT). Runs offline with no model. Pick another provider (a local Hugging Face model id such as
+`Qwen/Qwen3-VL-4B-Instruct`, a GGUF, Ollama, an OpenAI-compatible server or a cloud API) to have a model write the
+prompt from the picture; wire PROMPT into your H3 text encode. Built and exported from the live frontend (core 0.39.0,
+frontend 1.53.10); replace `example.png` with your own reference.

@@ -125,7 +125,11 @@ def scrub(text: str, *secrets: str) -> str:
 def _request(method: str, url: str, headers: dict[str, str], body: Any, timeout: float, secret: str) -> Any:
     data = None if body is None else json.dumps(body).encode("utf-8")
     req = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json",
-                                                                          "Accept": "application/json", **headers})
+                                                                          "Accept": "application/json"})
+    # Key headers are "unredirected": urllib copies only req.headers to a redirect target, so a 30x from an allowed
+    # host can never carry the key to another host (2026-11-23 review of the H3 Prompt Writer node).
+    for k, v in headers.items():
+        req.add_unredirected_header(k, v)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             raw = r.read()

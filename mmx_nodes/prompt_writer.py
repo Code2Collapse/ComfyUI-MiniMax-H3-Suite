@@ -66,7 +66,8 @@ class MiniMaxH3_PromptWriter(io.ComfyNode):
                 "Writes the structured H3 prompt for a task from a plain-language brief. 'template (no LLM)' is "
                 "deterministic and needs no model; an LLM backend (Ollama, an OpenAI-compatible server such as "
                 "llama-server or LM Studio, or a cloud API) refines the descriptive fields over HTTP. Any failure "
-                "falls back to the template and the report says why."
+                "falls back to the template and the report says why. For mode-based prompts that look at "
+                "connected images, video and audio, use H3 Prompt Writer."
             ),
             inputs=[
                 io.Combo.Input("family", options=list(FAMILY_IDS), default="replace_keep_composition",
