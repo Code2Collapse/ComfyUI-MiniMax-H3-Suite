@@ -76,7 +76,10 @@ class MiniMaxH3_PromptWriter(io.ComfyNode):
                 io.String.Input("brief", default="", multiline=True,
                                 tooltip="What you want, in plain words: look, light, mood, what the character "
                                         "does. Only what the brief says is described - nothing is invented."),
-                io.String.Input("subject_name", default="the character"),
+                io.String.Input("subject_name", default="the character",
+                                tooltip="How <Subject 1> is named in the family template's sentences (e.g. "
+                                        "'<Subject 1> is the character ...'); also given to the LLM. Blank = "
+                                        "'primary subject'."),
                 io.Combo.Input("head_size_mode", options=list(HEAD_SIZE_MODES), default=HEAD_SIZE_MODES[0],
                                tooltip="Same as on H3 Subject Crop / H3 Family Presets.", extra_dict={'c2c_show_if': {'family': ['replace_keep_composition', 'replace_change_pose', 'replace_keep_pose_change_look', 'expression_transfer', 'replace_masked_subject', 'replace_across_video']}}),
                 io.Boolean.Input("face_closeup_reference", default=False,
@@ -93,20 +96,28 @@ class MiniMaxH3_PromptWriter(io.ComfyNode):
                                 tooltip="The NAME of the environment variable that holds the API key (blank = "
                                         "ANTHROPIC_API_KEY / GEMINI_API_KEY / OPENAI_API_KEY). The key itself is "
                                         "never stored in the workflow.", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
-                io.Int.Input("timeout_s", default=90, min=5, max=600, tooltip="Per request.", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
+                io.Int.Input("timeout_s", default=90, min=5, max=600, tooltip="Seconds to wait for one HTTP request to the backend before it counts as failed (then "
+                                                                     "retries, then on_failure).", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
                 io.Int.Input("retries", default=1, min=0, max=3,
                              tooltip="Extra attempts after a timeout, 429 or 5xx (1 s, 2 s apart).", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
-                io.Float.Input("temperature", default=0.4, min=0.0, max=1.5, step=0.05, extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
-                io.Int.Input("max_tokens", default=1200, min=256, max=8192, extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
+                io.Float.Input("temperature", default=0.4, min=0.0, max=1.5, step=0.05,
+                               tooltip="Sampling temperature sent to the LLM backend (0 = most repeatable).", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
+                io.Int.Input("max_tokens", default=1200, min=256, max=8192,
+                             tooltip="Most tokens the LLM backend may reply with (its JSON of descriptive fields).", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
                 io.Combo.Input("on_failure", options=list(ON_FAILURE), default=ON_FAILURE[0],
                                tooltip="What to do when the backend fails: use the deterministic template "
                                        "(the report says why) or stop the run with the reason.", extra_dict={'c2c_section': 'LLM', 'c2c_show_if': {'backend': ['ollama', 'openai-compatible server', 'anthropic api', 'gemini api', 'openai api']}}),
             ],
             outputs=[
-                io.String.Output("prompt", display_name="PROMPT"),
+                io.String.Output("prompt", display_name="PROMPT",
+                                 tooltip="The structured H3 prompt: the family's template sections filled from the "
+                                         "8-field plan (LLM-refined fields where the backend succeeded)."),
                 io.String.Output("plan", display_name="PLAN",
                                  tooltip="The 8-field plan as JSON, with where each field came from."),
-                io.String.Output("report", display_name="REPORT"),
+                io.String.Output("report", display_name="REPORT",
+                                 tooltip="Text report: backend used and time, HTTP log, which fields came from the "
+                                         "LLM, repairs and problems, and why the template was used on a failure "
+                                         "(API keys removed)."),
             ],
         )
 

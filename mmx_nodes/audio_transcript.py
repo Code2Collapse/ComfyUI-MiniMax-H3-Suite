@@ -348,6 +348,13 @@ class DenoAudioTranscript:
 
     RETURN_TYPES = ("STRING", "STRING", "AUDIO")
     RETURN_NAMES = ("audio_context", "transcript", "audio")
+    OUTPUT_TOOLTIPS = (
+        "Plain-text transcript block for a prompt writer: requested and detected language, a confidence band "
+        "from Whisper's mean avg_logprob, the transcript and [start-end] segments in seconds; with "
+        "manual_transcript, that exact text first.",
+        "The effective transcript text: manual_transcript when it is non-empty, otherwise Whisper's text.",
+        "The input audio passed through unchanged.",
+    )
     FUNCTION = "transcribe"
     CATEGORY = "MiniMax H3/Audio"
     DESCRIPTION = (
@@ -361,12 +368,31 @@ class DenoAudioTranscript:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "audio": ("AUDIO",),
-                "model": (list(MODEL_CHOICES), {"default": "large-v3-turbo"}),
-                "language": (list(LANGUAGE_CHOICES), {"default": "auto"}),
+                "audio": ("AUDIO", {
+                    "tooltip": (
+                        "One audio clip (batch 1, mono or stereo) to transcribe. It is mixed to mono and "
+                        "resampled to 16 kHz for Whisper (torchaudio needed for other rates)."
+                    ),
+                }),
+                "model": (list(MODEL_CHOICES), {
+                    "default": "large-v3-turbo",
+                    "tooltip": (
+                        "Official openai-whisper checkpoint. Downloaded on first use to "
+                        "models/stt/whisper; runs on CUDA when available, after ComfyUI unloads its "
+                        "models to make room."
+                    ),
+                }),
+                "language": (list(LANGUAGE_CHOICES), {
+                    "default": "auto",
+                    "tooltip": "Spoken language passed to Whisper; auto lets Whisper detect it.",
+                }),
                 "model_after_run": (
                     list(MODEL_AFTER_RUN_CHOICES),
-                    {"default": "Unload after run", "c2c_section": "Memory"},
+                    {"default": "Unload after run", "c2c_section": "Memory",
+                     "tooltip": (
+                         "Unload after run: drop the Whisper model and free VRAM after each run (also "
+                         "after an error). Keep loaded: reuse it on the next run with the same model."
+                     )},
                 ),
             },
             "optional": {

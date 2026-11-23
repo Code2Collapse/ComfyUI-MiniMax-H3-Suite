@@ -51,7 +51,8 @@ class MiniMaxH3_NativeAudioLock(io.ComfyNode):
                 "the mouth drifts; a sample-rate mismatch that is silently resampled changes pitch."
             ),
             inputs=[
-                io.Model.Input("model"),
+                io.Model.Input("model", tooltip="The H3 model to sample with. It is cloned and given the "
+                                                "lock-audio-clean flag (minimax_h3_lock_audio_clean)."),
                 io.Latent.Input(
                     "av_latent",
                     tooltip="Joint MiniMax H3 AV latent (NestedTensor video+audio).",
@@ -67,10 +68,16 @@ class MiniMaxH3_NativeAudioLock(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Model.Output("model"),
-                io.Latent.Output("av_latent"),
-                io.Audio.Output("exact_audio"),
-                io.String.Output("report"),
+                io.Model.Output("model", tooltip="The model clone with the audio-lock flag set: H3 keeps the audio "
+                                                 "stream at its clean timestep. Sample with this model."),
+                io.Latent.Output("av_latent", tooltip="The AV latent with the encoded audio in the audio stream and a "
+                                                      "noise mask: audio 0 (kept), video as before (all 1, or the "
+                                                      "region mask already on the latent)."),
+                io.Audio.Output("exact_audio", tooltip="A copy of the input audio, unchanged (original rate and "
+                                                       "channels): mux it with the decoded video."),
+                io.String.Output("report", tooltip="Text: input and VAE sample rates, resampling, audio vs clip "
+                                                   "duration, fit notes and warnings, and whether a region mask "
+                                                   "was kept."),
             ],
         )
 
@@ -128,7 +135,8 @@ class MiniMaxH3_ReferenceAudio(io.ComfyNode):
                 "two channels."
             ),
             inputs=[
-                io.Audio.Input("audio"),
+                io.Audio.Input("audio", tooltip="The reference clip (first batch item is used): any channel count "
+                                                "and sample rate."),
                 io.Float.Input(
                     "max_seconds",
                     default=10.0,
@@ -140,8 +148,10 @@ class MiniMaxH3_ReferenceAudio(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Audio.Output("audio"),
-                io.String.Output("report"),
+                io.Audio.Output("audio", tooltip="The clip as stereo 32 kHz (mono duplicated, extra channels "
+                                                 "dropped, resampled), cut to max_seconds: a Ref2VA reference audio."),
+                io.String.Output("report", tooltip="One line: channels, rate and length out, and what was changed "
+                                                   "(or 'already valid')."),
             ],
         )
 
@@ -163,7 +173,7 @@ class MiniMaxH3_AudioTrimStart(io.ComfyNode):
                 "each shot's duplicated first frame (1/24s) from video AND audio together."
             ),
             inputs=[
-                io.Audio.Input("audio"),
+                io.Audio.Input("audio", tooltip="The clip to shorten (every batch item and channel, rate kept)."),
                 io.Float.Input(
                     "seconds",
                     default=0.04167,
@@ -174,8 +184,9 @@ class MiniMaxH3_AudioTrimStart(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Audio.Output("audio"),
-                io.String.Output("report"),
+                io.Audio.Output("audio", tooltip="The same audio without its first 'seconds' (rounded to whole "
+                                                 "samples); sample rate unchanged."),
+                io.String.Output("report", tooltip="One line: seconds and samples removed, and the new length."),
             ],
         )
 

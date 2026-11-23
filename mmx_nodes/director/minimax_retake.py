@@ -112,8 +112,11 @@ class MiniMaxH3RetakeStitch(io.ComfyNode):
             ],
             outputs=[
                 io.Image.Output(display_name="images", tooltip="Full-length video frames at 24 fps."),
-                io.Audio.Output(display_name="audio"),
-                io.Float.Output(display_name="fps"),
+                io.Audio.Output(display_name="audio",
+                                tooltip="Stereo 44.1 kHz soundtrack: base head + the retake's audio (or the base "
+                                        "audio with keep_base_audio / no audio) + base tail, each piece padded to its "
+                                        "video piece. Without a retake: the audio input, or silence."),
+                io.Float.Output(display_name="fps", tooltip="Always 24.0 (H3's frame rate). Wire into CreateVideo."),
             ],
         )
 

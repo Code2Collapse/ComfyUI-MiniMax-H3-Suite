@@ -85,7 +85,9 @@ class MiniMaxH3_H3PromptWriter(io.ComfyNode):
                                         "<Video 1>, <Audio 1> to give each a role."),
                 io.Float.Input("duration_seconds", default=5.0, min=1.0, max=20.0, step=0.5,
                                tooltip="Target video length in seconds."),
-                io.Combo.Input("aspect_ratio", options=list(ASPECT_RATIOS), default=ASPECT_RATIOS[0]),
+                io.Combo.Input("aspect_ratio", options=list(ASPECT_RATIOS), default=ASPECT_RATIOS[0],
+                               tooltip="Aspect ratio stated to the model in the request (LLM providers; the template "
+                                       "does not use it). Text only: nothing is resized."),
                 io.Combo.Input("provider", options=list(PROVIDERS), default=TEMPLATE,
                                tooltip="template (no LLM) is offline and deterministic. The others write the prompt "
                                        "with a model: local (transformers, GGUF) or over HTTP."),
@@ -103,8 +105,13 @@ class MiniMaxH3_H3PromptWriter(io.ComfyNode):
                                 tooltip="The NAME of the environment variable holding the API key (blank = the "
                                         "provider's usual one). The key is never stored in the workflow.",
                                 extra_dict=_show(*_HTTP, section="Provider")),
-                io.Combo.Input("device", options=list(DEVICES), default="auto", extra_dict=_show(HF_LOCAL)),
-                io.Combo.Input("dtype", options=list(DTYPES), default="auto", extra_dict=_show(HF_LOCAL)),
+                io.Combo.Input("device", options=list(DEVICES), default="auto",
+                               tooltip="Local transformers model only: where it runs. auto = CUDA when available, "
+                                       "else CPU; cuda stops with an error when there is no GPU.",
+                               extra_dict=_show(HF_LOCAL)),
+                io.Combo.Input("dtype", options=list(DTYPES), default="auto",
+                               tooltip="Local transformers model only: weight precision. auto = float32 on CPU, the "
+                                       "checkpoint's own dtype on CUDA.", extra_dict=_show(HF_LOCAL)),
                 io.Combo.Input("quantization", options=list(QUANTIZATIONS), default="none",
                                tooltip="8-bit / 4-bit need bitsandbytes and a CUDA GPU.", extra_dict=_show(HF_LOCAL)),
                 io.Boolean.Input("trust_remote_code", default=False,
@@ -128,8 +135,12 @@ class MiniMaxH3_H3PromptWriter(io.ComfyNode):
                 io.Int.Input("video_samples", default=6, min=2, max=24,
                              tooltip="Frames on each video's contact sheet."),
                 io.Float.Input("temperature", default=1.0, min=0.0, max=2.0, step=0.05,
+                               tooltip="Sampling temperature of the model's reply (top_p 0.95); the one repair "
+                                       "request always uses 0.3.",
                                extra_dict=_show(*_LLM, section="Advanced")),
                 io.Int.Input("max_tokens", default=2048, min=256, max=16384,
+                             tooltip="Most tokens the model may reply with. A reply cut off at this limit is an "
+                                     "error: raise it.",
                              extra_dict=_show(*_LLM, section="Advanced")),
                 # control_after_generate=False: the frontend would otherwise add a "randomize" control to any
                 # input named seed, so every queue would ask the model again and the prompt would never be cached.
@@ -162,12 +173,21 @@ class MiniMaxH3_H3PromptWriter(io.ComfyNode):
                                tooltip="A video as an IMAGE sequence: the next <Video N>."),
                 io.Float.Input("video_frames_fps", default=24.0, min=1.0, max=240.0, optional=True,
                                tooltip="Frame rate of video_frames, for the timestamps."),
-                io.Audio.Input("audio", optional=True, tooltip="<Audio 1>."),
+                io.Audio.Input("audio", optional=True,
+                               tooltip="<Audio 1>. Mixed to mono, the first 30 s sent as 16 kHz WAV when "
+                                       "media_to_model sends media and the model takes audio; otherwise only the "
+                                       "label (its role comes from the brief)."),
             ],
             outputs=[
-                io.String.Output("prompt", display_name="PROMPT"),
-                io.String.Output("negative", display_name="NEGATIVE"),
-                io.String.Output("report", display_name="REPORT"),
+                io.String.Output("prompt", display_name="PROMPT",
+                                 tooltip="The H3 prompt in the mode's official format: the template's text, or the "
+                                         "model's reply (corrected once when repair is on and the format audit "
+                                         "fails)."),
+                io.String.Output("negative", display_name="NEGATIVE",
+                                 tooltip="The negative input, or a short built-in default negative when it is blank."),
+                io.String.Output("report", display_name="REPORT",
+                                 tooltip="Text report: mode and provider, each reference and whether it was sent, "
+                                         "guide source, format audit, repair, tokens and timing (API keys removed)."),
             ],
         )
 

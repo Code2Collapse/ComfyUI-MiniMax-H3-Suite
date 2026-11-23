@@ -101,11 +101,15 @@ class MiniMaxH3_AnchorStudio(io.ComfyNode):
                                           "conditioning are connected, else the whole image)."),
                     io.String.Input("prompt", default="", multiline=True,
                                     tooltip="The anchor prompt: kept in the metadata with the approval."),
-                    io.Float.Input("detection_threshold", default=0.4, min=0.0, max=1.0, step=0.01, extra_dict={'c2c_section': 'Detection'}),
+                    io.Float.Input("detection_threshold", default=0.4, min=0.0, max=1.0, step=0.01,
+                                   tooltip="Score threshold for core SAM3_Detect when it looks for the person in each "
+                                           "candidate and reference (needs model + conditioning); lower finds more.", extra_dict={'c2c_section': 'Detection'}),
                     io.Float.Input("min_overlap", default=0.3, min=0.0, max=1.0, step=0.01,
                                    tooltip="The candidate's person must cover this share of the performer's area; "
                                            "someone merely touching the spot does not count.", extra_dict={'c2c_section': 'Detection'}),
-                    io.Int.Input("tile", default=256, min=96, max=1024, extra_dict={'c2c_section': 'Output'})],
+                    io.Int.Input("tile", default=256, min=96, max=1024,
+                                 tooltip="Size in pixels of each square tile on the contact sheet (source + each "
+                                         "candidate, letterboxed).", extra_dict={'c2c_section': 'Output'})],
             outputs=[io.Image.Output("candidates", tooltip="At the source size."),
                      io.Mask.Output("masks", tooltip="The new character in each candidate."),
                      io.Image.Output("sheet", tooltip="Source + candidates, numbered, with their numbers."),
@@ -220,17 +224,32 @@ class MiniMaxH3_AnchorApproval(io.ComfyNode):
                         "Memory and every segment use it; a rejected candidate is never used. With decision = review "
                         "it gives the approved anchor of this source frame; until one is approved, what needs it waits "
                         "(no error) and 'status' says what to do.",
-            inputs=[io.Image.Input("candidates"), io.String.Input("metadata", force_input=True),
-                    io.Mask.Input("masks", optional=True),
+            inputs=[io.Image.Input("candidates", tooltip="H3 Anchor Studio's candidates output (checked against the "
+                                                         "metadata's checksums)."),
+                    io.String.Input("metadata", force_input=True,
+                                    tooltip="H3 Anchor Studio's metadata (h3.anchor_candidates JSON): checksums, person "
+                                            "check and colour scores of each candidate."),
+                    io.Mask.Input("masks", optional=True,
+                                  tooltip="H3 Anchor Studio's masks: the approved candidate's mask is saved with it and "
+                                          "becomes anchor_mask."),
                     io.String.Input("bank", optional=True, force_input=True,
                                     tooltip="A Reference Bank to add the approved anchor to (role identity)."),
                     io.String.Input("job", default="h3_job", tooltip="The H3 job that keeps the decision."),
-                    io.Combo.Input("decision", options=["review", "approve", "reject"], default="review"),
-                    io.Int.Input("candidate", default=0, min=0, max=256),
-                    io.String.Input("note", default="", extra_dict={'c2c_show_if': {'decision': ['approve', 'reject']}})],
-            outputs=[io.Image.Output("anchor"), io.Mask.Output("anchor_mask"),
+                    io.Combo.Input("decision", options=["review", "approve", "reject"], default="review",
+                                   tooltip="review: only output this source frame's approved anchor (wait if none). "
+                                           "approve / reject: record that for candidate '#' in the job (once; an "
+                                           "approved one is saved as a 16-bit PNG in the job folder)."),
+                    io.Int.Input("candidate", default=0, min=0, max=256,
+                                 tooltip="The '#' of the candidate on H3 Anchor Studio's sheet to approve or reject."),
+                    io.String.Input("note", default="",
+                                    tooltip="Free text kept with the decision in the job (and shown in status).", extra_dict={'c2c_show_if': {'decision': ['approve', 'reject']}})],
+            outputs=[io.Image.Output("anchor", tooltip="The approved anchor image for this source frame, read back "
+                                                       "from the job. Waits (no error) while none is approved."),
+                     io.Mask.Output("anchor_mask", tooltip="Its saved mask (1 = the new character); all zero when no "
+                                                           "masks were connected at approval."),
                      io.String.Output("bank", tooltip="The bank with the approved anchor (identity)."),
-                     io.String.Output("status")],
+                     io.String.Output("status", tooltip="What was approved (candidate, checksum, job, note), or what "
+                                                        "to do while no anchor is approved.")],
         )
 
     @classmethod
@@ -338,12 +357,20 @@ class MiniMaxH3_PropConsistencyChecker(io.ComfyNode):
                     io.Int.Input("anchor_index", default=-1, min=-1, max=256,
                                  tooltip="Which reference is the anchor (props the performer holds are allowed in "
                                          "it); -1 = none."),
-                    io.Combo.Input("policy", options=["stop", "warn"], default="stop"),
+                    io.Combo.Input("policy", options=["stop", "warn"], default="stop",
+                                   tooltip="stop: when a new prop is found, block references and prompt (what follows "
+                                           "does not run). warn: pass them through and put a warning in the report."),
                     io.Float.Input("threshold", default=0.7, min=0.0, max=1.0, step=0.01,
                                    tooltip="SAM 3 score a prop needs (the reference's 0.7: fewer false props).", extra_dict={'c2c_section': 'Detection'})],
             outputs=[io.Image.Output("references", tooltip="Passed through when the check passes (policy stop)."),
                      io.String.Output("prompt", tooltip="Passed through when the check passes (policy stop)."),
-                     io.Boolean.Output("ok"), io.String.Output("report"), io.Image.Output("overlay")],
+                     io.Boolean.Output("ok", tooltip="True when no unlocked prop appears in the references, anchor "
+                                                     "or prompt that the performer does not hold in the source."),
+                     io.String.Output("report", tooltip="JSON: props held in the source, props found and where, "
+                                                        "allowed locked props, ok, policy, per-view checks and the "
+                                                        "warning / stop message."),
+                     io.Image.Output("overlay", tooltip="Source and each reference side by side (256 px tiles): the "
+                                                        "person tinted blue, found props tinted red.")],
         )
 
     @classmethod

@@ -138,10 +138,16 @@ class MiniMaxH3_AVBridge(io.ComfyNode):
                                extra_dict={"c2c_section": "Frame rate"}),
             ],
             outputs=[
-                io.Latent.Output(display_name="latent"),
+                io.Latent.Output(display_name="latent",
+                                 tooltip="The target AV latent with clip A's last and clip B's first preserve_frames "
+                                         "encoded in (video and audio) and a noise mask: 0 = kept ends, 1 = the "
+                                         "middle to generate. Wire to the sampler."),
                 io.String.Output(display_name="bridge_info", tooltip="For H3 AV Bridge Assemble."),
-                io.Int.Output(display_name="middle_frames"),
-                io.String.Output(display_name="report"),
+                io.Int.Output(display_name="middle_frames",
+                              tooltip="Frames generated between the kept ends: target frames - 2 x preserve_frames."),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: target frames and size, frames / video steps / audio ticks kept at "
+                                         "each end, the generated middle in frames and seconds, any fps conversion."),
             ],
         )
 
@@ -172,11 +178,21 @@ class MiniMaxH3_AVBridgeAssemble(io.ComfyNode):
                 io.String.Input("bridge_info", force_input=True, tooltip="From H3 AV Bridge."),
                 io.Image.Input("start_frames", tooltip="Clip A, as given to the bridge."),
                 io.Image.Input("end_frames", tooltip="Clip B, as given to the bridge."),
-                io.Audio.Input("start_audio", optional=True),
-                io.Audio.Input("end_audio", optional=True),
+                io.Audio.Input("start_audio", optional=True,
+                               tooltip="Clip A's sound, as given to the bridge: made stereo, resampled to the bridge "
+                                       "sound's rate and fitted to clip A's length (silence if not connected)."),
+                io.Audio.Input("end_audio", optional=True,
+                               tooltip="Clip B's sound, handled the same way (silence if not connected)."),
             ],
-            outputs=[io.Image.Output(display_name="images"), io.Audio.Output(display_name="audio"),
-                     io.String.Output(display_name="report")],
+            outputs=[io.Image.Output(display_name="images",
+                                     tooltip="IMAGE batch at 24 fps: all of clip A + the generated middle + all of clip "
+                                             "B (clips resized to the bridge's size when they differ)."),
+                     io.Audio.Output(display_name="audio",
+                                     tooltip="Stereo sound at the bridge sound's rate, cut on the picture's sample "
+                                             "boundaries: exactly as long as the frames."),
+                     io.String.Output(display_name="report",
+                                      tooltip="Text: frame accounting (A + generated + B), sound length in samples "
+                                              "and seconds, and any resizing; also shown on the node.")],
         )
 
     @classmethod
