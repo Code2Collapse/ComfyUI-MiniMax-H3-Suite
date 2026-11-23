@@ -131,7 +131,9 @@ class MiniMaxH3_H3PromptWriter(io.ComfyNode):
                                extra_dict=_show(*_LLM, section="Advanced")),
                 io.Int.Input("max_tokens", default=2048, min=256, max=16384,
                              extra_dict=_show(*_LLM, section="Advanced")),
-                io.Int.Input("seed", default=0, min=0, max=2**31 - 1,
+                # control_after_generate=False: the frontend would otherwise add a "randomize" control to any
+                # input named seed, so every queue would ask the model again and the prompt would never be cached.
+                io.Int.Input("seed", default=0, min=0, max=2**31 - 1, control_after_generate=False,
                              tooltip="Change it for a different reply from the same inputs.",
                              extra_dict=_show(*_LLM, section="Advanced")),
                 io.Boolean.Input("repair", default=True,

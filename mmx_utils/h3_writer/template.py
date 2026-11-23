@@ -49,8 +49,11 @@ def _soundscape(brief: str) -> str:
     return "Ambient sound consistent with the described scene, with no sound events beyond those in the brief."
 
 
+_NO_MUSIC = re.compile(r"(?i)\b(?:no|without|not any|avoid)\b[^.;]{0,20}\b(?:music|score|soundtrack|song)\b")
+
+
 def _music(brief: str) -> str:
-    picked = [s for s in _sentences(brief) if _MUSIC_WORDS.search(s)]
+    picked = [s for s in _sentences(brief) if _MUSIC_WORDS.search(s) and not _NO_MUSIC.search(s)]
     return " ".join(_sentence(s) for s in picked) if picked else "N/A"
 
 
