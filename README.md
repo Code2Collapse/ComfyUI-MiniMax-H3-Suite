@@ -1340,3 +1340,9 @@ past the node edge: it shrinks to the panel and ends the text with "...". The fu
 Every input and output of every Suite node (202 nodes) now has a tooltip that says what it does: units, what 0 and
 the extremes do, which mode it applies to, and H3 limits such as 17k+5 frames and multiples of 32. Hover a socket or a
 widget to read it. Node ids, inputs, defaults and behaviour are unchanged, so saved workflows load as before.
+
+## Seven node fixes (2026-11-23)
+
+Per-Frame Denoise, Strongest Pose gap fill, Region Mask (painted masks per frame; sky / ground without depth), Track +
+Crop auto canvas, Color Round-Trip QC (every frame), Vision REF_IMAGES (a list again) and the capture / reset nodes now
+do what their descriptions say. Saved workflows load unchanged; CHANGELOG.md says how each result changes.
