@@ -394,6 +394,29 @@ The decisions for every pack in both reference folders are in the work area's
   Community License), LightX2V FL2VA Turbo, LMS Sharp (Alissonerdx) and the H3 latent upscaler (LBH-123-AI) keep their
   own licences; the code licence does not cover them.
 
+## ComfyUI-MiniMaxH3-Prompt-Writer (H3 Prompt Writer as a node)
+
+- **Source:** ComfyUI-MiniMaxH3-Prompt-Writer, extension 0.4.8 (vendored read-only at
+  `third_party/ComfyUI-MiniMaxH3-Prompt-Writer`), by the "H3 Prompt Writer contributors".
+- **Licence:** MIT (its LICENSE; copy in `THIRD_PARTY_LICENSES/ComfyUI-MiniMaxH3-Prompt-Writer-LICENSE.txt`).
+  MIT code may be included in this GPL-3.0 work; the MIT notice is kept.
+- **Ported into this pack (2026-11-23):** `mmx_utils/h3_writer/` - the mode system wrappers (`system_prompts.py`),
+  the reference-tag policy (`references.py`), the official-format audit (`audit.py`), the repair pass
+  (`repair.py`), the generate / audit / repair flow (`pipeline.py`), the per-reference binding texts and the final
+  grounding contracts (`assembly.py`, `modes.py`), the contact-sheet layout and frame positions (`media.py`), the
+  guide revision pins and shared-rule excerpt (`guides.py`), the GGUF entries of its model catalog (`models.json`).
+  Every ported file starts with a `# PORTED FROM:` header. Node: `MiniMaxH3_H3PromptWriter` ("H3 Prompt Writer").
+- **Changed here:** a workflow node with IMAGE / VIDEO / IMAGE-sequence / AUDIO sockets instead of a floating window
+  and a media session store; three added modes (V2V edit, Replacement, Continuation); a base-mode audit; local
+  Hugging Face transformers (any repo id) beside GGUF (in a child process), Ollama, OpenAI-compatible and cloud APIs;
+  keys through the Suite's existing `llm_http` rules.
+- **Not ported:** the floating window and every `web/` file, the HTTP routes, the media editor / composer, Sequence,
+  Music 3, the standalone app.
+- **Not shipped: the two official MiniMax prompt-writing guides.** They are MiniMax "Documentation" under the MiniMax
+  H3 Community License (territory limits, NOTICE and agreement-copy duties). The node reads them from
+  `models/LLM/h3_prompt_guides/` or fetches them there at the pinned revision (SHA-256 checked) when the user's run
+  may download; otherwise it uses a short format summary written for this pack. Owner decision pending on bundling.
+
 ## Code2Collapse's own packs
 
 `# PORTED FROM:` headers that name ComfyUI-WanNodeExperiments or ComfyUI-CustomNodePacks point at the same

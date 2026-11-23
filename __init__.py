@@ -248,6 +248,8 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.hdr_a29_dataset_nodes", "MiniMaxH3_HDRHDRIToClips"),
     (".mmx_nodes.hdr_a29_dataset_nodes", "MiniMaxH3_HDRMakePairs"),
     (".mmx_nodes.hdr_a29_train_node", "MiniMaxH3_HDRTrainICLoRA"),
+    # owner 2026-11-23: H3 Prompt Writer as a node (ported from third_party/ComfyUI-MiniMaxH3-Prompt-Writer, MIT)
+    (".mmx_nodes.h3_prompt_writer", "MiniMaxH3_H3PromptWriter"),
 )
 
 

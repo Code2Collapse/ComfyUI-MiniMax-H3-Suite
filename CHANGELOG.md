@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+- **H3 Prompt Writer** node (`MiniMaxH3_H3PromptWriter`, category `MiniMax H3/Prompt`; design
+  `docs/PLAN_h3_prompt_writer_node.md`): the H3 Prompt Writer extension's prompt logic (MIT, ported) as a workflow node
+  with image / video / image-sequence / audio sockets, eight modes, and any provider - offline template, local Hugging
+  Face transformers (any repo id), local GGUF (child process), Ollama, OpenAI-compatible, OpenAI, Anthropic, Gemini.
+  Official-format audit plus one repair pass. Prompt, negative and report outputs. Example workflow
+  `workflows/h3_prompt_writer_reference.json`.
+- Prompt Writer v2: its description points to the new node (no input change; saved workflows load unchanged).
+
 ### Fixed
 - Compact-node layout engine: a node removed right after it was created (paste then undo, a script that adds and
   removes) is no longer kept alive by the engine (about 185 KB each, measured in CNP). Same fix as CNP's engine (L9.01).
