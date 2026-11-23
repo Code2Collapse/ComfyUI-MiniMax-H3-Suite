@@ -48,14 +48,19 @@ class MiniMaxH3_TurboLoRA(io.ComfyNode):
                 "OFF=bypass (sharper, more VRAM)."
             ),
             inputs=[
-                io.Model.Input("model"),
-                io.Combo.Input("lora_name", options=names, default=names[0]),
+                io.Model.Input("model", tooltip="MiniMax H3 MODEL. A pruned H3 base (adaln curves) also needs "
+                                                "mmx_utils/h3_silu_temb_grid.safetensors, otherwise an error is raised."),
+                io.Combo.Input("lora_name", options=names, default=names[0],
+                               tooltip="Turbo LoRA file from models/loras. A missing file (or the '<no loras folder>' "
+                                       "placeholder) raises an error."),
                 io.Float.Input(
                     "strength",
                     default=1.0,
                     min=-10.0,
                     max=10.0,
                     step=0.01,
+                    tooltip="LoRA multiplier applied to every patched layer. 1 = as trained; 0 = no effect; "
+                            "negative values subtract the LoRA.",
                 ),
                 io.Boolean.Input(
                     "low_vram",
@@ -67,8 +72,11 @@ class MiniMaxH3_TurboLoRA(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Model.Output("model"),
-                io.String.Output("report"),
+                io.Model.Output("model", tooltip="Clone of the model with the Turbo LoRA applied and the step "
+                                                 "contract (target 4, warn above 8, refuse above 16 steps) stored in "
+                                                 "transformer_options. Wire through H3 Legal Scheduler's model input."),
+                io.String.Output("report", tooltip="Text: LoRA file, strength, merge/bypass mode and the stored step "
+                                                   "contract."),
             ],
         )
 

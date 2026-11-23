@@ -32,10 +32,12 @@ class MiniMaxH3_DualClockShim(io.ComfyNode):
                 "use H3 Sigma Presets to see the audio clock."
             ),
             is_deprecated=True,
-            inputs=[io.Model.Input("model")],
+            inputs=[io.Model.Input("model", tooltip="H3 model to inspect for core's native ModelSamplingAV "
+                                                    "(coupled video/audio sigma schedule). It is not modified.")],
             outputs=[
-                io.Model.Output("model"),
-                io.String.Output("report"),
+                io.Model.Output("model", tooltip="The input model, passed through unchanged (no patch is applied)."),
+                io.String.Output("report", tooltip="Plain-text note: whether native ModelSamplingAV was found, and if "
+                                                   "not, that legacy dual-clock stepping lives in H3 Turbo Sampler."),
             ],
         )
 

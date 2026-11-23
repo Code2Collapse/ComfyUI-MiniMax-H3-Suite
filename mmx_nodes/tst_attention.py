@@ -40,7 +40,12 @@ class MiniMaxH3_TSTAttention(io.ComfyNode):
                                tooltip="Strength. 0 = no patch (the A/B baseline). Usual 0.1-0.3; up to 0.3 when "
                                        "small faces break up. Applied strongest in deep layers and early steps."),
             ],
-            outputs=[io.Model.Output(display_name="model"), io.String.Output(display_name="report")],
+            outputs=[io.Model.Output(display_name="model",
+                                     tooltip="Clone of the model with the TST query correction mounted (attention "
+                                             "override plus wrappers); the unchanged input model when tau = 0."),
+                     io.String.Output(display_name="report",
+                                      tooltip="One line: whether TST was mounted, the tau used and the kill-switch "
+                                              "environment variable. Also shown on the node.")],
         )
 
     @classmethod

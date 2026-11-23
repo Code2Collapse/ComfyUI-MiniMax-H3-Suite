@@ -309,7 +309,15 @@ class MiniMaxH3_LatentUpscaleModel(io.ComfyNode):
                                        "area is marked in the noise mask for the next sampler pass to generate.",
                                        extra_dict={"c2c_show_if": {"fit": ["pad"]}}),
             ],
-            outputs=[io.Latent.Output(display_name="latent"), io.String.Output(display_name="report")],
+            outputs=[io.Latent.Output(display_name="latent",
+                                      tooltip="H3 AV latent with the video half resized to the target cells (audio "
+                                              "unchanged). An H3 AV noise mask is resized with it; padded areas are "
+                                              "marked for regeneration. Re-sample it next (Split Upscale, Tiled "
+                                              "Diffusion or a low-denoise sampler)."),
+                     io.String.Output(display_name="report",
+                                      tooltip="Text: size plan, input/output cells and pixels, scale, method and "
+                                              "device, chunking, and warnings (dropped plain mask or geometry record, "
+                                              "scale above 4x, unequal axis scales). Also shown on the node.")],
         )
 
     @classmethod

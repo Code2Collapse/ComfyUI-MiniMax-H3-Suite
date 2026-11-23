@@ -102,7 +102,13 @@ class MiniMaxH3_LatentColorAnchor(io.ComfyNode):
                 "Late steps are left alone — they are texture, not colour."
             ),
             inputs=[
-                io.Model.Input("model"),
+                io.Model.Input(
+                    "model",
+                    tooltip=(
+                        "MODEL to patch. Cloned with a post-CFG colour-anchor hook; returned unchanged when "
+                        "neither the latent's noise_mask nor the mask input defines a preserved region."
+                    ),
+                ),
                 io.Latent.Input(
                     "latent",
                     tooltip=(

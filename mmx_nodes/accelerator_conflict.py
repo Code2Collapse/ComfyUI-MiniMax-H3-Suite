@@ -27,10 +27,15 @@ class MiniMaxH3_AcceleratorConflict(io.ComfyNode):
                 "Passes MODEL through on success so it can sit inline: "
                 "N4 → ProtectedLayer → this → SigmaShift → …"
             ),
-            inputs=[io.Model.Input("model")],
+            inputs=[io.Model.Input("model", tooltip="H3 MODEL after all acceleration nodes. Its model_options are "
+                                                    "checked for conflicting stacks (Block Cache with Spectrum or "
+                                                    "EasyCache, EasyCache with LazyCache, First-Block Cache with "
+                                                    "another cache, duplicate dit patches); a conflict raises an error.")],
             outputs=[
-                io.Model.Output("model"),
-                io.String.Output("report"),
+                io.Model.Output("model", tooltip="The input MODEL, unchanged (same object), when no conflict was "
+                                                 "found. Continue the chain from here."),
+                io.String.Output("report", tooltip="One line confirming that no conflicting cache or dit-patch stack "
+                                                   "was detected."),
             ],
         )
 

@@ -188,20 +188,40 @@ class MiniMaxH3_BlockCacheT8(io.ComfyNode):
                 "cache_device defaults to cpu for 8 GB VRAM."
             ),
             inputs=[
-                io.Model.Input("model"),
-                io.Float.Input("residual_diff_threshold", default=0.12, min=0.0, max=1.0, step=0.01),
+                io.Model.Input("model",
+                               tooltip=("Native MiniMax H3 MODEL. It is cloned and patched; errors if the model is not "
+                                        "native H3, Spectrum Apply or EasyCache/LazyCache is already on it, or block 0 / "
+                                        "the last block already has a dit replace patch.")),
+                io.Float.Input("residual_diff_threshold", default=0.12, min=0.0, max=1.0, step=0.01,
+                               tooltip=("Relative change of block 0's residual (audio and video scored separately, the "
+                                        "larger counts) below which the cached tail of the remaining blocks is reused. "
+                                        "0 = never reuse; higher = more reuse.")),
                 io.Float.Input("start_percent", default=0.08, min=0.0, max=1.0, step=0.01,
-                               extra_dict={"c2c_section": "Cache"}),
+                               extra_dict={"c2c_section": "Cache"},
+                               tooltip=("Sampling progress (0-1, converted to sigma) at which cache reuse may start. "
+                                        "Must be lower than end_percent.")),
                 io.Float.Input("end_percent", default=0.95, min=0.0, max=1.0, step=0.01,
-                               extra_dict={"c2c_section": "Cache"}),
+                               extra_dict={"c2c_section": "Cache"},
+                               tooltip=("Sampling progress (0-1) after which no cache reuse happens and the cache is "
+                                        "cleared; the remaining steps run every block.")),
                 io.Int.Input("max_consecutive_hits", default=2, min=1, max=10, step=1,
-                             extra_dict={"c2c_section": "Cache"}),
+                             extra_dict={"c2c_section": "Cache"},
+                             tooltip=("Maximum model calls in a row that may reuse the cache before a full forward is "
+                                      "forced to refresh it. 1 = at most every other call is cached.")),
                 io.Combo.Input("cache_device", options=["cpu", "gpu"], default="cpu",
-                               extra_dict={"c2c_section": "Cache"}),
-                io.Int.Input("metric_stride", default=8, min=1, max=32, step=1, extra_dict={"c2c_section": "Cache"}),
-                io.Boolean.Input("verbose", default=False, extra_dict={"c2c_section": "Debug"}),
+                               extra_dict={"c2c_section": "Cache"},
+                               tooltip=("Where the cached residual tails and metric samples are stored. cpu = system RAM "
+                                        "(saves VRAM, copies each step); gpu = the model's device.")),
+                io.Int.Input("metric_stride", default=8, min=1, max=32, step=1, extra_dict={"c2c_section": "Cache"},
+                             tooltip=("Subsampling stride (tokens and channels) for the change metric. 1 = compare "
+                                      "every value; higher = cheaper, coarser metric. Does not affect what is cached.")),
+                io.Boolean.Input("verbose", default=False, extra_dict={"c2c_section": "Debug"},
+                                 tooltip=("Logs hit/refresh with the audio and video diff and sigma for every model "
+                                          "call. The cache summary is logged after sampling either way.")),
             ],
-            outputs=[io.Model.Output("model")],
+            outputs=[io.Model.Output("model",
+                                     tooltip=("Clone of the H3 model with the block cache installed (block 0 and last "
+                                              "block patched, sample/diffusion wrappers). Wire it to the sampler."))],
         )
 
     @classmethod

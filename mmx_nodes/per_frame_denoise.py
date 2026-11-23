@@ -40,25 +40,49 @@ class MiniMaxH3_PerFrameDenoise(io.ComfyNode):
                 "Place after N4 Masked Replace. One sigma schedule, per-frame strength via noise_mask."
             ),
             inputs=[
-                io.Latent.Input("av_latent"),
-                H3TransformType.Input("transform"),
-                io.Float.Input("strength_small_face", default=1.0, min=0.0, max=1.0, step=0.05),
-                io.Float.Input("strength_large_face", default=0.35, min=0.0, max=1.0, step=0.05),
+                io.Latent.Input("av_latent",
+                                tooltip="H3 audio+video LATENT (nested video/audio samples). An existing noise_mask "
+                                        "is kept: its video part is multiplied by the per-frame strength, its audio "
+                                        "part is left as is."),
+                H3TransformType.Input("transform",
+                                      tooltip="H3_TRANSFORM from a face track/crop node. Face height per frame = crop "
+                                              "box height / crop_factor (pixels); errors if it has no boxes."),
+                io.Float.Input("strength_small_face", default=1.0, min=0.0, max=1.0, step=0.05,
+                               tooltip="Denoise strength (noise_mask value, 0-1) for frames whose face is at or below "
+                                       "the small end of the ramp. 0 = keep those frames unchanged."),
+                io.Float.Input("strength_large_face", default=0.35, min=0.0, max=1.0, step=0.05,
+                               tooltip="Denoise strength (0-1) for frames whose face is at or above the large end of "
+                                       "the ramp. Faces in between are interpolated."),
                 io.Combo.Input(
                     "scale_mode",
                     options=["absolute_px", "relative_to_clip"],
                     default="absolute_px",
+                    tooltip="Ramp ends. absolute_px = face_px_small to face_px_large; relative_to_clip = the "
+                            "smallest to the largest face height in this clip.",
                 ),
                 io.Float.Input("face_px_small", default=30.0, min=4.0, max=400.0, step=1.0,
-                               extra_dict={"c2c_show_if": {"scale_mode": ["absolute_px"]}}),
+                               extra_dict={"c2c_show_if": {"scale_mode": ["absolute_px"]}},
+                               tooltip="Face height in source pixels at or below which strength_small_face applies "
+                                       "(absolute_px only)."),
                 io.Float.Input("face_px_large", default=120.0, min=8.0, max=800.0, step=1.0,
-                               extra_dict={"c2c_show_if": {"scale_mode": ["absolute_px"]}}),
-                io.Float.Input("gamma", default=1.0, min=0.2, max=4.0, step=0.1, extra_dict={"c2c_section": "Curve"}),
-                io.Int.Input("smooth_frames", default=9, min=1, max=61, step=2, extra_dict={"c2c_section": "Curve"}),
+                               extra_dict={"c2c_show_if": {"scale_mode": ["absolute_px"]}},
+                               tooltip="Face height in source pixels at or above which strength_large_face applies "
+                                       "(absolute_px only)."),
+                io.Float.Input("gamma", default=1.0, min=0.2, max=4.0, step=0.1, extra_dict={"c2c_section": "Curve"},
+                               tooltip="Curve shape of the small-to-large ramp: position^gamma. 1 = linear; above 1 "
+                                       "keeps strength near strength_small_face for longer; below 1 drops it sooner."),
+                io.Int.Input("smooth_frames", default=9, min=1, max=61, step=2, extra_dict={"c2c_section": "Curve"},
+                             tooltip="Gaussian smoothing window over frames for the strength curve (odd, capped at "
+                                     "the clip length). 1 = no smoothing."),
             ],
             outputs=[
-                io.Latent.Output("av_latent"),
-                io.String.Output("report"),
+                io.Latent.Output("av_latent",
+                                 tooltip="Same latent with a noise_mask whose video part holds the per-frame "
+                                         "strength (resampled to latent frames). Without an incoming mask the audio "
+                                         "part is 0 (audio kept). Wire to the sampler."),
+                io.String.Output("report",
+                                 tooltip="Text: face height range, ramp ends, strength range and mean, frame and "
+                                         "latent-frame counts, gamma."),
             ],
         )
 

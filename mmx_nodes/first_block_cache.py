@@ -141,7 +141,13 @@ class MiniMaxH3_FirstBlockCache(io.ComfyNode):
                 "by default and the report says what actually happened."
             ),
             inputs=[
-                io.Model.Input("model"),
+                io.Model.Input(
+                    "model",
+                    tooltip="Native MiniMax H3 MODEL. Cloned and every DiT block "
+                            "patched; errors if another cache (Block Cache T8, "
+                            "EasyCache, LazyCache, CacheDiT, a second FBC) or any "
+                            "dit block replace is already on it - connect it "
+                            "right after the model loader."),
                 io.Combo.Input(
                     "mode", options=MODES, default=DEFAULT_MODE,
                     tooltip="A calibrated preset, or Custom to use the values "
@@ -194,7 +200,11 @@ class MiniMaxH3_FirstBlockCache(io.ComfyNode):
                             "only.", extra_dict={"c2c_show_if": {"mode": [CUSTOM_MODE]}}),
             ],
             outputs=[
-                io.Model.Output("model"),
+                io.Model.Output(
+                    "model",
+                    tooltip="Clone of the H3 model with the first-block cache on "
+                            "all blocks plus sample/diffusion wrappers. Wire it "
+                            "to the sampler; the input model is unchanged."),
                 io.String.Output(
                     display_name="report",
                     tooltip="What was installed. The RUN statistics - how many "

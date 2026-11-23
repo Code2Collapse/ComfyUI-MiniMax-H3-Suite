@@ -32,7 +32,9 @@ class MiniMaxH3_TurboSampler(io.ComfyNode):
                 "on separate clocks."
             ),
             inputs=[],
-            outputs=[io.Sampler.Output("sampler")],
+            outputs=[io.Sampler.Output("sampler", tooltip="KSAMPLER object running the H3 turbo Euler step (single "
+                                                          "schedule on ModelSamplingAV builds, separate video/audio "
+                                                          "clocks on older ones). Wire to SamplerCustomAdvanced sampler.")],
         )
 
     @classmethod

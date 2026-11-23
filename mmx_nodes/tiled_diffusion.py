@@ -50,7 +50,10 @@ class MiniMaxH3_TiledDiffusion(io.ComfyNode):
             outputs=[
                 io.Model.Output(display_name="model",
                                 tooltip="The patched model: feed it to an H3 sampler or to H3 Split Upscale."),
-                io.String.Output(display_name="report"),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: snapped tile size and minimum overlap (pixels and latent cells), "
+                                         "blend method, the kill-switch variable, and whether an existing model "
+                                         "function wrapper is wrapped. Also shown on the node."),
             ],
         )
 
