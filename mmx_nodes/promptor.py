@@ -375,9 +375,12 @@ class MiniMaxH3_Vision(io.ComfyNode):
                                  tooltip="JSON: the analysis per tag (<Picture N>, <Video N>, <Audio N>) plus "
                                          "_media_keys; wire to MiniMax H3 Promptor's vision_context. '{}' when nothing "
                                          "was analysed; '[Analyzer Exception]: ...' on an error."),
-                io.Image.Output("ref_images_out", display_name="REF_IMAGES",
-                                tooltip="The connected reference images passed through in input order (a 64x64 "
-                                        "black image after an error)."),
+                # is_output_list: the upstream node set OUTPUT_IS_LIST = (False, True); the port dropped it, so the
+                # Python list reached the next node as ONE image (L9.312).
+                io.Image.Output("ref_images_out", display_name="REF_IMAGES", is_output_list=True,
+                                tooltip="The connected reference images passed through in input order, as a list "
+                                        "(one IMAGE per reference, sizes may differ; a node downstream runs once "
+                                        "per image unless it takes lists). A 64x64 black image after an error."),
             ],
         )
 

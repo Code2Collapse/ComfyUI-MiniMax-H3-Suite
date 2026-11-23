@@ -26,6 +26,9 @@
   "clamped to SDR" check reads the peak of the whole clip (a dark first frame in an HDR clip no longer fails it).
   Saved workflows with multi-frame input can now fail where they passed, and `error_map` returns more frames. Each
   extra frame costs one more OCIO round trip on the CPU.
+- MiniMax H3 Vision: `REF_IMAGES` is now a list output (one IMAGE per reference), as in the original Promptor node.
+  Before, it handed the whole Python list to the next node as a single image, which image nodes cannot use. A node
+  wired to it now runs once per reference image unless it takes lists.
 
 ## 1.2.0 - 2026-11-23
 
