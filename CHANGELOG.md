@@ -42,6 +42,10 @@
   - Face Stitch no longer fades the face out for one missed detection (the old face ghosted through ~9 frames).
   - Temporal Subject Tracker keeps the soft mask edge until the plate-size matte (4K edge error 8.0 -> 2.6 px).
   - Matte Chatter's dropout bridge uses 1 byte per cell instead of 9 (bit-exact).
+  - H3 Frame Handles: appended `handles` output + optional `undo_handles` input - a second Frame Handles after the
+    model removes exactly the frames and sound the first one added (L8.56). The full-spine and masked-face workflows
+    now trim back before Create Video: the delivered clip starts on the plate's first frame.
+  - H3 Remake resizes references in float (no 8-bit rounding, HDR above 1.0 kept) (L8.57).
 - H3 Subject Memory: the approved anchor (H3 Anchor Approval) is now in its `anchors` output, as Approval promised,
   without routing Approval's bank (R2).
 - H3 Identity Fusion Controller: a pixel-frame mask is reduced with H3's own frame groups, so a frame where the head

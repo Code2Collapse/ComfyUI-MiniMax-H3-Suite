@@ -456,6 +456,9 @@ stand-in with core's geometry); details and numbers in `docs/PLAN_h3_zero_offset
 - Outside the edit, every chain returns the plate bit-exact (measured 0/255 before and after).
 - **One crop for a whole job.** H3 Subject Crop has two new optional inputs, `bboxes` and `bboxes_first_frame`: wire
   the boxes of a Subject Crop run on the whole clip and every window is cut at exactly the same place.
+- **Frame Handles trim back.** Wire a second H3 Frame Handles after the model with `undo_handles` from the first
+  one's new `handles` output: the frames and sound added for the 17k+5 grid are removed exactly, so the delivered clip
+  starts on the plate's first frame. The full-spine and masked-face workflows do this now.
 - **Face Stitch** keeps the new face through a single missed detection; the **Temporal Subject Tracker** matte keeps a
   smooth edge at 4K; **Matte Chatter** needs a ninth of the memory.
 

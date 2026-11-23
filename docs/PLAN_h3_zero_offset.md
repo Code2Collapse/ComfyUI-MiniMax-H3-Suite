@@ -81,16 +81,21 @@ pasted region, phase correlation (cross-check), interior mean / max |diff| x 255
 
 ## 3. Open items (not changed here)
 
-- **Frame Handles (temporal)**: `h3_full_spine_pipeline.json` pads the HEAD to 17k+5 and nothing trims it after the
-  decode, so the delivered clip starts with repeated frames (picture and sound late by the pad). Fix needs a trim-back
-  path (an appended output carrying the pad, or a Stitch Back option) - a workflow/UX decision; logged.
+- **Frame Handles (temporal) - FIXED 2026-11-23 (L8.56)**: the full-spine and masked-face workflows padded the HEAD
+  to 17k+5 and nothing trimmed it after the decode, so the delivered clip started with repeated frames (picture and
+  sound 2 frames late for a 20-frame clip). H3 Frame Handles gained an appended `handles` output (what it padded, JSON)
+  and an appended optional `undo_handles` input: a second Frame Handles wired to it removes exactly those frames and
+  that sound (sample-exact, same rounding both ways). Both workflows now trim back before Create Video. Tests: pad ->
+  identity -> trim gives the plate frame-exact and the sound sample-exact (44.1 kHz with a 1837.5-sample frame, and a
+  32 kHz decode); must-fail twin: without the trim the delivered frame k is plate frame k - 2.
 - **Subject Uncrop default `protect = feathered box`** pastes the whole box (the model's background inside it). The
   default is kept because changing it alters saved workflows; task workflows 04/06 already use `exact outside mask`.
 - **Ingest (F1)** not re-measured in this pass (NOT RUN): F1's numbers stand (VHS 26.5/255 8-bit vs core LoadVideo
   0.4/255 float); the Suite's loaders use the C2C 16-bit reader.
-- **H3 Remake (merged from replace-quality, 705df75)**: `mmx_nodes/remake.py::_resize` still uses core's 8-bit
-  Lanczos (Z2). Left as is on purpose: the port is pinned bit-for-bit against the Viggle reference nodes; switching to
-  `mmx_utils/resample.common_upscale_float` is a one-line change once that parity test is re-baselined.
+- **H3 Remake - FIXED 2026-11-23 (L8.57)**: `mmx_nodes/remake.py::_resize` now uses the float Lanczos (Z2). The
+  reference-match test stays exact where no Lanczos runs (references already on their canvas); resized references
+  match the reference within its own 8-bit rounding (<= 2/255); an HDR test proves values above 1.0 survive (the
+  reference node clips them at 1.0).
 - **Real weights**: everything above is UNIT TESTED with stand-ins on CPU. Whether H3's own decoder adds a
   sub-pixel drift is NOT VERIFIED (no weights here); Plate Restore `register = correct` measures and corrects it per
   frame on real output - read its report on the first GPU run.
