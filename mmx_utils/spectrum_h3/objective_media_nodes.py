@@ -1136,6 +1136,22 @@ def pending_objective_media_state() -> dict[str, Any]:
         }
 
 
+def pending_capture_fingerprint(benchmark_id: str | None = None) -> tuple:
+    """Cache fingerprint of the capture / reset nodes: what they act on is this pending store, not their inputs.
+
+    (benchmark id, stored roles, bytes) for one benchmark, or for every pending one when benchmark_id is None. It
+    changes whenever a role is stored, a benchmark completes or is evicted / released, so the node re-runs then and
+    is cached otherwise. Replaces IS_CHANGED = float("nan") (never cached) - L9.312.
+    """
+    with _PENDING_LOCK:
+        if benchmark_id is None:
+            items = list(_PENDING_CAPTURES.items())
+        else:
+            key = str(benchmark_id).strip()
+            items = [(key, _PENDING_CAPTURES[key])] if key in _PENDING_CAPTURES else []
+        return tuple((k, tuple(sorted(e["roles"])), int(e["bytes"])) for k, e in items)
+
+
 def _evict_for_capture_locked(
     benchmark_id: str,
     extra_bytes: int,
@@ -1637,7 +1653,7 @@ class SpectrumH3ObjectiveSequentialCapture:
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
-        return float("nan")
+        return pending_capture_fingerprint(kwargs.get("benchmark_id"))
 
     def capture(
         self,
@@ -2062,7 +2078,8 @@ class SpectrumH3ObjectiveCaptureReset:
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
-        return float("nan")
+        scope = str(kwargs.get("scope") or "benchmark")
+        return pending_capture_fingerprint(None if scope == "all" else kwargs.get("benchmark_id"))
 
     def clear(self, benchmark_id, scope):
         released = clear_pending_objective_media(

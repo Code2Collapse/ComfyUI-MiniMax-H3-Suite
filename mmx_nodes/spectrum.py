@@ -744,6 +744,12 @@ class MiniMaxH3_ObjectiveSequentialCapture(io.ComfyNode):
         )
 
     @classmethod
+    def fingerprint_inputs(cls, **kwargs):
+        # not_idempotent only adds the node id to the cache key (core comfy_execution/caching.py); it never forces a
+        # re-run. The capture acts on the pending store, so that is the fingerprint (L9.312).
+        return SpectrumH3ObjectiveSequentialCapture.IS_CHANGED(**kwargs)
+
+    @classmethod
     def execute(
         cls,
         video,
@@ -806,6 +812,12 @@ class MiniMaxH3_ObjectiveCaptureReset(io.ComfyNode):
                 )
             ],
         )
+
+    @classmethod
+    def fingerprint_inputs(cls, **kwargs):
+        # The pending captures this reset would release (L9.312): queued again after a new capture it re-runs,
+        # queued again with nothing new pending it is cached.
+        return SpectrumH3ObjectiveCaptureReset.IS_CHANGED(**kwargs)
 
     @classmethod
     def execute(cls, benchmark_id, scope) -> io.NodeOutput:

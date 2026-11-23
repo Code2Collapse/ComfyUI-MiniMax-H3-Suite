@@ -29,6 +29,9 @@
 - MiniMax H3 Vision: `REF_IMAGES` is now a list output (one IMAGE per reference), as in the original Promptor node.
   Before, it handed the whole Python list to the next node as a single image, which image nodes cannot use. A node
   wired to it now runs once per reference image unless it takes lists.
+- Spectrum H3 Objective Media Capture (Sequential) and Capture Reset: they now re-run when the in-memory capture
+  store they act on has changed, and are cached when it has not. Before, a Capture Reset queued again after a new
+  capture could be served from cache and release nothing.
 
 ## 1.2.0 - 2026-11-23
 
