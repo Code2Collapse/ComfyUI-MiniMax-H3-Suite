@@ -718,6 +718,29 @@ Checked on a real face clip with a known head roll: an identical output scores r
 4 frames late drops mouth r to 0.31 and event F1 to 0.38. No H3 output has been scored yet; that is the owner's GPU
 run.
 
+## Replacement through Viggle Remake: character, head / face, item (experimental, 2026-11-23)
+
+Viggle Remake (two LoRAs on H3) re-renders a clip from a painted keyframe, which is exactly what H3 Anchor Studio and
+Anchor Approval produce. Five nodes in `MiniMax H3/Replace`:
+
+| Node | What it does |
+|---|---|
+| H3 Remake Conditioning (Viggle) | Remake's own conditioning, ported faithfully: the source clip as `<Video 1>` (text-only labels), pictures as `<Picture N>`, optional pins (keyframes), the source soundtrack held clean |
+| H3 Remake Keyframe Until | drops the pinned keyframes once sigma < `keyframe_until` (0.9) |
+| H3 Remake Noise | the reference script's noise order (same seed, same video) |
+| H3 Remake Prefix | the previous take's frames open the render, held clean |
+| **H3 Remake Replace** | approved anchor + this segment's plate window -> all of the above, in the **window's own framing** (a stretch, never a crop: `<Video 1>` lands token-for-token on the output, the result maps back onto the plate). First window: the anchor is pinned. Later windows: the Job Controller's accepted context (17, 34 ... frames) opens the render. Modes character / face / head / item / prop; extra identity pictures (every image of a batch, 4 at most); returns the edit mask and boxes for **H3 Plate Restore**. `hold_outside_mask` (experimental, off) also holds the plate outside the mask in the latent. |
+
+Load the Remake LoRA with core **Load LoRA (Bypass, Model Only)**. Workflows: `workflows/replace/` (character,
+head / face, item). Audit and design: `docs/PLAN_h3_replacement_quality.md`. **Not run on H3 weights or the LoRA here:
+image quality is NOT VERIFIED** - score it against the spine with `tools/h3_replace_bench.py` (now also re-entry
+identity drop and multi-shot spread).
+
+Fixed on the way (identity side): H3 Image + Reference to Video can use every image of a reference batch
+(`image_batches`); H3 Subject Memory now carries the approved anchor; Identity Fusion keeps a one-frame head entry;
+the Tracker refuses a pick made after frame 0; Face Track + Crop no longer jumps to a lone extra when an identity
+reference is connected, and a reference it cannot use is an error.
+
 ## H3 Identity Fusion Controller (experimental)
 
 RefMod and the reference size decide **what** reference goes in. This node decides **where**, **when** and **how

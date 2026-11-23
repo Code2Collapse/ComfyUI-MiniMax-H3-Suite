@@ -1,3 +1,14 @@
+# Remake replacement — `replace/remake_*_replace.json` (2026-11-23)
+
+Character (whole window), head / face (crop window) and item / prop (crop window) replacement through **Viggle
+Remake** and **H3 Remake Replace**, run as an H3 job: pick on frame 0, track, approve an anchor, then one click per
+segment (auto-continue). Each graph's note is its guide; design `docs/PLAN_h3_replacement_quality.md`. **Status:
+wiring checked against the registered node definitions (tests/test_workflow_wiring.py); loaded on the testbed (see
+the branch report); NOT run on H3 weights or the Remake LoRA. The LoRA file name and the 6-step / euler sampling are
+placeholders to confirm from Viggle's model card.**
+
+---
+
 # H3 Open Regen (standard) — `h3_open_regen_std_*.json`
 
 Ported from rdh9616/ComfyUI-Open-H3-Regenerate (Apache-2.0) onto the Suite's `MiniMaxH3_OpenRegen*` nodes; guide in

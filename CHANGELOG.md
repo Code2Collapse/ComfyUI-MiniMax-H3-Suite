@@ -10,8 +10,30 @@
   Official-format audit plus one repair pass. Prompt, negative and report outputs. Example workflow
   `workflows/h3_prompt_writer_reference.json`.
 - Prompt Writer v2: its description points to the new node (no input change; saved workflows load unchanged).
+- **Viggle Remake on H3** (category `MiniMax H3/Replace`; design `docs/PLAN_h3_replacement_quality.md`): H3 Remake
+  Conditioning (Viggle), H3 Remake Keyframe Until, H3 Remake Noise, H3 Remake Prefix - ported from the reference
+  nodes (Apache-2.0, CREDITS.md) - and **H3 Remake Replace**, the adapter from an approved anchor + a plate window to
+  Remake conditioning in the window's own framing (zero offset), chunked by the Job Controller (anchor pinned on the
+  first window, the accepted context held clean on later ones), with character, face / head and item / prop modes.
+  Experimental: not run on H3 weights or the Remake LoRA.
+- Workflows `workflows/replace/remake_character_replace.json`, `remake_head_face_replace.json`,
+  `remake_item_replace.json` (job-chunked; Plate Restore puts the literal plate back outside the mask).
+- `tools/h3_replace_bench.py`: re-entry identity drop and multi-shot identity spread (`--shots`, manifest
+  `"cases"`), with the measure named (ArcFace when installed, otherwise masked colour histogram).
+- H3 Image + Reference to Video: `image_batches` (appended, default `first image only` = unchanged) - `every image`
+  makes each image of a reference batch its own `<Picture N>`; the report now says when images were left out.
 
 ### Fixed
+- H3 Subject Memory: the approved anchor (H3 Anchor Approval) is now in its `anchors` output, as Approval promised,
+  without routing Approval's bank (R2).
+- H3 Identity Fusion Controller: a pixel-frame mask is reduced with H3's own frame groups, so a frame where the head
+  enters or leaves is no longer dropped (R6).
+- H3 Temporal Subject Tracker: refuses a subject picked on a frame other than 0 instead of putting that mask on frame
+  0 and tracking the wrong spot (T1).
+- H3 Face Track + Crop: with an identity anchor, a lone face that is not the performer (an extra while the performer
+  is out of frame) and a first-frame face below `identity_threshold` are no longer taken; a connected
+  `identity_reference` that cannot run (insightface missing) is an error instead of silently ignored; the report
+  says whether identity was on (T2, T3).
 - Compact-node layout engine: a node removed right after it was created (paste then undo, a script that adds and
   removes) is no longer kept alive by the engine (about 185 KB each, measured in CNP). Same fix as CNP's engine (L9.01).
 

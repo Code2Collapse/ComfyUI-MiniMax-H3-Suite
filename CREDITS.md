@@ -428,3 +428,16 @@ owner's packs. That code needs no third-party credit. Shared CNP code is carried
   Code2Collapse, 2026-11: V3 schema, run-time silence option, asset length check, LoRA chain node, appended outputs.
   Distributed as part of a GPL-3.0 work. The silence asset and all weights are not bundled; they stay under the
   MiniMax-H3 Community License.
+
+## ComfyUI-Viggle-Remake (Viggle Remake reference nodes) - ported 2026-11-23
+
+- **Source:** the reference ComfyUI nodes for Viggle Remake (two rank-256 LoRAs on MiniMax H3), local copy
+  `third_party/ComfyUI-Viggle-Remake/nodes.py` (no git metadata in that copy; upstream URL not recorded there).
+- **Licence:** Apache-2.0 (SPDX header of `nodes.py`; the copy ships no licence file, so
+  `THIRD_PARTY_LICENSES/ComfyUI-Viggle-Remake-LICENSE.txt` carries the standard text). Apache-2.0 -> GPL-3.0.
+- **Ported:** `mmx_utils/remake.py` (stamps, canvas, pins, audio padding, prefix rows, keyframe release) and
+  `mmx_nodes/remake.py` as H3 Remake Conditioning (Viggle), H3 Remake Keyframe Until, H3 Remake Noise and H3 Remake
+  Prefix. Behaviour unchanged (tests compare every conditioning tensor with the reference nodes on stand-in models);
+  V3 nodes, errors in words instead of asserts, a `report` output added.
+- **Original (GPL-3.0):** H3 Remake Replace, the anchor -> plate window adapter (docs/PLAN_h3_replacement_quality.md).
+- The Remake LoRA weights are not shipped and fall under the MiniMax H3 Community License (Viggle's derivative).

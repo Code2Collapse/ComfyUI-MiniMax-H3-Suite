@@ -250,6 +250,12 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.hdr_a29_train_node", "MiniMaxH3_HDRTrainICLoRA"),
     # owner 2026-11-23: H3 Prompt Writer as a node (ported from third_party/ComfyUI-MiniMaxH3-Prompt-Writer, MIT)
     (".mmx_nodes.h3_prompt_writer", "MiniMaxH3_H3PromptWriter"),
+    # owner 2026-11-23: Viggle Remake port + the anchor -> plate window adapter (docs/PLAN_h3_replacement_quality.md)
+    (".mmx_nodes.remake", "MiniMaxH3_RemakeConditioning"),
+    (".mmx_nodes.remake", "MiniMaxH3_RemakeKeyframeUntil"),
+    (".mmx_nodes.remake", "MiniMaxH3_RemakeNoise"),
+    (".mmx_nodes.remake", "MiniMaxH3_RemakePrefix"),
+    (".mmx_nodes.remake", "MiniMaxH3_RemakeReplace"),
 )
 
 

@@ -1340,13 +1340,26 @@ class MiniMaxH3_SubjectMemory(io.ComfyNode):
             raise ValueError(f"H3 Subject Memory: {exc}") from exc
         b = _json(bank, BANK, "H3 Subject Memory") if str(bank or "").strip() else None
         mem = subject_memory(j, b, sid, max_anchors=max_anchors)
+        # the approved anchor is identity too (H3 Anchor Approval promises it reaches every segment): after the bank's
+        # identity images, before the examples; one already in the bank (Approval's bank output) is not repeated
+        # (docs/PLAN_h3_replacement_quality.md R2)
+        in_bank = {e["sha256"] for e in mem["identity"]}
+        approved = [a for a in mem["anchors"]
+                    if a.get("path") and a.get("sha256") not in in_bank and os.path.isfile(a["path"])]
         imgs = [_load_ref(e["path"], "H3 Subject Memory") for e in mem["identity"]] + \
+               [_read_png16(a["path"]) for a in approved] + \
                [_read_png16(e["path"]) for e in mem["examples"]]
         anchors = _stack_fitted(imgs) if imgs else _blocker(
             "H3 Subject Memory: nothing to anchor this scene yet - connect an H3 Reference Bank with an identity "
             "image, or leave 'anchors' unconnected for prompt-only shots.")
         notes = "; ".join(mem["notes"]) or (f"{len(mem['identity'])} identity image(s), {len(mem['examples'])} "
                                             f"approved frame(s) from scene {(mem['scene'] or 0) + 1}")
+        if approved:
+            notes += f"; {len(approved)} approved anchor(s) added after the identity images"
+        if mem["examples"]:
+            notes += ("; approved frames are whole generated frames (not cropped to the subject) - wire 'anchors' "
+                      "into a reference input that takes every image (H3 Image + Reference image_batches = every "
+                      "image, or H3 Remake Replace references)")
         return io.NodeOutput(anchors, json.dumps(mem), notes)
 
 
