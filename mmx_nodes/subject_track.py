@@ -690,6 +690,12 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
         mem = ST.parse_subject(subject, who)
         if mem is None:
             raise ValueError(f"{who}: connect 'subject' (H3 Multi-Subject Selector).")
+        if int(mem.get("frame") or 0) != 0:
+            # the track is seeded at frame 0; a mask picked on a later frame would be put on frame 0 and SAM 3 would
+            # follow whatever stands there (docs/PLAN_h3_replacement_quality.md T1)
+            raise ValueError(f"{who}: the subject was picked on frame {int(mem['frame'])}, but the track starts at "
+                             "frame 0 with that mask. Pick the performer on frame 0 of this clip (H3 Multi-Subject "
+                             "Selector frame = 0), or trim the clip so it starts at the frame you picked on.")
         src = _Source(media, images, int(proxy_width), who)
         if backend == BACKENDS[0] and model is None:
             raise ValueError(f"{who}: backend = SAM 3 (core) needs 'model' - load the SAM 3 / 3.1 checkpoint with "
