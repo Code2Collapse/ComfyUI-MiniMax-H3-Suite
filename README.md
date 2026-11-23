@@ -438,6 +438,11 @@ In 22-25 the generation hears each window's own sound (H3 Frame Window Reader's 
   `candidate`, `props` / `locked_props`.
 - Its outputs: job, track, anchor and prop statuses, the gallery, the track preview and the anchor sheet.
 
+### Fixed 2026-11-23: removed nodes no longer stay in memory
+
+The compact-node layout engine kept a node alive when it was removed right after being created (paste then undo, or a
+script that adds and removes nodes), about 185 KB each. The Suite now carries the same fix as CustomNodePacks.
+
 ### Fixed 2026-11-01: H3 Plate Restore did not paste the edit back
 
 H3 Plate Restore handed one frame's mask to a blend written for a batch, which read the mask's first three columns
