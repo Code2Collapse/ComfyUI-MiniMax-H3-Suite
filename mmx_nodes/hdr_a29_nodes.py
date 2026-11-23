@@ -114,7 +114,9 @@ class MiniMaxH3_HDRLogEncode(io.ComfyNode):
                 io.Combo.Input("encoding", options=HM.SUITE_ENCODINGS, default=HM.DEFAULT_ENCODING,
                                tooltip="Log curve. diffhdr_log_16384 is the A29 standard (training and inference must match)."),
             ],
-            outputs=[io.Image.Output("image")],
+            outputs=[io.Image.Output("image", tooltip="Log code values 0..1 (IMAGE, one frame per input frame); linear "
+                                                      "values above the curve maximum are held at 1. Feed to VAE Encode "
+                                                      "or Save Log 16-bit.")],
         )
 
     @classmethod
@@ -142,7 +144,9 @@ class MiniMaxH3_HDRLogDecode(io.ComfyNode):
                 io.Combo.Input("encoding", options=HM.SUITE_ENCODINGS, default=HM.DEFAULT_ENCODING,
                                tooltip="The curve the LoRA was trained with (A29: diffhdr_log_16384)."),
             ],
-            outputs=[io.Image.Output("image")],
+            outputs=[io.Image.Output("image", tooltip="Scene-linear Rec.709 HDR (IMAGE, 1.0 = diffuse white), NOT "
+                                                      "clamped: values above 1 are highlights. Next: Bias Correct, "
+                                                      "Gain Map Join or a Save node.")],
         )
 
     @classmethod
@@ -171,7 +175,10 @@ class MiniMaxH3_HDRBiasCorrect(io.ComfyNode):
                 io.Float.Input("strength", default=1.0, min=0.0, max=2.0, step=0.01,
                                tooltip="1 = apply the table as written, 0 = off."),
             ],
-            outputs=[io.Image.Output("image"), io.String.Output("report")],
+            outputs=[io.Image.Output("image", tooltip="Scene-linear HDR, each pixel scaled by 2^(-bias(luma) x "
+                                                      "strength); colour ratios unchanged, not clamped."),
+                     io.String.Output("report", tooltip="Text: parsed table points, strength, mean correction in "
+                                                        "stops and min/max/% above 1 of the output.")],
         )
 
     @classmethod
@@ -202,7 +209,8 @@ class MiniMaxH3_HDRGamutConvert(io.ComfyNode):
                 io.Combo.Input("source", options=GAMUT_NAMES, default="rec709", tooltip="Primaries of the input."),
                 io.Combo.Input("target", options=GAMUT_NAMES, default="rec2020", tooltip="Primaries of the output."),
             ],
-            outputs=[io.Image.Output("image")],
+            outputs=[io.Image.Output("image", tooltip="Linear RGB in the target primaries (3x3 matrix applied); not "
+                                                      "clamped, so out-of-gamut negatives and values above 1 stay.")],
         )
 
     @classmethod
@@ -240,7 +248,10 @@ class MiniMaxH3_HDRClipMask(io.ComfyNode):
                 io.Int.Input("grow", default=0, min=0, max=256, tooltip="Dilate both masks by this many pixels."),
                 io.Int.Input("feather", default=0, min=0, max=256, tooltip="Soften the edges over this many pixels."),
             ],
-            outputs=[io.Mask.Output("over_mask"), io.Mask.Output("under_mask")],
+            outputs=[io.Mask.Output("over_mask", tooltip="MASK, 1 = over-exposed (any channel >= 'over'), after grow "
+                                                         "and feather; one mask per frame."),
+                     io.Mask.Output("under_mask", tooltip="MASK, 1 = under-exposed (Rec.709 luma of the code values "
+                                                          "<= 'under'), after grow and feather; one mask per frame.")],
         )
 
     @classmethod
@@ -291,7 +302,11 @@ class MiniMaxH3_HDRGainMapJoin(io.ComfyNode):
                 io.Float.Input("guide_eps", default=1e-3, min=1e-6, max=1.0, step=1e-4,
                                tooltip="Guided-filter regularisation: larger = less edge-following."),
             ],
-            outputs=[io.Image.Output("image"), io.String.Output("report")],
+            outputs=[io.Image.Output("image", tooltip="Linear HDR at the 'regen' resolution (sRGB-decoded regen x "
+                                                      "upsampled gain), one frame per input frame; not clamped. Save "
+                                                      "with Save EXR Sequence or Save HDR10."),
+                     io.String.Output("report", tooltip="Text: draft and regen sizes, gain range, frame count and "
+                                                        "output min/max/% above 1.")],
         )
 
     @classmethod
@@ -336,7 +351,9 @@ class MiniMaxH3_HDRPrompt(io.ComfyNode):
                                         "template that was missing from the message, so this default is a stand-in: "
                                         "edit it to your wording."),
             ],
-            outputs=[io.String.Output("prompt")],
+            outputs=[io.String.Output("prompt", tooltip="The filled template text (sentences whose field is empty are "
+                                                        "removed); wire to the text encoder or use as a training "
+                                                        "caption.")],
         )
 
     @classmethod
@@ -363,7 +380,9 @@ class MiniMaxH3_HDRTonemapPreview(io.ComfyNode):
                 io.Float.Input("shoulder", default=0.5, min=0.0, max=1.0, step=0.01,
                                tooltip="Highlight roll-off: 0 = hard clip at white, larger = softer, starts lower."),
             ],
-            outputs=[io.Image.Output("image")],
+            outputs=[io.Image.Output("image", tooltip="Display-referred sRGB 0..1 (exposure, shoulder, sRGB transfer) "
+                                                      "for all frames; the node's own preview shows at most 16. For "
+                                                      "viewing only - do not save it as HDR.")],
             is_output_node=True,
         )
 
@@ -421,7 +440,11 @@ class MiniMaxH3_HDRLoadEXRSequence(io.ComfyNode):
                 io.Int.Input("count", default=0, min=0, max=100000, tooltip="Frames to load; 0 = all."),
                 io.Int.Input("step", default=1, min=1, max=1000, tooltip="Every n-th file."),
             ],
-            outputs=[io.Image.Output("images"), io.Int.Output("frame_count"), io.String.Output("report")],
+            outputs=[io.Image.Output("images", tooltip="Float IMAGE [frames, H, W, 3] RGB as stored in the EXRs "
+                                                       "(alpha dropped, grey -> 3 channels), not clamped."),
+                     io.Int.Output("frame_count", tooltip="Number of EXR frames loaded after start / step / count."),
+                     io.String.Output("report", tooltip="Text: folder, first and last file, size and min / max / % "
+                                                        "above 1.")],
         )
 
     @classmethod
@@ -508,7 +531,9 @@ class MiniMaxH3_HDRSaveEXRSequence(io.ComfyNode):
                 io.Int.Input("start_frame", default=1001, min=0, max=10000000, tooltip="Number of the first frame."),
                 io.Int.Input("padding", default=4, min=1, max=8, tooltip="Digits of the frame number (4 -> 1001)."),
             ],
-            outputs=[io.String.Output("report")],
+            outputs=[io.String.Output("report", tooltip="Text: EXR frames written, precision, backend, output file "
+                                                        "range, max value, NaN / inf and half-float saturation counts, "
+                                                        "read-back result.")],
             is_output_node=True,
         )
 
@@ -554,7 +579,9 @@ class MiniMaxH3_HDRSaveLog16(io.ComfyNode):
                 io.Int.Input("start_frame", default=1001, min=0, max=10000000, tooltip="Number of the first frame."),
                 io.Int.Input("padding", default=4, min=1, max=8, tooltip="Digits of the frame number."),
             ],
-            outputs=[io.String.Output("report")],
+            outputs=[io.String.Output("report", tooltip="Text: number of 16-bit PNG / TIFF frames written, the curve "
+                                                        "used (if encoded), output folder and % of pixels held at 0 "
+                                                        "or 1.")],
             is_output_node=True,
         )
 
@@ -599,14 +626,18 @@ class MiniMaxH3_HDRSaveHDR10(io.ComfyNode):
                 io.Image.Input("images", tooltip="Scene-linear Rec.709 HDR frames."),
                 io.String.Input("filename_prefix", default="hdr/hdr10/h3_hdr10",
                                 tooltip="sub/folder/name under output/; each run writes name_NNNNN.mp4."),
-                io.Float.Input("fps", default=24.0, min=1.0, max=240.0, step=0.001, tooltip="Frame rate."),
+                io.Float.Input("fps", default=24.0, min=1.0, max=240.0, step=0.001,
+                               tooltip="Frames per second of the written .mp4: passed to ffmpeg as the frame rate "
+                                       "(-r) of the piped frames, so it sets playback speed and duration."),
                 io.Int.Input("crf", default=12, min=0, max=51, tooltip="x265 quality: lower = better / larger."),
                 io.Float.Input("paper_white_nits", default=203.0, min=50.0, max=1000.0, step=1.0,
                                tooltip="Brightness of diffuse white (1.0); 203 = BT.2408 reference white."),
                 io.Int.Input("master_display_nits", default=1000, min=100, max=10000,
                              tooltip="Peak of the mastering display written in the HDR10 metadata."),
             ],
-            outputs=[io.String.Output("report")],
+            outputs=[io.String.Output("report", tooltip="Text: written .mp4 path, frames, size, fps, CRF, paper white, "
+                                                        "MaxCLL / MaxFALL, % clipped above 10000 nits, % out-of-gamut "
+                                                        "zeroed and the verified colour tags.")],
             is_output_node=True,
         )
 
@@ -649,7 +680,9 @@ class MiniMaxH3_HDREvalReport(io.ComfyNode):
                 io.Combo.Input("encoding", options=HM.SUITE_ENCODINGS, default=HM.DEFAULT_ENCODING,
                                tooltip="Curve for the code-domain PSNR and the 8-bit baseline."),
             ],
-            outputs=[io.String.Output("report")],
+            outputs=[io.String.Output("report", tooltip="Text table: frames compared, luminance error in stops per "
+                                                        "brightness band (mean, p99, bias), worst channel, 8-bit "
+                                                        "rounding baseline and code-domain PSNR.")],
             is_output_node=True,
         )
 

@@ -49,8 +49,10 @@ class MiniMaxH3_HybridHDR(io.ComfyNode):
                 "(start_sigma .. end_sigma with ramps). Not yet validated on a real H3 run."
             ),
             inputs=[
-                io.Model.Input("model"),
-                io.Combo.Input("lora_name", options=names, default=names[0]),
+                io.Model.Input("model", tooltip="Ref2VA MODEL of the same H3 variant the LoRA was extracted from; "
+                                                "it is cloned, the input stays unpatched."),
+                io.Combo.Input("lora_name", options=names, default=names[0],
+                               tooltip="Hybrid HDR LoRA file in models/loras (Hybrid HDR Extract output)."),
                 io.Float.Input(
                     "strength",
                     default=1.0,
@@ -104,8 +106,11 @@ class MiniMaxH3_HybridHDR(io.ComfyNode):
                                          "filtered them.", extra_dict={"c2c_section": "Blocks"}),
             ],
             outputs=[
-                io.Model.Output("model"),
-                io.String.Output("report"),
+                io.Model.Output("model", tooltip="Clone of the input MODEL with the LoRA added as patches (constant "
+                                                 "merge) or as sigma-scheduled hooks (scheduled mode); wire to the "
+                                                 "sampler."),
+                io.String.Output("report", tooltip="Text: LoRA file, strength or schedule, block range, patched / "
+                                                   "total layers with coverage counts and the variant check note."),
             ],
         )
 

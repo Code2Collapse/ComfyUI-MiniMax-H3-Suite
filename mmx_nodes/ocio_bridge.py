@@ -50,28 +50,41 @@ class MiniMaxH3_OCIOBridge(io.ComfyNode):
                 "OCIO applies one CPU plane per frame (known throughput cost)."
             ),
             inputs=[
-                io.Image.Input("image"),
+                io.Image.Input("image", tooltip="to_display: scene-linear frames in source_colorspace (values above "
+                                                "1 allowed). to_scene_linear: display / view-encoded frames."),
                 io.Combo.Input(
                     "direction",
                     options=["to_display", "to_scene_linear"],
                     default="to_display",
+                    tooltip="to_display: source_colorspace -> target_colorspace -> display/view. to_scene_linear: "
+                            "inverse display/view -> target_colorspace -> source_colorspace. Never clamped.",
                 ),
                 io.Combo.Input(
                     "source_colorspace",
                     options=colorspaces,
                     default=default_scene,
+                    tooltip="Scene-linear OCIO colorspace of the scene side: the input space for to_display, the "
+                            "output space for to_scene_linear.",
                 ),
                 io.Combo.Input(
                     "target_colorspace",
                     options=colorspaces,
                     default=default_scene,
+                    tooltip="OCIO colorspace the display/view transform is applied from (to_display) or inverted "
+                            "into (to_scene_linear). Same as source = no extra colorspace step.",
                 ),
-                io.Combo.Input("display", options=displays, default=default_display),
-                io.Combo.Input("view", options=views, default=default_view),
+                io.Combo.Input("display", options=displays, default=default_display,
+                               tooltip="OCIO display of the view transform; must hold the chosen view."),
+                io.Combo.Input("view", options=views, default=default_view,
+                               tooltip="OCIO view applied with the display; checked against the display before "
+                                       "running."),
             ],
             outputs=[
-                io.Image.Output("image"),
-                io.String.Output("report"),
+                io.Image.Output("image", tooltip="Transformed frames, same size and frame count, not clamped: "
+                                                 "display/view values (to_display) or scene-linear "
+                                                 "(to_scene_linear)."),
+                io.String.Output("report", tooltip="Text: direction, colorspaces, display / view, OCIO config "
+                                                   "source, frame count and the per-frame OCIO note."),
             ],
         )
 

@@ -304,8 +304,12 @@ class MiniMaxH3_TemporalSplitParams(io.ComfyNode):
                             extra_dict={"c2c_section": "Anchors"}),
             ],
             outputs=[
-                H3_TEMPORAL_SPLIT.Output(display_name="temporal_split_param"),
-                io.String.Output(display_name="report"),
+                H3_TEMPORAL_SPLIT.Output(display_name="temporal_split_param",
+                                         tooltip="Chunk length, overlap and anchor settings (H3_TEMPORAL_SPLIT_PARAM); "
+                                                 "wire to H3 Split Upscale 'temporal_split_param'."),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: the segment plan for an EXAMPLE 124-frame clip (37 latent rows); "
+                                         "Split Upscale recomputes it from the real latent."),
             ],
         )
 
@@ -414,8 +418,13 @@ class MiniMaxH3_SpatialSplitParams(io.ComfyNode):
                     extra_dict={"c2c_section": "Tiles"}),
             ],
             outputs=[
-                H3_SPATIAL_SPLIT.Output(display_name="spatial_split_param"),
-                io.String.Output(display_name="report"),
+                H3_SPATIAL_SPLIT.Output(display_name="spatial_split_param",
+                                        tooltip="Tile size / overlap / fade / seam settings converted to latent cells "
+                                                "(H3_SPATIAL_SPLIT_PARAM); wire to H3 Split Upscale "
+                                                "'spatial_split_param'."),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: the tile grid on an EXAMPLE 64 x 64 latent; Split Upscale recomputes "
+                                         "the grid from the real latent size."),
             ],
         )
 
@@ -481,16 +490,30 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                 "pin. Anti-fork: seam_denoise cap on the freeze mask."
             ),
             inputs=[
-                io.Model.Input("model"),
-                io.Conditioning.Input("conditioning"),
-                io.Conditioning.Input("negative", optional=True),
-                io.Latent.Input("latent"),
-                io.Noise.Input("noise"),
-                io.Sampler.Input("sampler"),
-                io.Sigmas.Input("sigmas"),
-                io.Float.Input("cfg", default=1.0, min=0.0, max=100.0, step=0.1, round=0.01),
-                H3_TEMPORAL_SPLIT.Input("temporal_split_param", optional=True),
-                H3_SPATIAL_SPLIT.Input("spatial_split_param", optional=True),
+                io.Model.Input("model", tooltip="The H3 MODEL that samples every tile / chunk (a Fun ControlNet "
+                                                "patch on it is cropped per tile); unloaded at the end of the run."),
+                io.Conditioning.Input("conditioning", tooltip="Positive conditioning; its minimax_keyframes are "
+                                                              "trimmed to each chunk and cropped to each tile."),
+                io.Conditioning.Input("negative", optional=True,
+                                      tooltip="Optional negative conditioning. Not wired = positive only and cfg is "
+                                              "ignored."),
+                io.Latent.Input("latent", tooltip="H3 AV latent (video + audio NestedTensor), batch 1, already at the "
+                                                  "target size; it is re-sampled in tiles, not resized. Audio is kept "
+                                                  "(frozen by the noise mask)."),
+                io.Noise.Input("noise", tooltip="Noise source (e.g. RandomNoise); generated once for the whole "
+                                                "latent and sliced per tile, so tiles share one seed."),
+                io.Sampler.Input("sampler", tooltip="Sampler used for every tile, chunk and seam-polish pass."),
+                io.Sigmas.Input("sigmas", tooltip="Sigma schedule for each tile pass (steps = len - 1); its start "
+                                                  "sigma sets how much each tile is re-noised."),
+                io.Float.Input("cfg", default=1.0, min=0.0, max=100.0, step=0.1, round=0.01,
+                               tooltip="CFG scale; used only when 'negative' is wired. 1.0 = no extra guidance "
+                                       "(H3 is guidance-distilled)."),
+                H3_TEMPORAL_SPLIT.Input("temporal_split_param", optional=True,
+                                        tooltip="From H3 Temporal Split Params. Not wired = the whole clip in one "
+                                                "temporal pass, no anchors."),
+                H3_SPATIAL_SPLIT.Input("spatial_split_param", optional=True,
+                                       tooltip="From H3 Spatial Split Params. Not wired = the full frame as one "
+                                               "tile."),
                 io.Combo.Input(
                     "seam_polish", options=["off", "auto", "all"], default="off",
                     tooltip="Second-pass resample on seams that fail a colour/"
@@ -504,8 +527,12 @@ class MiniMaxH3_SplitUpscale(io.ComfyNode):
                             "often show a visible colour step between tiles.", extra_dict={"c2c_section": "Seams"}),
             ],
             outputs=[
-                io.Latent.Output(display_name="latent"),
-                io.String.Output(display_name="report"),
+                io.Latent.Output(display_name="latent",
+                                 tooltip="H3 AV latent at the input size with the re-sampled video and the original "
+                                         "audio; wire to VAE Decode."),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: temporal segments, tile grid and overlaps, seam-polish count, colour "
+                                         "match on/off (+ Fun ControlNet windowing note)."),
             ],
         )
 
