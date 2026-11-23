@@ -151,13 +151,23 @@ class MiniMaxH3_BlendLatentsByFrames(io.ComfyNode):
                 io.String.Input("keyframes", default="0:0, 22:0, 44:1",
                                 tooltip="frame:weight pairs (0-based pixel frames). Held before the first and after "
                                         "the last."),
-                io.Combo.Input("interpolation", options=["linear", "smooth", "hold"], default="linear"),
+                io.Combo.Input("interpolation", options=["linear", "smooth", "hold"], default="linear",
+                               tooltip="Between keyframes: linear ramp, smooth (cosine ease in / out), or "
+                                       "hold (keep the earlier keyframe's value until the next keyframe)."),
                 io.Combo.Input("audio", options=["latent 1", "latent 2", "blend"], default="latent 1",
                                tooltip="Which sound to keep; blend follows the same weights."),
                 io.Mask.Input("mask", optional=True,
                               tooltip="Where latent 2 may be used (frames at the canvas size, or latent size)."),
             ],
-            outputs=[io.Latent.Output(display_name="latent"), io.String.Output(display_name="report")],
+            outputs=[io.Latent.Output(display_name="latent",
+                                      tooltip="H3 audio + video latent: video = latent 1 x (1 - w) + latent 2 x "
+                                              "w per latent frame (w = mean keyframe weight of the pixel "
+                                              "frames it holds, times the mask); audio per the audio choice. "
+                                              "No noise mask."),
+                     io.String.Output(display_name="report",
+                                      tooltip="One line: frames and latent frames, latent 2's weight at the "
+                                              "first / last frame, the first frame it is used, audio choice, "
+                                              "masked or not.")],
         )
 
     @classmethod
@@ -187,16 +197,24 @@ class MiniMaxH3_KeyframeMask(io.ComfyNode):
             inputs=[
                 io.String.Input("keyframes", default="15:1, 22:0, 30:1", tooltip="frame:value pairs (0-based)."),
                 io.Int.Input("frame_count", default=124, min=1, max=100000,
-                             extra_dict={"c2c_hide_if_linked": ["size_reference"]}),
+                             extra_dict={"c2c_hide_if_linked": ["size_reference"]},
+                             tooltip="Number of mask frames (pixel frames). Ignored when size_reference is "
+                                     "connected."),
                 io.Int.Input("width", default=768, min=16, max=16384,
-                             extra_dict={"c2c_hide_if_linked": ["size_reference"]}),
+                             extra_dict={"c2c_hide_if_linked": ["size_reference"]},
+                             tooltip="Mask width in px. Ignored when size_reference is connected."),
                 io.Int.Input("height", default=768, min=16, max=16384,
-                             extra_dict={"c2c_hide_if_linked": ["size_reference"]}),
-                io.Combo.Input("interpolation", options=["linear", "smooth", "hold"], default="linear"),
+                             extra_dict={"c2c_hide_if_linked": ["size_reference"]},
+                             tooltip="Mask height in px. Ignored when size_reference is connected."),
+                io.Combo.Input("interpolation", options=["linear", "smooth", "hold"], default="linear",
+                               tooltip="Between keyframes: linear ramp, smooth (cosine ease in / out), or "
+                                       "hold (keep the earlier keyframe's value until the next keyframe)."),
                 io.Image.Input("size_reference", optional=True,
                                tooltip="Frames whose size and count to use instead of the numbers above."),
             ],
-            outputs=[io.Mask.Output(display_name="mask")],
+            outputs=[io.Mask.Output(display_name="mask",
+                                    tooltip="MASK [frame_count, height, width]: every pixel of a frame holds that "
+                                            "frame's keyframe value, clamped to 0-1.")],
         )
 
     @classmethod
@@ -227,12 +245,19 @@ class MiniMaxH3_MaskLevels(io.ComfyNode):
                          "the middle. For a denoise mask, black_level is the least any area is regenerated and "
                          "white_level the most (e.g. 0.3 / 0.6 for a refine pass)."),
             inputs=[
-                io.Mask.Input("mask"),
-                io.Float.Input("black_level", default=0.0, min=0.0, max=1.0, step=0.01),
-                io.Float.Input("white_level", default=1.0, min=0.0, max=1.0, step=0.01),
-                io.Float.Input("gamma", default=1.0, min=0.1, max=5.0, step=0.05),
+                io.Mask.Input("mask", tooltip="Any MASK; clamped to 0-1 before the levels are applied."),
+                io.Float.Input("black_level", default=0.0, min=0.0, max=1.0, step=0.01,
+                               tooltip="Output value where the mask is 0 (the least any area gets)."),
+                io.Float.Input("white_level", default=1.0, min=0.0, max=1.0, step=0.01,
+                               tooltip="Output value where the mask is 1 (the most any area gets). May be "
+                                       "below black_level, which inverts the mask."),
+                io.Float.Input("gamma", default=1.0, min=0.1, max=5.0, step=0.05,
+                               tooltip="Applied as mask^(1/gamma) before the levels: 1 = linear, above 1 "
+                                       "lifts mid values, below 1 lowers them."),
             ],
-            outputs=[io.Mask.Output(display_name="mask")],
+            outputs=[io.Mask.Output(display_name="mask",
+                                    tooltip="MASK of the same shape: black_level + (white_level - black_level) "
+                                            "x mask^(1/gamma), clamped to 0-1.")],
         )
 
     @classmethod

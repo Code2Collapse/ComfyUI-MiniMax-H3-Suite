@@ -130,13 +130,16 @@ def adapt(v1_cls, *, node_id: str, display_name: str, category: str,
         inputs.append(_build_input(name, entry, optional=True))
 
     names = getattr(v1_cls, "RETURN_NAMES", None) or ()
+    # The classic OUTPUT_TOOLTIPS tuple is V3's per-output tooltip (L9.293)
+    tips = getattr(v1_cls, "OUTPUT_TOOLTIPS", None) or ()
     outputs = []
     for i, ret in enumerate(v1_cls.RETURN_TYPES):
         factory = _OUTPUT_TYPES.get(str(ret))
         if factory is None:
             raise V1AdapterError(
                 f"Output {i} of {node_id} has type {ret!r}, unknown to this adapter.")
-        outputs.append(factory(display_name=names[i] if i < len(names) else None))
+        outputs.append(factory(display_name=names[i] if i < len(names) else None,
+                               tooltip=(str(tips[i]) if i < len(tips) and tips[i] else None)))
 
     fn_name = getattr(v1_cls, "FUNCTION", "execute")
     doc = description or (getattr(v1_cls, "DESCRIPTION", "") or "")

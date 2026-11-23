@@ -211,7 +211,9 @@ class MiniMaxH3_IdentityFusion(io.ComfyNode):
                 io.Mask.Input("occluder_mask", optional=True,
                               tooltip="Latent-space mask of things in front of the face (hands, hair, props): no "
                                       "identity there."),
-                io.Boolean.Input("enabled", default=True),
+                io.Boolean.Input("enabled", default=True,
+                                 tooltip="Off: the model passes through unchanged (no attention override, nothing "
+                                         "checked). On: installs the identity-attention weighting on a model clone."),
                 io.Float.Input("identity_inside", default=1.0, min=0.0, max=4.0, step=0.05, optional=True,
                                tooltip="Multiplier on the attention to the identity pictures inside the region.",
                                extra_dict={"c2c_show_if": {"enabled": [True]}}),
@@ -220,6 +222,9 @@ class MiniMaxH3_IdentityFusion(io.ComfyNode):
                                extra_dict={"c2c_show_if": {"enabled": [True]}}),
                 io.Float.Input("identity_on_expression", default=0.6, min=0.0, max=4.0, step=0.05,
                                optional=True,
+                               tooltip="Multiplier on the attention to the identity pictures on expression_mask "
+                                       "rows inside the region, from expression_from on. 0 = no identity there; "
+                                       "needs expression_mask.",
                                extra_dict={"c2c_section": "Expression", "c2c_show_if": {"enabled": [True]}}),
                 io.Float.Input("plate_on_expression", default=1.4, min=0.0, max=4.0, step=0.05,
                                tooltip="Multiplier on the attention to the plate video (<Video 1>) on mouth / eye "
@@ -228,6 +233,9 @@ class MiniMaxH3_IdentityFusion(io.ComfyNode):
                                        extra_dict={"c2c_section": "Expression", "c2c_show_if": {"enabled": [True]}}),
                 io.Float.Input("identity_on_occluder", default=0.0, min=0.0, max=4.0, step=0.05,
                                optional=True,
+                               tooltip="Multiplier on the attention to the identity pictures on occluder_mask rows; "
+                                       "overrides the region and expression values. 0 = no identity on occluders; "
+                                       "needs occluder_mask.",
                                extra_dict={"c2c_section": "Expression", "c2c_show_if": {"enabled": [True]}}),
                 io.Float.Input("expression_from", default=0.4, min=0.0, max=1.0, step=0.05,
                                tooltip="Expression easing starts at this fraction of the steps (fine detail is late).",
@@ -235,12 +243,20 @@ class MiniMaxH3_IdentityFusion(io.ComfyNode):
                                extra_dict={"c2c_section": "Expression", "c2c_show_if": {"enabled": [True]}}),
                 io.Float.Input("start_percent", default=0.0, min=0.0, max=1.0, step=0.05,
                                optional=True,
+                               tooltip="Fraction of the sampling schedule (0 = first, noisiest step) where the "
+                                       "weighting starts; converted to a sigma by the model. Outside the "
+                                       "start..end window attention is unchanged.",
                                extra_dict={"c2c_section": "Schedule", "c2c_show_if": {"enabled": [True]}}),
                 io.Float.Input("end_percent", default=1.0, min=0.0, max=1.0, step=0.05,
                                optional=True,
+                               tooltip="Fraction of the sampling schedule where the weighting stops (1 = through "
+                                       "the last step); converted to a sigma by the model.",
                                extra_dict={"c2c_section": "Schedule", "c2c_show_if": {"enabled": [True]}}),
                 io.Int.Input("block_start", default=0, min=0, max=200,
-                             optional=True, extra_dict={"c2c_section": "Blocks", "c2c_show_if": {"enabled": [True]}}),
+                             optional=True,
+                             tooltip="First DiT block index (0-based) whose attention is weighted; earlier blocks "
+                                     "run unchanged. Works with block_end.",
+                             extra_dict={"c2c_section": "Blocks", "c2c_show_if": {"enabled": [True]}}),
                 io.Int.Input("block_end", default=-1, min=-1, max=200, tooltip="-1 = the last block.",
                              optional=True, extra_dict={"c2c_section": "Blocks", "c2c_show_if": {"enabled": [True]}}),
                 io.Boolean.Input("asymmetric_flow", default=False,
@@ -249,7 +265,13 @@ class MiniMaxH3_IdentityFusion(io.ComfyNode):
                                          optional=True,
                                          extra_dict={"c2c_section": "Blocks", "c2c_show_if": {"enabled": [True]}}),
             ],
-            outputs=[io.Model.Output(display_name="model"), io.String.Output(display_name="report")],
+            outputs=[io.Model.Output(display_name="model",
+                                     tooltip="Clone of the MODEL with the identity-attention override installed "
+                                             "(the input model unchanged when disabled). Wire to the sampler."),
+                     io.String.Output(display_name="report",
+                                      tooltip="Text summary: identity/plate reference counts, masked latent-pixel "
+                                              "counts, the weights, schedule and blocks used, and whether another "
+                                              "attention override runs inside this one.")],
         )
 
     @classmethod

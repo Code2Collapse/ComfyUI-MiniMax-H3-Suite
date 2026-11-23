@@ -398,14 +398,21 @@ class MiniMaxH3Director(io.ComfyNode):
                              tooltip="Automation (connection-only). Output height. See width."),
             ],
             outputs=[
-                io.Model.Output(display_name="model"),
-                io.Conditioning.Output(display_name="positive"),
+                io.Model.Output(display_name="model",
+                                tooltip="The checkpoint the toolbar path needs (ref2va with Refs ON, fl2va with Refs "
+                                        "OFF; the other one if only one is connected) with shift_video / shift_audio "
+                                        "applied. Wire to the guider."),
+                io.Conditioning.Output(display_name="positive",
+                                       tooltip="The compiled prompt encoded by core H3 Reference To Video (Refs ON) "
+                                               "or H3 Image To Video (Refs OFF), with the reference / keyframe "
+                                               "images attached. Wire to the guider."),
                 io.Latent.Output(display_name="latent", tooltip="Joint video+audio latent. Wire to SamplerCustomAdvanced."),
                 io.Audio.Output(display_name="combined_audio",
                                 tooltip="Timeline audio mixdown. Wire into CreateVideo to replace the generated audio."),
                 io.Float.Output(display_name="fps", tooltip="Always 24.0 — H3's native output rate. Wire into CreateVideo."),
-                io.Int.Output(display_name="width"),
-                io.Int.Output(display_name="height"),
+                io.Int.Output(display_name="width", tooltip="The resolved output width in pixels (after the canvas "
+                                                            "box, resize and divisible_by snapping)."),
+                io.Int.Output(display_name="height", tooltip="The resolved output height in pixels (see width)."),
                 io.Int.Output(display_name="length", tooltip="Frame count actually generated (snapped to the 17k+5 grid)."),
                 io.String.Output(display_name="prompt", tooltip="The compiled storyboard prompt that was encoded."),
                 io.String.Output(display_name="retake_info",

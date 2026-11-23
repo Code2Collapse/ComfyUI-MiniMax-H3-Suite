@@ -42,20 +42,39 @@ class MiniMaxH3_DetailReinject(io.ComfyNode):
                 "(mask=0 outside region)."
             ),
             inputs=[
-                io.Image.Input("plate"),
-                io.Image.Input("generated"),
-                io.Mask.Input("mask", optional=True),
-                io.Combo.Input("mode", options=["divide", "subtract"], default="divide"),
+                io.Image.Input("plate", tooltip="Original frames whose fine detail (high band: image minus its "
+                                                "blur) is transferred. Same size and frame order as generated."),
+                io.Image.Input("generated", tooltip="Regenerated frames (e.g. H3 Stitch Back output). Their low "
+                                                    "band (blurred lighting/colour) is kept; outside the mask they "
+                                                    "pass through. Frames = min(plate, generated)."),
+                io.Mask.Input("mask", optional=True,
+                              tooltip="Where detail is transferred: 1 = full transfer, 0 = generated unchanged; "
+                                      "resized bilinearly to the frame, last frame reused if short. Not wired = "
+                                      "the whole frame."),
+                io.Combo.Input("mode", options=["divide", "subtract"], default="divide",
+                               tooltip="divide: blur(generated) * plate / (blur(plate) + eps), detail as a ratio. "
+                                       "subtract: blur(generated) + (plate - blur(plate)), detail as an offset. "
+                                       "Identical inputs return unchanged in both."),
                 io.Combo.Input("blur_method", options=["Gaussian", "Box"], default="Gaussian",
+                               tooltip="Low-pass filter that splits low and high bands: Gaussian or Box (flat "
+                                       "average), both with blur_radius.",
                                extra_dict={"c2c_section": "Filter"}),
-                io.Int.Input("blur_radius", default=8, min=1, max=64),
-                io.Float.Input("strength", default=1.0, min=0.0, max=1.0, step=0.01),
+                io.Int.Input("blur_radius", default=8, min=1, max=64,
+                             tooltip="Blur radius in pixels. Detail finer than this comes from the plate; "
+                                     "coarser structure stays from generated. Larger = more plate structure "
+                                     "transferred."),
+                io.Float.Input("strength", default=1.0, min=0.0, max=1.0, step=0.01,
+                               tooltip="0-1 mix from generated (0) to the full reinjected result (1) inside the "
+                                       "mask."),
                 io.Float.Input("eps", default=1e-4, min=1e-6, max=1e-2, step=1e-5,
+                               tooltip="divide mode: added to |blur(plate)| before dividing, to keep near-black "
+                                       "areas from blowing up. Larger = weaker detail in very dark regions.",
                                extra_dict={"c2c_section": "Filter", "c2c_show_if": {"mode": ["divide"]}}),
             ],
             outputs=[
-                io.Image.Output("images"),
-                io.String.Output("report"),
+                io.Image.Output("images", tooltip="IMAGE batch (RGB, not clamped), one frame per input pair: "
+                                                  "generated with the plate's fine detail inside the mask."),
+                io.String.Output("report", tooltip="Plain-text summary: mode, strength, blur radius, frame count."),
             ],
         )
 

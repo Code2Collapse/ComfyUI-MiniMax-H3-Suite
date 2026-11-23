@@ -201,7 +201,9 @@ class MiniMaxH3_Promptor(io.ComfyNode):
                     default="",
                     tooltip="Director instructions and scene plot.",
                 ),
-                io.Float.Input("duration", default=5.0, min=4.0, max=15.0, step=0.5),
+                io.Float.Input("duration", default=5.0, min=4.0, max=15.0, step=0.5,
+                               tooltip="Target clip length in seconds. Given to the LLM for shot timing; LENGTH is "
+                                       "this at 24 fps snapped up to H3's 17n+5 frame grid."),
                 io.String.Input(
                     "vision_context",
                     multiline=True,
@@ -215,6 +217,9 @@ class MiniMaxH3_Promptor(io.ComfyNode):
                     options=["Auto", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
                     default="Auto",
                     optional=True,
+                    tooltip="How many reference pictures (<Picture N> tags) the prompt uses. Auto = 0, so "
+                            "vision_context decides; a number is a minimum (the larger of it and vision_context's "
+                            "count). Also feeds task detection when task_type = Auto.",
                     extra_dict={'c2c_section': 'References'},
                 ),
                 io.Combo.Input(
@@ -222,6 +227,8 @@ class MiniMaxH3_Promptor(io.ComfyNode):
                     options=["Auto", "1", "2", "3"],
                     default="Auto",
                     optional=True,
+                    tooltip="Any number marks a reference video as present (<Video 1> tag, task detection); the "
+                            "count itself is not used further. Auto: only vision_context decides.",
                     extra_dict={'c2c_section': 'References'},
                 ),
                 io.Combo.Input(
@@ -229,17 +236,30 @@ class MiniMaxH3_Promptor(io.ComfyNode):
                     options=["Auto", "1", "2", "3"],
                     default="Auto",
                     optional=True,
+                    tooltip="Any number marks a reference audio as present (<Audio 1> tag, task detection); the "
+                            "count itself is not used further. Auto: only vision_context decides.",
                     extra_dict={'c2c_section': 'References'},
                 ),
-                io.Combo.Input("output_language", options=["English", "Chinese"], default="English", optional=True),
-                io.Combo.Input("provider", options=active_providers, default=default_choice, optional=True),
-                io.Float.Input("temperature", default=0.7, min=0.0, max=1.0, step=0.05, optional=True, extra_dict={'c2c_section': 'LLM'}),
-                io.Int.Input("max_tokens", default=4096, min=256, max=8192, step=256, optional=True, extra_dict={'c2c_section': 'LLM'}),
+                io.Combo.Input("output_language", options=["English", "Chinese"], default="English", optional=True,
+                               tooltip="Language the LLM writes the prompt in."),
+                io.Combo.Input("provider", options=active_providers, default=default_choice, optional=True,
+                               tooltip="LLM provider from the Promptor config.json (enabled entries, 'name (model)'). "
+                                       "Called twice per run (blueprint, then storyboard): a cloud API provider sends "
+                                       "the text over the network; ollama / local run on this machine."),
+                io.Float.Input("temperature", default=0.7, min=0.0, max=1.0, step=0.05, optional=True,
+                               tooltip="Sampling temperature of both LLM calls (0 = most repeatable).", extra_dict={'c2c_section': 'LLM'}),
+                io.Int.Input("max_tokens", default=4096, min=256, max=8192, step=256, optional=True,
+                             tooltip="Upper limit on the tokens each of the two LLM calls may return.", extra_dict={'c2c_section': 'LLM'}),
             ],
             outputs=[
-                io.String.Output("prompt", display_name="PROMPT"),
-                io.Float.Output("duration", display_name="DURATION"),
-                io.Int.Output("length", display_name="LENGTH"),
+                io.String.Output("prompt", display_name="PROMPT",
+                                 tooltip="The H3 structured prompt after both LLM stages and clean-up (subject "
+                                         "definitions, alignment line). On an LLM failure: the error text."),
+                io.Float.Output("duration", display_name="DURATION",
+                                tooltip="The duration input in seconds, unchanged."),
+                io.Int.Output("length", display_name="LENGTH",
+                              tooltip="Frame count: duration x 24 fps snapped up to H3's 17n+5 grid (5 s -> 124 "
+                                      "frames). Wire to the video length."),
             ],
         )
 
@@ -290,16 +310,31 @@ class MiniMaxH3_Vision(io.ComfyNode):
             ),
             is_output_node=True,
             inputs=[
-                io.Combo.Input("global_image_mode", options=IMAGE_MODES, default="Subject / Identity"),
-                io.Combo.Input("global_video_mode", options=VIDEO_MODES, default="Comprehensive"),
-                io.Combo.Input("output_language", options=["English", "Chinese"], default="English", optional=True),
-                io.Combo.Input("provider", options=active_providers, default=default_choice, optional=True),
-                io.Float.Input("temperature", default=0.2, min=0.0, max=1.0, step=0.05, optional=True, extra_dict={'c2c_section': 'LLM'}),
-                io.Int.Input("max_tokens", default=2048, min=256, max=8192, step=256, optional=True, extra_dict={'c2c_section': 'LLM'}),
-                io.Int.Input("seed", default=0, min=0, max=0xFFFFFFFFFFFFFFFF, optional=True, extra_dict={'c2c_hidden': True}),
+                io.Combo.Input("global_image_mode", options=IMAGE_MODES, default="Subject / Identity",
+                               tooltip="Analysis preset (vision_prompts.json) the LLM gets for every reference image, "
+                                       "e.g. Subject / Identity, Lighting & Camera. custom_prompt_override can "
+                                       "replace it per image."),
+                io.Combo.Input("global_video_mode", options=VIDEO_MODES, default="Comprehensive",
+                               tooltip="Analysis preset for every reference video (up to 4 frames of each are sent), "
+                                       "e.g. Motion Focus, Camera Tracking."),
+                io.Combo.Input("output_language", options=["English", "Chinese"], default="English", optional=True,
+                               tooltip="Language of the analysis text."),
+                io.Combo.Input("provider", options=active_providers, default=default_choice, optional=True,
+                               tooltip="LLM provider from the Promptor config.json. The images / video frames are "
+                                       "sent to it (a cloud provider = network upload). With ollama, ComfyUI first "
+                                       "unloads all its models and frees VRAM."),
+                io.Float.Input("temperature", default=0.2, min=0.0, max=1.0, step=0.05, optional=True,
+                               tooltip="Sampling temperature of the vision LLM calls (0 = most repeatable).", extra_dict={'c2c_section': 'LLM'}),
+                io.Int.Input("max_tokens", default=2048, min=256, max=8192, step=256, optional=True,
+                             tooltip="Upper limit on the tokens each vision LLM call may return.", extra_dict={'c2c_section': 'LLM'}),
+                io.Int.Input("seed", default=0, min=0, max=0xFFFFFFFFFFFFFFFF, optional=True,
+                             tooltip="Not used by the analysis (discarded in execute); changing it only makes "
+                                     "ComfyUI run the node again.", extra_dict={'c2c_hidden': True}),
                 io.Autogrow.Input(
                     "ref_images",
                     optional=True,
+                    tooltip="Up to 9 reference images, analysed in order as <Picture 1>, <Picture 2>... (sent to "
+                            "the LLM in batches of the provider's batch_size, default 4).",
                     template=io.Autogrow.TemplatePrefix(
                         input=io.Image.Input("image"),
                         prefix="image_",
@@ -310,6 +345,7 @@ class MiniMaxH3_Vision(io.ComfyNode):
                 io.Autogrow.Input(
                     "ref_videos",
                     optional=True,
+                    tooltip="Up to 3 reference videos, each analysed as <Video N> from up to 4 of its frames.",
                     template=io.Autogrow.TemplatePrefix(
                         input=io.Video.Input("video"),
                         prefix="video_",
@@ -320,6 +356,8 @@ class MiniMaxH3_Vision(io.ComfyNode):
                 io.Autogrow.Input(
                     "ref_audios",
                     optional=True,
+                    tooltip="Up to 3 reference audios. Not analysed (no audio LLM path): each only adds an "
+                            "<Audio N> entry so the Promptor knows audio is present.",
                     template=io.Autogrow.TemplatePrefix(
                         input=io.Audio.Input("audio"),
                         prefix="audio_",
@@ -327,11 +365,19 @@ class MiniMaxH3_Vision(io.ComfyNode):
                         max=3,
                     ),
                 ),
-                io.String.Input("custom_prompt_override", multiline=True, default="", optional=True, extra_dict={'c2c_section': 'Prompt'}),
+                io.String.Input("custom_prompt_override", multiline=True, default="", optional=True,
+                                tooltip="Per-item instructions replacing the preset, one 'key: text' per line, e.g. "
+                                        "'<Picture 2>: describe the jacket' or 'video 0: ...' (image/video N without "
+                                        "'<' counts from 0). Lines without a number are ignored.", extra_dict={'c2c_section': 'Prompt'}),
             ],
             outputs=[
-                io.String.Output("vision_context", display_name="VISION_CONTEXT"),
-                io.Image.Output("ref_images_out", display_name="REF_IMAGES"),
+                io.String.Output("vision_context", display_name="VISION_CONTEXT",
+                                 tooltip="JSON: the analysis per tag (<Picture N>, <Video N>, <Audio N>) plus "
+                                         "_media_keys; wire to MiniMax H3 Promptor's vision_context. '{}' when nothing "
+                                         "was analysed; '[Analyzer Exception]: ...' on an error."),
+                io.Image.Output("ref_images_out", display_name="REF_IMAGES",
+                                tooltip="The connected reference images passed through in input order (a 64x64 "
+                                        "black image after an error)."),
             ],
         )
 
@@ -455,7 +501,10 @@ class MiniMaxH3_PromptEditor(io.ComfyNode):
             description="Shows the prompt that reaches H3 and lets you edit it: a wired PROMPT wins until you edit the text (use_edited_text).",
             is_output_node=True,
             inputs=[
-                io.String.Input("prompt", multiline=True, force_input=True, default="", optional=True),
+                io.String.Input("prompt", multiline=True, force_input=True, default="", optional=True,
+                                tooltip="A wired prompt (e.g. the Promptor's PROMPT). It is the output unless "
+                                        "use_edited_text is on and the box has text; when it is empty the box "
+                                        "text is used."),
                 io.String.Input("_stored_prompt", multiline=True, default="", tooltip="Edited prompt storage."),
                 # C2C L8.21 (owner 2026-10-13: the generated prompt stays editable). Appended, default off: saved
                 # workflows behave exactly as before.
@@ -464,7 +513,9 @@ class MiniMaxH3_PromptEditor(io.ComfyNode):
                                          "was used. On: the text in the box wins - typing in the box turns this on. "
                                          "Turn it off to take a regenerated prompt again."),
             ],
-            outputs=[io.String.Output("prompt", display_name="PROMPT")],
+            outputs=[io.String.Output("prompt", display_name="PROMPT",
+                                      tooltip="The chosen prompt (wired or edited, see use_edited_text), trimmed of "
+                                              "outer spaces; also shown on the node.")],
         )
 
     @staticmethod
@@ -503,7 +554,9 @@ class MiniMaxH3_PromptComposer(io.ComfyNode):
                 io.String.Input("_composer_prompt", multiline=True, default="",
                                 tooltip="Your prompt. Empty = the selected mode's scaffold is output."),
             ],
-            outputs=[io.String.Output("prompt", display_name="PROMPT")],
+            outputs=[io.String.Output("prompt", display_name="PROMPT",
+                                      tooltip="Your text trimmed of outer spaces, or the selected mode's scaffold "
+                                              "when the text is empty; also shown on the node.")],
         )
 
     @classmethod

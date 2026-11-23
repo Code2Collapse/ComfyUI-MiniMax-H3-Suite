@@ -76,12 +76,14 @@ class MiniMaxH3_PixelRepair(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Image.Output("images"),
+                io.Image.Output("images", tooltip="The frames with detected impulse snow and chroma blotches "
+                                              "repaired (inside 'mask' when wired); same size and frame count."),
                 io.Mask.Output(
                     "damage_mask",
                     tooltip="Union of impulse and blotch damage detected per frame.",
                 ),
-                io.String.Output("report"),
+                io.String.Output("report", tooltip="JSON (per-frame impulse / blotch pixel counts) followed by "
+                                               "a one-line summary: frames, impulse, blotch, total damage pixels."),
             ],
         )
 

@@ -95,11 +95,17 @@ class MiniMaxH3_MediaConform(io.ComfyNode):
                 io.Int.Input("count", default=0, min=0, max=10_000_000, tooltip="Frames to keep. 0 = to the end."),
                 io.Combo.Input("fps_policy", options=list(FPS_POLICIES), default="keep",
                                tooltip="constant: resample to target_fps (repeats or skips frames, by real timestamps)."),
-                io.Float.Input("target_fps", default=24.0, min=0.0, max=240.0, step=0.001, extra_dict={'c2c_show_if': {'fps_policy': ['constant']}}),
+                io.Float.Input("target_fps", default=24.0, min=0.0, max=240.0, step=0.001,
+                               tooltip="fps_policy constant only: the output frame rate; each output frame shows the "
+                                       "source frame at its time (frames repeat or are skipped). Must be above 0.", extra_dict={'c2c_show_if': {'fps_policy': ['constant']}}),
                 io.Combo.Input("size_policy", options=list(SIZE_POLICIES), default="keep",
                                tooltip="fit: inside the box, aspect kept. fill: cover the box, centre crop. exact: stretch."),
-                io.Int.Input("target_width", default=0, min=0, max=16384, extra_dict={'c2c_show_if': {'size_policy': ['fit', 'fill', 'exact']}}),
-                io.Int.Input("target_height", default=0, min=0, max=16384, extra_dict={'c2c_show_if': {'size_policy': ['fit', 'fill', 'exact']}}),
+                io.Int.Input("target_width", default=0, min=0, max=16384,
+                             tooltip="Box width in pixels for fit / fill / exact (0 is an error there; ignored by "
+                                     "keep). Rounded down to multiple_of when that is set.", extra_dict={'c2c_show_if': {'size_policy': ['fit', 'fill', 'exact']}}),
+                io.Int.Input("target_height", default=0, min=0, max=16384,
+                             tooltip="Box height in pixels for fit / fill / exact (0 is an error there; ignored by "
+                                     "keep). Rounded down to multiple_of when that is set.", extra_dict={'c2c_show_if': {'size_policy': ['fit', 'fill', 'exact']}}),
                 io.Int.Input("multiple_of", default=0, min=0, max=256,
                              tooltip="Round the size to a multiple (e.g. 16 or 32). 0 = off."),
                 io.Audio.Input("audio", optional=True,
@@ -110,8 +116,9 @@ class MiniMaxH3_MediaConform(io.ComfyNode):
             outputs=[
                 C2C_VIDEO.Output("media", tooltip="The conformed lazy handle. Feed H3 Frame Window Reader."),
                 io.String.Output("ledger_json", tooltip="Contract h3.frame_ledger v1: output frame -> source frame."),
-                io.String.Output("report"),
-                io.Int.Output("frame_count"),
+                io.String.Output("report", tooltip="Text: frames / fps / size before and after, crop, colour tags "
+                                                   "(carried unchanged), audio, retiming method, ledger problems."),
+                io.Int.Output("frame_count", tooltip="Frames in the conformed handle."),
             ],
         )
 

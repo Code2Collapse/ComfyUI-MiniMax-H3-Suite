@@ -811,14 +811,27 @@ class MuseMinimaxDirector:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "mode": ([MODE_REFERENCE, MODE_FIRST_LAST], {"default": MODE_REFERENCE}),
-                "model": ("MODEL",),
-                "clip": ("CLIP",),
-                "vae": ("VAE",),
+                "mode": ([MODE_REFERENCE, MODE_FIRST_LAST], {"default": MODE_REFERENCE, "tooltip":
+                    "Reference (Omni): each chunk runs core MiniMax H3 Reference To Video with the timeline's "
+                    "character/background images, reference videos and audios. First/Last Frame: each chunk runs "
+                    "H3 Image To Video; timeline Ref 1 = first frame of chunk 1, Ref 2 = last frame of the last "
+                    "chunk."}),
+                "model": ("MODEL", {"tooltip": "The H3 model (Reference / ref2va checkpoint). Sigma-shifted with "
+                    "shift_video / shift_audio, then sampled; also the fallback for First/Last Frame mode when "
+                    "model_fl2va is not connected."}),
+                "clip": ("CLIP", {"tooltip": "H3's text encoder: encodes each chunk's compiled prompt."}),
+                "vae": ("VAE", {"tooltip": "H3's video VAE: encodes the reference / keyframe images and decodes "
+                    "every chunk's video latent to frames."}),
                 "audio_vae": ("VAE", {"tooltip": "Needed for final audio decode in both modes — H3 always builds a joint audio+video latent internally, even in First/Last Frame mode."}),
-                "aspect_ratio": (ASPECT_RATIO_OPTIONS, {"default": AspectRatio.WIDESCREEN_H.value}),
-                "megapixels": ("FLOAT", {"default": 0.98, "min": 0.1, "max": 4.0, "step": 0.02}),
-                "multiple": ("INT", {"default": 32, "min": 8, "max": 128, "step": 4, "c2c_section": "Size"}),
+                "aspect_ratio": (ASPECT_RATIO_OPTIONS, {"default": AspectRatio.WIDESCREEN_H.value, "tooltip":
+                    "Output aspect ratio (core Resolution Selector list). With megapixels and multiple it sets "
+                    "the output width x height; every reference / frame image is fitted to it."}),
+                "megapixels": ("FLOAT", {"default": 0.98, "min": 0.1, "max": 4.0, "step": 0.02, "tooltip":
+                    "Output pixel area in megapixels (x 1024 x 1024 pixels), split by aspect_ratio; width and "
+                    "height are then rounded to multiple."}),
+                "multiple": ("INT", {"default": 32, "min": 8, "max": 128, "step": 4, "c2c_section": "Size",
+                    "tooltip": "Width and height are rounded to a multiple of this many pixels (same formula "
+                               "as core Resolution Selector)."}),
                 "resize_method": (["crop", "pad", "stretch"], {"default": "crop", "tooltip":
                     "How every character/background reference image and First/Last Frame image gets fit to "
                     "the output resolution when its own aspect ratio doesn't match. 'crop' scales up and "
@@ -857,12 +870,20 @@ class MuseMinimaxDirector:
                     "get fresh reference-image reinforcement after that (the anchor frame itself already "
                     "carries the correct likeness forward, since it's real output from the reference-anchored "
                     "first chunk, not a blank start)."}),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                "steps": ("INT", {"default": 20, "min": 1, "max": 100}),
-                "sampler_name": (["res_multistep", "euler", "euler_ancestral", "dpmpp_2m"], {"default": "res_multistep"}),
-                "scheduler": (["simple", "normal", "beta", "sgm_uniform"], {"default": "simple"}),
-                "shift_video": ("FLOAT", {"default": 12.0, "min": 0.01, "max": 100.0, "step": 0.01, "c2c_section": "Sampling"}),
-                "shift_audio": ("FLOAT", {"default": 3.0, "min": 0.01, "max": 100.0, "step": 0.01, "c2c_section": "Sampling"}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "tooltip":
+                    "Noise seed of the first chunk; chunk N uses seed + N - 1."}),
+                "steps": ("INT", {"default": 20, "min": 1, "max": 100, "tooltip":
+                    "Sampling steps per chunk (core BasicScheduler, denoise 1.0)."}),
+                "sampler_name": (["res_multistep", "euler", "euler_ancestral", "dpmpp_2m"], {"default": "res_multistep",
+                    "tooltip": "Core sampler used for every chunk (KSamplerSelect + SamplerCustomAdvanced)."}),
+                "scheduler": (["simple", "normal", "beta", "sgm_uniform"], {"default": "simple", "tooltip":
+                    "Core sigma schedule for every chunk (BasicScheduler) on the shifted model."}),
+                "shift_video": ("FLOAT", {"default": 12.0, "min": 0.01, "max": 100.0, "step": 0.01, "c2c_section": "Sampling",
+                    "tooltip": "H3 video flow shift (core ModelSamplingMiniMaxH3): sets the sampler's sigma "
+                               "schedule. Applied to model and model_fl2va."}),
+                "shift_audio": ("FLOAT", {"default": 3.0, "min": 0.01, "max": 100.0, "step": 0.01, "c2c_section": "Sampling",
+                    "tooltip": "H3 audio flow shift (core ModelSamplingMiniMaxH3), handed to the model to derive "
+                               "the audio schedule. Applied to model and model_fl2va."}),
                 # ADDED (not upstream). Upstream has no prompt socket: every word
                 # comes from timeline_data, which its canvas timeline writes. This
                 # pack does not ship that front-end, so without this the node
@@ -873,7 +894,11 @@ class MuseMinimaxDirector:
                     "own - then the whole duration is one shot described by this. "
                     "With a timeline loaded the timeline's own shots win and this "
                     "is ignored."}),
-                "timeline_data": ("STRING", {"default": "{}", "multiline": False, "c2c_section": "Timeline (raw)"}),
+                "timeline_data": ("STRING", {"default": "{}", "multiline": False, "c2c_section": "Timeline (raw)",
+                    "tooltip": "Raw timeline JSON: characters, segments (shots), background, style_line, refVideos, "
+                               "refAudios, soundscape / music, dialogue_language. Files it names are read from "
+                               "ComfyUI's input folder. '{}' (or invalid JSON) = no timeline: the prompt input "
+                               "becomes the single shot."}),
             },
             "optional": {
                 "model_fl2va": ("MODEL", {"tooltip": "The separate First/Last-Frame checkpoint (not the same "
@@ -891,6 +916,12 @@ class MuseMinimaxDirector:
 
     RETURN_TYPES = ("IMAGE", "AUDIO", "STRING")
     RETURN_NAMES = ("images", "audio", "compiled_prompt")
+    OUTPUT_TOOLTIPS = (
+        "IMAGE batch: every chunk's decoded frames joined in order (24 fps; each chunk is snapped to H3's "
+        "17n+5 frame grid).",
+        "AUDIO: every chunk's decoded soundtrack (audio_vae) joined in order.",
+        "The prompt each chunk was generated from, under '--- Chunk i/N (~s) ---' headers.",
+    )
     FUNCTION = "execute"
     CATEGORY = "MiniMax H3/Director"
 

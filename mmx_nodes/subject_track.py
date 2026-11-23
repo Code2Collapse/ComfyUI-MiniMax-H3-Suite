@@ -154,14 +154,24 @@ class MiniMaxH3_MultiSubjectSelector(io.ComfyNode):
                     io.String.Input("subject_lock", optional=True, force_input=True,
                                     tooltip="An H3 subject from an earlier run: that person is kept, with their id."),
                     io.Int.Input("frame", default=0, min=0, max=100000, tooltip="Which of the images to pick on."),
-                    io.Combo.Input("selection", options=["auto", "index"], default="auto", extra_dict={'c2c_hide_if_linked': ['subject_lock']}),
+                    io.Combo.Input("selection", options=["auto", "index"], default="auto",
+                                   tooltip="auto: rank the candidates by size, reference and position and stop for "
+                                           "review when the best two are within ambiguity_margin. index: take the "
+                                           "gallery's '#index' candidate. Not used when subject_lock is connected.", extra_dict={'c2c_hide_if_linked': ['subject_lock']}),
                     io.Int.Input("index", default=0, min=0, max=256, tooltip="With selection = index: the '#' number "
                                  "in the gallery.", extra_dict={'c2c_show_if': {'selection': ['index']}, 'c2c_hide_if_linked': ['subject_lock']}),
-                    io.Combo.Input("position_preference", options=list(ST.POSITIONS), default="none", extra_dict={'c2c_hide_if_linked': ['subject_lock']}),
-                    io.Float.Input("size_weight", default=1.0, min=0.0, max=10.0, step=0.05, extra_dict={'c2c_section': 'Ranking', 'c2c_hide_if_linked': ['subject_lock']}),
+                    io.Combo.Input("position_preference", options=list(ST.POSITIONS), default="none",
+                                   tooltip="Favour candidates whose box centre lies at the centre, left, right, top "
+                                           "or bottom of the frame (a 0-1 position score). none: position is not "
+                                           "scored.", extra_dict={'c2c_hide_if_linked': ['subject_lock']}),
+                    io.Float.Input("size_weight", default=1.0, min=0.0, max=10.0, step=0.05,
+                                   tooltip="Weight of size (mask area / the largest candidate's area) in the ranking "
+                                           "score, a weighted mean of the active terms. 0 leaves size out.", extra_dict={'c2c_section': 'Ranking', 'c2c_hide_if_linked': ['subject_lock']}),
                     io.Float.Input("reference_weight", default=1.0, min=0.0, max=10.0, step=0.05,
                                    tooltip="Weight of the appearance match to the reference images.", extra_dict={'c2c_section': 'Ranking', 'c2c_hide_if_linked': ['subject_lock']}),
-                    io.Float.Input("position_weight", default=0.5, min=0.0, max=10.0, step=0.05, extra_dict={'c2c_section': 'Ranking', 'c2c_hide_if_linked': ['subject_lock'], 'c2c_show_if': {'position_preference': ['centre', 'left', 'right', 'top', 'bottom']}}),
+                    io.Float.Input("position_weight", default=0.5, min=0.0, max=10.0, step=0.05,
+                                   tooltip="Weight of the position_preference score in the ranking; 0 leaves position "
+                                           "out. Only used when position_preference is not none.", extra_dict={'c2c_section': 'Ranking', 'c2c_hide_if_linked': ['subject_lock'], 'c2c_show_if': {'position_preference': ['centre', 'left', 'right', 'top', 'bottom']}}),
                     io.Float.Input("ambiguity_margin", default=0.05, min=0.0, max=1.0, step=0.01,
                                    tooltip="Auto stops for review when the best two scores are closer than this.", extra_dict={'c2c_section': 'Decision'}),
                     io.Float.Input("lock_min_score", default=0.5, min=-1.0, max=1.0, step=0.01,
@@ -172,11 +182,19 @@ class MiniMaxH3_MultiSubjectSelector(io.ComfyNode):
                                     tooltip="H3 Frame Window's window_json for 'images': the pick is recorded with its "
                                             "frame in the clip, so H3 Temporal Subject Tracker can refuse a mask that "
                                             "does not belong on its first frame.")],
-            outputs=[io.String.Output("subject_id"), io.Mask.Output("mask"), io.BoundingBox.Output("bbox"),
+            outputs=[io.String.Output("subject_id", tooltip="The picked person's stable id (with subject_lock: the "
+                                                            "lock's id). Blocked, with a review message, when no "
+                                                            "candidate is picked."),
+                     io.Mask.Output("mask", tooltip="MASK of the pick on that frame (1 = the person), image size: "
+                                                    "H3 Temporal Subject Tracker's initial_mask."),
+                     io.BoundingBox.Output("bbox", tooltip="The pick's box as a core BOUNDING_BOX (x, y, width, "
+                                                           "height in pixels) for that frame."),
                      io.String.Output("subject", tooltip="H3 subject (id, box, appearance): for the tracker and "
                                                          "re-identification."),
                      io.Image.Output("gallery", tooltip="The candidates, best first; the pick outlined."),
-                     io.String.Output("report")],
+                     io.String.Output("report", tooltip="JSON: frame, number of candidates, selection mode, decision "
+                                                        "(accept / review), why, subject_id and every candidate's "
+                                                        "score terms.")],
         )
 
     @classmethod
@@ -259,21 +277,40 @@ class MiniMaxH3_SubjectReIdentification(io.ComfyNode):
                     io.String.Input("subject", force_input=True,
                                     tooltip="The subject's memory: H3 Multi-Subject Selector's or H3 Temporal Subject "
                                             "Tracker's subject."),
-                    io.Int.Input("frame", default=0, min=0, max=100000),
+                    io.Int.Input("frame", default=0, min=0, max=100000,
+                                 tooltip="Which image of the batch (and which frame of the bboxes) to search; "
+                                         "clamped to the last image."),
                     io.Combo.Input("confirmation", options=list(CONFIRM), default=CONFIRM[0],
                                    tooltip="always ask: stop and show the candidates; pick index: take '#index'."),
-                    io.Int.Input("index", default=0, min=0, max=256, extra_dict={'c2c_show_if': {'confirmation': ['pick index']}}),
-                    io.Float.Input("min_confidence", default=0.5, min=-1.0, max=1.0, step=0.01, extra_dict={'c2c_section': 'Decision', 'c2c_show_if': {'confirmation': ['auto when confident']}}),
+                    io.Int.Input("index", default=0, min=0, max=256,
+                                 tooltip="With confirmation = pick index: the '#' number of the candidate in the "
+                                         "gallery to accept.", extra_dict={'c2c_show_if': {'confirmation': ['pick index']}}),
+                    io.Float.Input("min_confidence", default=0.5, min=-1.0, max=1.0, step=0.01,
+                                   tooltip="auto when confident: when the best score (appearance x colour similarity "
+                                           "- motion penalty) is under this, it stops for review.", extra_dict={'c2c_section': 'Decision', 'c2c_show_if': {'confirmation': ['auto when confident']}}),
                     io.Float.Input("margin", default=0.05, min=0.0, max=1.0, step=0.01,
                                    tooltip="Review when the second candidate scores within this of the best.", extra_dict={'c2c_section': 'Decision', 'c2c_show_if': {'confirmation': ['auto when confident']}}),
-                    io.Float.Input("appearance_weight", default=1.0, min=0.0, max=10.0, step=0.05, extra_dict={'c2c_section': 'Ranking'}),
+                    io.Float.Input("appearance_weight", default=1.0, min=0.0, max=10.0, step=0.05,
+                                   tooltip="Multiplier on the colour-histogram similarity (body and clothing colours) "
+                                           "to the subject's memory; 0 ranks by distance only.", extra_dict={'c2c_section': 'Ranking'}),
                     io.Float.Input("motion_weight", default=0.5, min=0.0, max=10.0, step=0.05,
                                    tooltip="Penalty per frame width of distance from where the subject was.", extra_dict={'c2c_section': 'Ranking'}),
                     io.Float.Input("search_distance", default=1.0, min=0.0, max=2.0, step=0.05,
                                    tooltip="Ignore candidates farther than this (a fraction of the width).", extra_dict={'c2c_section': 'Ranking'})],
-            outputs=[io.String.Output("subject_id"), io.Mask.Output("mask"), io.BoundingBox.Output("bbox"),
-                     io.Float.Output("confidence"), io.String.Output("subject"),
-                     io.String.Output("ranking"), io.Image.Output("gallery")],
+            outputs=[io.String.Output("subject_id", tooltip="The subject's id from its memory (never changed). "
+                                                            "Blocked, with a review message, when no candidate is "
+                                                            "accepted."),
+                     io.Mask.Output("mask", tooltip="MASK of the accepted candidate on that frame (1 = the person)."),
+                     io.BoundingBox.Output("bbox", tooltip="The accepted candidate's box as a core BOUNDING_BOX "
+                                                           "(pixels)."),
+                     io.Float.Output("confidence", tooltip="The accepted candidate's score, clipped to 0-1."),
+                     io.String.Output("subject", tooltip="The subject memory JSON updated with the new frame, box, "
+                                                         "frame size and re-identification score."),
+                     io.String.Output("ranking", tooltip="JSON: subject id, frame, decision, why and every "
+                                                         "candidate's score, similarity and distance (also when it "
+                                                         "stops for review)."),
+                     io.Image.Output("gallery", tooltip="The candidate crops side by side, best first, mask tinted, "
+                                                        "'#index score'; the accepted one outlined.")],
         )
 
     @classmethod
@@ -679,13 +716,18 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
                                                                   "whole clip (any tracker); losses are still checked."),
                     io.String.Input("job", default="track01", tooltip="Job name: the folder in "
                                                                       "output/h3_jobs/<job>/track/."),
-                    io.Combo.Input("backend", options=list(BACKENDS), default=BACKENDS[0]),
+                    io.Combo.Input("backend", options=list(BACKENDS), default=BACKENDS[0],
+                                   tooltip="SAM 3 (core): track with core SAM3_VideoTrack (needs 'model'). masks input "
+                                           "(precomputed): take the per-frame masks from 'masks' and only run the "
+                                           "loss and re-identification checks (validate_backward is off)."),
                     io.Int.Input("window", default=100, min=2, max=2000, tooltip="Frames tracked per run."),
                     io.Combo.Input("review", options=list(REVIEW), default=REVIEW[0],
                                    tooltip="When the job waits for review: go on with candidate '#review_pick', end "
                                            "the track there (the subject has left), or track again (after you "
                                            "connected model + conditioning or changed nothing but want a retry)."),
-                    io.Int.Input("review_pick", default=0, min=0, max=256, extra_dict={'c2c_show_if': {'review': ['continue with candidate']}}),
+                    io.Int.Input("review_pick", default=0, min=0, max=256,
+                                 tooltip="With review = continue with candidate: the '#' number in the preview of the "
+                                         "candidate the track is reseeded from.", extra_dict={'c2c_show_if': {'review': ['continue with candidate']}}),
                     io.Boolean.Input("auto_continue", default=True, tooltip="Queue the next window automatically."),
                     io.Combo.Input("action", options=["run", "restart"], default="run",
                                    tooltip="restart: start this track again on this run (the old files are kept "
@@ -699,22 +741,36 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
                     io.Boolean.Input("validate_backward", default=False,
                                      tooltip="Also track each window backwards; frames where the two disagree "
                                              "(IoU under confidence_threshold) count as a loss. Twice the time.", extra_dict={'c2c_section': 'Tracking', 'c2c_show_if': {'backend': ['SAM 3 (core)']}}),
-                    io.Float.Input("confidence_threshold", default=0.5, min=0.0, max=1.0, step=0.01, extra_dict={'c2c_section': 'Tracking'}),
+                    io.Float.Input("confidence_threshold", default=0.5, min=0.0, max=1.0, step=0.01,
+                                   tooltip="With validate_backward on: a frame whose forward/backward mask IoU (0-1) "
+                                           "is under this counts as a loss.", extra_dict={'c2c_section': 'Tracking'}),
                     io.Int.Input("reid_interval", default=12, min=0, max=1000,
                                  tooltip="Every N frames compare the tracked person's colours with the memory "
                                          "(0 = off): catches a tracker that moved to someone else. 12 for a new "
                                          "node (2026-11-23, T6); a saved workflow keeps its own value.", extra_dict={'c2c_section': 'Re-identification'}),
-                    io.Float.Input("drift_similarity", default=0.5, min=0.0, max=1.0, step=0.01, extra_dict={'c2c_section': 'Tracking'}),
+                    io.Float.Input("drift_similarity", default=0.5, min=0.0, max=1.0, step=0.01,
+                                   tooltip="On every reid_interval-th frame: a colour similarity (0-1) of the tracked "
+                                           "mask to the subject's memory under this counts as a loss.", extra_dict={'c2c_section': 'Tracking'}),
                     io.Int.Input("max_gap", default=0, min=0, max=1000,
                                  tooltip="Frames the subject may be gone (occluded, off frame: no candidate matches "
                                          "well enough) before the job asks. Those frames get an empty mask.", extra_dict={'c2c_section': 'Re-identification'}),
                     io.Float.Input("min_confidence", default=0.5, min=-1.0, max=1.0, step=0.01,
                                    tooltip="Re-identification below this score stops for review.", extra_dict={'c2c_section': 'Re-identification'}),
-                    io.Float.Input("margin", default=0.05, min=0.0, max=1.0, step=0.01, extra_dict={'c2c_section': 'Re-identification'}),
-                    io.Float.Input("motion_weight", default=0.5, min=0.0, max=10.0, step=0.05, extra_dict={'c2c_section': 'Re-identification'}),
-                    io.Float.Input("search_distance", default=1.0, min=0.0, max=2.0, step=0.05, extra_dict={'c2c_section': 'Re-identification'}),
-                    io.Float.Input("detection_threshold", default=0.4, min=0.0, max=1.0, step=0.01, extra_dict={'c2c_section': 'Detection'}),
-                    io.Int.Input("max_auto_runs", default=200, min=1, max=100000, extra_dict={'c2c_section': 'Automation', 'c2c_show_if': {'auto_continue': [True]}}),
+                    io.Float.Input("margin", default=0.05, min=0.0, max=1.0, step=0.01,
+                                   tooltip="Re-identification after a loss: stops for review when the second "
+                                           "candidate scores within this of the best.", extra_dict={'c2c_section': 'Re-identification'}),
+                    io.Float.Input("motion_weight", default=0.5, min=0.0, max=10.0, step=0.05,
+                                   tooltip="Re-identification after a loss: score penalty per proxy-frame width of "
+                                           "distance from the last box (score = similarity - this x distance).", extra_dict={'c2c_section': 'Re-identification'}),
+                    io.Float.Input("search_distance", default=1.0, min=0.0, max=2.0, step=0.05,
+                                   tooltip="Re-identification after a loss: candidates farther than this fraction of "
+                                           "the proxy width from the last box are ignored.", extra_dict={'c2c_section': 'Re-identification'}),
+                    io.Float.Input("detection_threshold", default=0.4, min=0.0, max=1.0, step=0.01,
+                                   tooltip="Threshold for core SAM3_Detect when it searches for the subject again "
+                                           "after a loss (needs model + conditioning); lower returns more candidates.", extra_dict={'c2c_section': 'Detection'}),
+                    io.Int.Input("max_auto_runs", default=200, min=1, max=100000,
+                                 tooltip="With auto_continue: stop queuing the next window automatically after this "
+                                         "many chained runs; queue again by hand to go on.", extra_dict={'c2c_section': 'Automation', 'c2c_show_if': {'auto_continue': [True]}}),
                     # appended last (T6): off keeps saved workflows' rule and their track key
                     io.Boolean.Input("jump_2d", default=False, optional=True,
                                      tooltip="Loss rule: measure the centre jump in 2-D, so two people swapping at a "
@@ -724,8 +780,15 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
                      io.BoundingBox.Output("bboxes", tooltip="Every tracked frame so far, in source pixels "
                                                              "(an empty list where the subject is absent)."),
                      io.Float.Output("confidence", tooltip="The lowest per-frame confidence so far."),
-                     io.String.Output("events"), io.String.Output("subject", tooltip="The subject's memory, updated."),
-                     io.String.Output("status"), io.Image.Output("preview"),
+                     io.String.Output("events", tooltip="JSON list of the last 50 track events (start, lost, absent, "
+                                                        "reacquired, review, complete), each with its frame."),
+                     io.String.Output("subject", tooltip="The subject's memory, updated."),
+                     io.String.Output("status", tooltip="One line: tracking / waiting review / done, frames tracked "
+                                                        "of the total, the review reason and what to set, and what "
+                                                        "this run did (e.g. next window queued)."),
+                     io.Image.Output("preview", tooltip="IMAGE batch: this window's frames at the proxy size, the "
+                                                        "accepted mask tinted, its box and the subject's path; while "
+                                                        "waiting for review, the candidate gallery instead."),
                      io.String.Output("track_json", tooltip="Contract h3.subject_track: the folder, frames, boxes."),
                      C2C_VIDEO.Output("matte", tooltip="When the track is done: the subject's matte at the plate's "
                                                        "size, as a lazy handle (H3 Job Controller's matte).")],

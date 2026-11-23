@@ -229,9 +229,16 @@ class MiniMaxH3_NegPiP(io.ComfyNode):
                             "terms still pulling at it.", extra_dict={"c2c_section": "Schedule"}),
             ],
             outputs=[
-                io.Model.Output(display_name="model"),
-                io.Conditioning.Output(display_name="conditioning"),
-                io.String.Output(display_name="report"),
+                io.Model.Output(display_name="model",
+                                tooltip="A clone of the model with the NegPiP attention patch: the term rows' values "
+                                        "are flipped between start_percent and end_percent. Unchanged when terms is "
+                                        "empty."),
+                io.Conditioning.Output(display_name="conditioning",
+                                       tooltip="The conditioning with the encoded term rows appended after the "
+                                               "prompt's tokens. Use it in place of the input, with the model above."),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: the plan (terms, token spans, strength, schedule), encoding notes "
+                                         "and fallbacks, and what is not flipped."),
             ],
         )
 

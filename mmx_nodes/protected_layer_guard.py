@@ -27,10 +27,14 @@ class MiniMaxH3_ProtectedLayerGuard(io.ComfyNode):
                 "norm_out / proj_out / audio_proj_out. Official Block Cache T8 hooks on "
                 "block 0 and the last block are allowed. Passes MODEL through on success."
             ),
-            inputs=[io.Model.Input("model")],
+            inputs=[io.Model.Input("model", tooltip="H3 MODEL to check. Raises an error if a patches_replace entry "
+                                                    "replaces a protected DiT block (0, last, Union blocks 10/20/30/40) "
+                                                    "or the final-layer paths; Block Cache T8 hooks are allowed.")],
             outputs=[
-                io.Model.Output("model"),
-                io.String.Output("report"),
+                io.Model.Output("model", tooltip="The input MODEL, unchanged (same object), when no protected layer "
+                                                 "is patched. Continue the chain from here."),
+                io.String.Output("report", tooltip="One line with the DiT block count and confirmation that no "
+                                                   "protected block or final-layer path is patched."),
             ],
         )
 

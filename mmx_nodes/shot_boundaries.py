@@ -102,7 +102,8 @@ class MiniMaxH3_ShotBoundaries(io.ComfyNode):
             outputs=[
                 io.String.Output("shots_json", tooltip="Contract h3.shot_manifest v1: one entry per shot."),
                 io.String.Output("cut_rows", tooltip="The rows where a new shot starts, comma separated."),
-                io.Int.Output("shot_count"),
+                io.Int.Output("shot_count", tooltip="Number of shots (cuts kept after merging and manual add / remove, "
+                                                    "plus one)."),
                 io.Image.Output("contact_sheet", tooltip="The first frame of every shot, side by side."),
             ],
         )

@@ -189,12 +189,16 @@ class MiniMaxH3_AudioMaskDebug(io.ComfyNode):
             category=CATEGORY,
             description="Report which audio time ranges the latent's noise mask keeps (0.0) and generates (1.0). Accepts a joint AV latent or an audio latent alone; route the string to a Preview Any node.",
             inputs=[
-                io.Latent.Input("latent"),
+                io.Latent.Input("latent", tooltip="Joint AV latent or audio latent whose audio noise mask is read "
+                                                  "(not changed)."),
                 io.Vae.Input("vae", optional=True,
                              tooltip="The audio VAE used to encode this latent. Required when timing is auto."),
                 _timing_input(),
             ],
-            outputs=[io.String.Output(display_name="report")],
+            outputs=[io.String.Output(display_name="report",
+                                      tooltip="Text: the mask source, latent frame count and duration, then each run "
+                                              "of equal values as 'start-end s = value (keep / generate / soft)'. "
+                                              "Route to a Preview Any node.")],
         )
 
     @classmethod

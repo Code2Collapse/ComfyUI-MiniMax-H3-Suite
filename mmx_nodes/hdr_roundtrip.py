@@ -91,20 +91,40 @@ class MiniMaxH3_HDRRoundtrip(io.ComfyNode):
                 "No torch.clamp on HDR paths — values above 1.0 must survive to_scene."
             ),
             inputs=[
-                io.Image.Input("image"),
-                io.Combo.Input("direction", options=["to_view", "to_scene"], default="to_view"),
-                io.Combo.Input("colorspace", options=colorspaces, default=default_scene),
-                io.Combo.Input("display", options=displays, default=default_display, extra_dict={'c2c_show_if': {'code_space': ['off (OCIO view)']}}),
-                io.Combo.Input("view", options=views, default=default_view, extra_dict={'c2c_show_if': {'code_space': ['off (OCIO view)']}}),
-                io.Combo.Input("tag", options=["HDR", "Rec709", "ACEScg"], default="HDR", extra_dict={'c2c_show_if': {'code_space': ['off (OCIO view)']}}),
+                io.Image.Input("image", tooltip="to_view: scene-linear frames in 'colorspace' (values above 1 "
+                                                "allowed). to_scene: display / view-encoded frames (or log codes "
+                                                "with code_space on). Alpha is passed through."),
+                io.Combo.Input("direction", options=["to_view", "to_scene"], default="to_view",
+                               tooltip="to_view = scene-linear -> OCIO display/view (or -> log code). to_scene = the "
+                                       "inverse back to scene-linear, with an HDR peak audit (not clamped)."),
+                io.Combo.Input("colorspace", options=colorspaces, default=default_scene,
+                               tooltip="Scene-linear OCIO colorspace of the scene side (input of to_view, output of "
+                                       "to_scene). code_space modes require ACEScg."),
+                io.Combo.Input("display", options=displays, default=default_display,
+                               tooltip="OCIO display of the view transform (code_space off only); must hold the "
+                                       "chosen view.",
+                               extra_dict={'c2c_show_if': {'code_space': ['off (OCIO view)']}}),
+                io.Combo.Input("view", options=views, default=default_view,
+                               tooltip="OCIO view applied with the display (code_space off only); checked against "
+                                       "the display before running.",
+                               extra_dict={'c2c_show_if': {'code_space': ['off (OCIO view)']}}),
+                io.Combo.Input("tag", options=["HDR", "Rec709", "ACEScg"], default="HDR",
+                               tooltip="Label of the incoming frames (code_space off only). HDR / ACEScg turn on the "
+                                       "to_scene peak audit; it also feeds tag_out.",
+                               extra_dict={'c2c_show_if': {'code_space': ['off (OCIO view)']}}),
                 # L9.181 (owner 2026-11-10, HDR in MiniMax): appended last, default off = the node as it always was
                 io.Combo.Input("code_space", options=[CODE_OFF, *CODE_CHOICES], default=CODE_OFF,
                                optional=True, tooltip=CODE_TIP),
             ],
             outputs=[
-                io.Image.Output("image"),
-                io.String.Output("tag_out"),
-                io.String.Output("report"),
+                io.Image.Output("image", tooltip="Transformed frames, same size and frame count, not clamped: "
+                                                 "display/view values (to_view), scene-linear (to_scene), or log "
+                                                 "codes / ACEScg linear in code_space mode."),
+                io.String.Output("tag_out", tooltip="Label of the output: 'Rec709' after to_view, 'ACEScg' or 'HDR' "
+                                                    "after to_scene; '<curve> code' / 'ACEScg' in code_space mode."),
+                io.String.Output("report", tooltip="Text: direction, tags, colorspace / display / view, OCIO config "
+                                                   "source and the HDR peak audit (code_space: % outside 0..1 or "
+                                                   "the footroom fake-HDR check)."),
             ],
         )
 

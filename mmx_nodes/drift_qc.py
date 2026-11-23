@@ -75,10 +75,15 @@ class MiniMaxH3_DriftQC(io.ComfyNode):
                 "Calibration gate: synthetic shifts 0/0.5/1/2 px should read within ±0.25 px."
             ),
             inputs=[
-                io.Image.Input("original"),
-                io.Image.Input("edited"),
-                io.Mask.Input("edit_mask"),
-                io.Float.Input("threshold_px", default=2.0, min=0.0, max=64.0, step=0.1),
+                io.Image.Input("original", tooltip="The source plate frames; compared frame by frame with 'edited' "
+                                                   "(the shorter batch sets the frame count)."),
+                io.Image.Input("edited", tooltip="The edited / generated frames, same size as 'original'."),
+                io.Mask.Input("edit_mask", tooltip="MASK, 1 = edited region (ignored); drift is averaged over the "
+                                                   "pixels outside it. One mask or one per frame."),
+                io.Float.Input("threshold_px", default=2.0, min=0.0, max=64.0, step=0.1,
+                               tooltip="Pass limit in pixels for the PEAK per-frame mean exterior drift (RAFT-small "
+                                       "flow magnitude). Keep >= 0.25: below that it measures the estimator's noise "
+                                       "and bias."),
                 # A16, appended: where the SUBJECT ended up, not only whether the background moved
                 io.Mask.Input("source_subject_mask", optional=True,
                               tooltip="Mask of the subject in the SOURCE frames (optional). With the output's "
@@ -91,10 +96,14 @@ class MiniMaxH3_DriftQC(io.ComfyNode):
                                              "placement is then also given in original-plate pixels."),
             ],
             outputs=[
-                io.String.Output("drift_per_frame"),
-                io.Image.Output("drift_heatmap"),
-                io.Boolean.Output("passed"),
-                io.String.Output("report"),
+                io.String.Output("drift_per_frame", tooltip="JSON {\"drift_px\": [...]}: mean flow magnitude in "
+                                                            "pixels outside the edit mask, one value per frame."),
+                io.Image.Output("drift_heatmap", tooltip="IMAGE batch, one per frame: flow magnitude in pixels "
+                                                         "(grey, not normalised; 0 inside the edit mask)."),
+                io.Boolean.Output("passed", tooltip="True when the peak per-frame drift is <= threshold_px."),
+                io.String.Output("report", tooltip="Text: peak drift, threshold, frame count, PASS / FAIL (starts "
+                                                   "with 'FAILED' on failure), plus subject placement when the "
+                                                   "subject masks are wired."),
                 io.String.Output("placement_json",
                                  tooltip="Subject placement per frame and summary (empty when the subject masks "
                                          "are not wired)."),

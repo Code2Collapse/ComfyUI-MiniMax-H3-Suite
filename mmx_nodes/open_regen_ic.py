@@ -98,8 +98,12 @@ class MiniMaxH3_OpenRegenICPrepareDraft(io.ComfyNode):
                 io.Image.Input("images", tooltip="Draft frames [N,H,W,C]; alpha is dropped."),
                 io.Float.Input("source_fps", default=24.0, min=1.0, max=240.0, step=0.01,
                                tooltip="Wire GetVideoComponents.fps. Index map int(i*fps/24) = floor (STD rounds)."),
-                io.Int.Input("target_width", default=1344, min=32, max=8192, step=32),
-                io.Int.Input("target_height", default=768, min=32, max=8192, step=32),
+                io.Int.Input("target_width", default=1344, min=32, max=8192, step=32,
+                             tooltip="Draft canvas width in px; must be a multiple of 32 (checked). Frames are "
+                                     "covered / stretched to it (see fit)."),
+                io.Int.Input("target_height", default=768, min=32, max=8192, step=32,
+                             tooltip="Draft canvas height in px; must be a multiple of 32 (checked). Frames "
+                                     "are covered / stretched to it (see fit)."),
                 io.Int.Input("frame_count", default=124, min=124, max=362, step=17,
                              tooltip="17k+5. 124 is the tested length; above 124 needs Compose silence_source = "
                                      "encode (audio VAE). Needs >= 113 real frames from the source."),
@@ -114,10 +118,15 @@ class MiniMaxH3_OpenRegenICPrepareDraft(io.ComfyNode):
                 io.Audio.Input("audio", optional=True, tooltip="Draft soundtrack."),
             ],
             outputs=[
-                io.Image.Output("draft_frames"),
-                io.Audio.Output("draft_audio"),
-                io.String.Output("report"),
-                io.Int.Output("frame_count"),
+                io.Image.Output("draft_frames", tooltip="IMAGE batch of exactly frame_count frames (17k+5) at 24 "
+                                                        "fps on the target_width x target_height canvas; the "
+                                                        "last source frame repeats past the source's end."),
+                io.Audio.Output("draft_audio", tooltip="Soundtrack per audio_mode: cut / zero-padded to "
+                                                       "frame_count / 24 s, unchanged (passthrough), or "
+                                                       "silence at 32 kHz."),
+                io.String.Output("report", tooltip="JSON: source frames and fps, real frames at 24 fps, output "
+                                                   "frames, canvas, audio samples / rate, fit and audio mode."),
+                io.Int.Output("frame_count", tooltip="Frames in draft_frames (= the frame_count input, 17k+5)."),
                 io.Int.Output("real_frames", tooltip="Source frames inside the clip before the last one repeats "
                                                      "(feed STD Finish to drop the padded tail)."),
             ],
@@ -165,8 +174,12 @@ class MiniMaxH3_OpenRegenICPrompt(io.ComfyNode):
             display_name="H3 Open Regen IC · Official Prompt",
             category=CATEGORY,
             description="The verbatim IC TASK prompt + 'Scene description: <caption>'. Feed the IC refine Ref2VA.",
-            inputs=[io.String.Input("caption", multiline=True, default="")],
-            outputs=[io.String.Output("prompt")],
+            inputs=[io.String.Input("caption", multiline=True, default="",
+                                    tooltip="Scene description appended (trimmed) after the fixed IC TASK prompt "
+                                            "and 'Scene description: '. Empty = task prompt only.")],
+            outputs=[io.String.Output("prompt", tooltip="The verbatim IC TASK prompt + 'Scene description: ' + "
+                                                        "caption. Wire to the Ref2VA (Reference to Video) "
+                                                        "prompt.")],
         )
 
     @classmethod
@@ -185,11 +198,16 @@ class MiniMaxH3_OpenRegenICSigmas(io.ComfyNode):
             category=CATEGORY,
             description="Fixed IC grids: up3 (3 steps, default), up4, hf8. Use euler + BasicGuider CFG 1.",
             inputs=[
-                io.Combo.Input("sampler", options=list(R.SIGMAS), default="up3"),
+                io.Combo.Input("sampler", options=list(R.SIGMAS), default="up3",
+                               tooltip="Fixed IC sigma grid. up3: 3 steps from 0.835; up4: 4 steps from 0.923; "
+                                       "hf8: 8 steps from 1.0. Ignored when custom_sigmas is set."),
                 io.String.Input("custom_sigmas", default="", multiline=False,
                                 tooltip="Comma list; overrides sampler. Must end at 0, never increase, stay in [0,1]."),
             ],
-            outputs=[io.Sigmas.Output("sigmas"), io.String.Output("report")],
+            outputs=[io.Sigmas.Output("sigmas", tooltip="SIGMAS of the chosen grid (or custom list), ending at "
+                                                        "0. Use with euler + BasicGuider CFG 1."),
+                     io.String.Output("report", tooltip="JSON: which grid / custom list was used and its "
+                                                        "values.")],
         )
 
     @classmethod
@@ -241,7 +259,12 @@ class MiniMaxH3_OpenRegenICComposeLatent(io.ComfyNode):
                 io.Combo.Input("silence_file", options=assets or [NO_FILE], default=default_asset, optional=True,
                                tooltip="File in models/h3_assets for silence_source = asset file."),
             ],
-            outputs=[io.Latent.Output("latent"), io.String.Output("report")],
+            outputs=[io.Latent.Output("latent", tooltip="Two-part AV latent: the upscaled video + silence, "
+                                                        "keeping reference_latent's other keys; with pin_audio "
+                                                        "a noise mask of 1 on video, 0 on audio. Wire to the "
+                                                        "refine sampler."),
+                     io.String.Output("report", tooltip="JSON: video and audio latent shapes, frames, silence "
+                                                        "source, pinned.")],
         )
 
     @classmethod
@@ -343,19 +366,30 @@ class MiniMaxH3_OpenRegenICLoRAChain(io.ComfyNode):
                          "DMAD 4-step accepted) -> LMS Sharp r64 -> Open-H3 IC. Base = minimax_h3_ref2va_bf16 or "
                          "the hybrid FL2VA/Ref2VA."),
             inputs=[
-                io.Model.Input("model"),
-                io.Combo.Input("speed_lora", options=opt, default=speed),
-                io.Float.Input("speed_strength", default=1.0, min=-2.0, max=2.0, step=0.01),
-                io.Combo.Input("sharp_lora", options=opt, default=sharp),
-                io.Float.Input("sharp_strength", default=1.0, min=-2.0, max=2.0, step=0.01),
+                io.Model.Input("model", tooltip="Base H3 model: minimax_h3_ref2va_bf16 or the hybrid "
+                                                "FL2VA/Ref2VA. The three LoRAs are patched onto it in order."),
+                io.Combo.Input("speed_lora", options=opt, default=speed,
+                               tooltip="Slot 1, applied first: the speed LoRA (HyperFlow 8-step; DMAD 4-step "
+                                       "accepted). none = skipped (a warning goes to the report)."),
+                io.Float.Input("speed_strength", default=1.0, min=-2.0, max=2.0, step=0.01,
+                               tooltip="Model strength of the speed LoRA; 0 adds no change."),
+                io.Combo.Input("sharp_lora", options=opt, default=sharp,
+                               tooltip="Slot 2, applied second: LMS Sharp r64. none = skipped (a warning goes "
+                                       "to the report)."),
+                io.Float.Input("sharp_strength", default=1.0, min=-2.0, max=2.0, step=0.01,
+                               tooltip="Model strength of the LMS Sharp LoRA; 0 adds no change."),
                 io.Combo.Input("ic_lora", options=ic_opts, default=ic,
                                tooltip="ComfyUI-keyed IC LoRA, or the official Diffusers-keyed file (converted "
                                        "at load)."),
-                io.Float.Input("ic_strength", default=1.0, min=-2.0, max=2.0, step=0.01),
+                io.Float.Input("ic_strength", default=1.0, min=-2.0, max=2.0, step=0.01,
+                               tooltip="Model strength of the IC LoRA (applied last)."),
                 io.Combo.Input("ic_format", options=["auto", "comfy", "diffusers (convert at load)"], default="auto",
                                advanced=True, tooltip="auto = detect by key names."),
             ],
-            outputs=[io.Model.Output("model"), io.String.Output("report")],
+            outputs=[io.Model.Output("model", tooltip="Clone of the model with speed -> LMS Sharp -> IC LoRA "
+                                                      "patches. Wire to the IC refine sampler."),
+                     io.String.Output("report", tooltip="Text: slot-order warnings, then per slot the file, "
+                                                        "strength, key format and modules matched.")],
         )
 
     @classmethod

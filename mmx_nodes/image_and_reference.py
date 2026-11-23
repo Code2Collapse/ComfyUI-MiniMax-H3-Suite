@@ -88,12 +88,30 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                 "stock nodes make you pick one; most shots want both."
             ),
             inputs=[
-                io.Clip.Input("clip"),
-                io.Vae.Input("vae"),
-                io.Vae.Input("audio_vae"),
-                io.String.Input("prompt", multiline=True, dynamic_prompts=True),
-                io.Int.Input("width", default=1344, min=32, max=MAX_RESOLUTION, step=32),
-                io.Int.Input("height", default=768, min=32, max=MAX_RESOLUTION, step=32),
+                io.Clip.Input(
+                    "clip",
+                    tooltip="The H3 text encoder: tokenizes the prompt together with the reference items "
+                            "and keyframe images (vision context)."),
+                io.Vae.Input(
+                    "vae",
+                    tooltip="The H3 video VAE: encodes the keyframes, reference images and reference "
+                            "videos."),
+                io.Vae.Input(
+                    "audio_vae",
+                    tooltip="The H3 audio VAE: encodes ref_video_audio and ref_audio inputs (resampled to "
+                            "its rate). Not used when no audio reference is wired."),
+                io.String.Input(
+                    "prompt", multiline=True, dynamic_prompts=True,
+                    tooltip="Text prompt. References are numbered in wiring order: <Picture n> for "
+                            "ref_images, <Video n> for ref_videos, <Audio n> for audio references."),
+                io.Int.Input(
+                    "width", default=1344, min=32, max=MAX_RESOLUTION, step=32,
+                    tooltip="Output width in px (steps of 32); the empty latent is width / 16 wide. "
+                            "Keyframes, 'match' reference sizes and target-grid reference videos follow it."),
+                io.Int.Input(
+                    "height", default=768, min=32, max=MAX_RESOLUTION, step=32,
+                    tooltip="Output height in px (steps of 32); the empty latent is height / 16 high. "
+                            "Keyframes, 'match' reference sizes and target-grid reference videos follow it."),
                 io.Int.Input(
                     "length", default=124, min=5, max=3600, step=17,
                     tooltip="Frames at 24 fps, snapped up to H3's 17k+5 grid. "
@@ -120,6 +138,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                             "sampling step, not just the first.", extra_dict={"c2c_section": "References"}),
                 io.Autogrow.Input(
                     "ref_images", optional=True,
+                    tooltip="Up to 10 reference images, each a <Picture n> in slot order (see "
+                            "image_batches for batches); sized by ref_image_size.",
                     template=io.Autogrow.TemplateNames(
                         input=io.Image.Input(
                             "ref_image",
@@ -128,6 +148,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                         names=_names("ref_image", 10), min=0)),
                 io.Autogrow.Input(
                     "ref_videos", optional=True,
+                    tooltip="Up to 4 reference videos, each a <Video n>; cut to the output length and to "
+                            "the VAE's frame grid, sized by ref_video_fit.",
                     template=io.Autogrow.TemplateNames(
                         input=io.Image.Input(
                             "ref_video",
@@ -135,6 +157,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                         names=_names("ref_video", 4), min=0)),
                 io.Autogrow.Input(
                     "ref_video_audios", optional=True,
+                    tooltip="Up to 4 soundtracks, each paired with the ref_video of the same number and "
+                            "encoded with audio_vae.",
                     template=io.Autogrow.TemplateNames(
                         input=io.Audio.Input(
                             "ref_video_audio",
@@ -145,6 +169,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                         names=_names("ref_video_audio", 4), min=0)),
                 io.Autogrow.Input(
                     "ref_audios", optional=True,
+                    tooltip="Up to 4 standalone audio references (<Audio n>), encoded with audio_vae, "
+                            "added after all reference videos and their soundtracks.",
                     template=io.Autogrow.TemplateNames(
                         input=io.Audio.Input(
                             "ref_audio", tooltip="Standalone voice reference."),
@@ -173,8 +199,13 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                     extra_dict={"c2c_section": "References"}),
             ],
             outputs=[
-                io.Conditioning.Output(display_name="positive"),
-                io.Latent.Output(),
+                io.Conditioning.Output(
+                    display_name="positive",
+                    tooltip="The encoded prompt carrying the keyframes (minimax_keyframes: frame 0 and / or "
+                            "the last frame) and the references (minimax_refs). Wire to the guider."),
+                io.Latent.Output(
+                    tooltip="Empty H3 audio + video latent: width x height, length snapped up to 17k+5 frames "
+                            "(5k+2 latent frames), silent audio of the same duration. Wire to the sampler."),
                 io.String.Output(
                     display_name="report",
                     tooltip="What was built: how many of each reference, what "

@@ -39,7 +39,10 @@ class MiniMaxH3_PosePuppeteer(io.ComfyNode):
             ),
             inputs=[
                 io.Image.Input("driving_pose", tooltip="Pose hints IMAGE from N8 StrongestPose."),
-                io.String.Input("keypoints_json", optional=True, multiline=True, extra_dict={"c2c_hidden": True}),
+                io.String.Input("keypoints_json", optional=True, multiline=True, extra_dict={"c2c_hidden": True},
+                                tooltip="Optional keypoints_json from H3 Strongest Pose. Its skeleton (points with "
+                                        "confidence >= 0.3) is drawn at 70% over the hints in every rig type, at "
+                                        "the given pixel coordinates - not rescaled to character_ref's size."),
                 io.Image.Input("character_ref", tooltip="Sets the output size; blended under the pose except with pose_only."),
                 io.Combo.Input("rig_type", options=list(RIG_TYPES), default="human_to_creature",
                                tooltip="pose_only = the clean pose, for a pose ControlNet. human_to_creature / "
@@ -47,9 +50,14 @@ class MiniMaxH3_PosePuppeteer(io.ComfyNode):
                                        "preview), not a retarget."),
             ],
             outputs=[
-                io.Image.Output("motion_hints"),
-                io.String.Output("motion_text"),
-                io.String.Output("report"),
+                io.Image.Output("motion_hints", tooltip="IMAGE batch at character_ref's size, frames = the longer of "
+                                                        "the two inputs (a single image is repeated): the pose, or "
+                                                        "the pose blended over the plate per rig_type."),
+                io.String.Output("motion_text", tooltip="Plain-text motion package: rig type, frame count, whether "
+                                                        "keypoints were attached, blend used. Descriptive only; "
+                                                        "nothing reads it automatically."),
+                io.String.Output("report", tooltip="Plain-text summary: rig type, frame count, output size, and "
+                                                   "where to wire the hints."),
             ],
         )
 

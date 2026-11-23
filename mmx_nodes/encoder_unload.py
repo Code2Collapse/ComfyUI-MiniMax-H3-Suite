@@ -79,7 +79,9 @@ class MiniMaxH3_TextEncoderUnload(io.ComfyNode):
                     tooltip="The negative conditioning, unchanged. Leave this "
                             "output unconnected if you did not connect a "
                             "negative input."),
-                io.String.Output(display_name="report"),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: the device the text encoder (and its clones) was released from, "
+                                         "and that the diffusion model, VAEs and ControlNets were not touched."),
             ],
         )
 

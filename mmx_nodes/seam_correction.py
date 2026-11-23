@@ -157,7 +157,14 @@ class MiniMaxH3_SeamCorrection(io.ComfyNode):
                 io.Boolean.Input("use_gpu", default=True, tooltip="Statistics, colour and flow on the GPU if there is one.",
                                  extra_dict={"c2c_section": "Performance"}),
             ],
-            outputs=[io.Image.Output(display_name="images"), io.String.Output(display_name="report")],
+            outputs=[io.Image.Output(display_name="images",
+                                     tooltip="IMAGE batch, same frame count and size as the input, with the "
+                                             "chosen colour / motion / flash corrections applied at the seams "
+                                             "(unchanged when all are off or under 2 frames)."),
+                     io.String.Output(display_name="report",
+                                      tooltip="Text: device and settings, each boundary found (seam or real "
+                                              "cut), the gain / luma step per corrected seam, flash and motion "
+                                              "repairs, and warnings.")],
         )
 
     @classmethod

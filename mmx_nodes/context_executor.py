@@ -53,7 +53,10 @@ class MiniMaxH3_ContextWindowSampling(io.ComfyNode):
             ],
             outputs=[
                 io.Model.Output(display_name="model", tooltip="The patched model: feed it to an H3 sampler."),
-                io.String.Output(display_name="report"),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: snapped window and overlap (frames and latent steps), stride, "
+                                         "positions mode, whether audio cut points are exact, the kill-switch "
+                                         "variable, and any wrapped model function wrapper. Also shown on the node."),
             ],
         )
 

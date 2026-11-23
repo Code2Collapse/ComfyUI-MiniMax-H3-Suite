@@ -47,19 +47,45 @@ class MiniMaxH3_MaskPrep(io.ComfyNode):
                 "noise_mask during sampling — regional strength without SplitSigmas."
             ),
             inputs=[
-                io.Mask.Input("mask"),
-                io.Int.Input("width", default=768, min=32, max=4096, step=32),
-                io.Int.Input("height", default=768, min=32, max=4096, step=32),
-                io.Int.Input("frame_count", default=22, min=5, max=400),
-                io.Float.Input("denoise_strength", default=1.0, min=0.0, max=1.0, step=0.01),
-                io.Int.Input("temporal_clean", default=2, min=0, max=32, extra_dict={"c2c_section": "Cleanup"}),
-                io.Int.Input("spatial_dilate", default=0, min=0, max=64, extra_dict={"c2c_section": "Cleanup"}),
-                io.Boolean.Input("quantize_soft", default=True, extra_dict={"c2c_section": "Cleanup"}),
+                io.Mask.Input("mask", tooltip="Pixel mask per frame, 1 = region H3 regenerates, 0 = keep. "
+                                              "Should be the size of the clip being encoded; shorter batches are "
+                                              "padded with the last frame, longer ones truncated."),
+                io.Int.Input("width", default=768, min=32, max=4096, step=32,
+                             tooltip="Pixel width of the video the latent belongs to. Sets the latent mask width "
+                                     "(width // 16); the mask is centre-cropped to a multiple of 16 like the VAE."),
+                io.Int.Input("height", default=768, min=32, max=4096, step=32,
+                             tooltip="Pixel height of the video the latent belongs to. Sets the latent mask height "
+                                     "(height // 16)."),
+                io.Int.Input("frame_count", default=22, min=5, max=400,
+                             tooltip="Pixel frames of the clip. Rounded UP to the next legal H3 length (17k+5), "
+                                     "then grouped to latent frames with the (1,4,4,4,4) cycle."),
+                io.Float.Input("denoise_strength", default=1.0, min=0.0, max=1.0, step=0.01,
+                               tooltip="Multiplies the final latent mask (0-1). 1 = masked tokens fully "
+                                       "regenerated; lower values give partial noise in the masked region; "
+                                       "0 = mask all zero (nothing regenerated)."),
+                io.Int.Input("temporal_clean", default=2, min=0, max=32,
+                             tooltip="Frames: each pixel takes the max of the mask over +-N neighbouring frames "
+                                     "before reduction, so the region grows in time and flicker gaps close. "
+                                     "0 = off.",
+                             extra_dict={"c2c_section": "Cleanup"}),
+                io.Int.Input("spatial_dilate", default=0, min=0, max=64,
+                             tooltip="Pixels: grows the mask by N steps of a 3x3 cross dilation (about N px) "
+                                     "before reduction to the 16 px latent grid. 0 = off.",
+                             extra_dict={"c2c_section": "Cleanup"}),
+                io.Boolean.Input("quantize_soft", default=True,
+                                 tooltip="Round values up to 1/256 steps (ceil(m*256)/256), the same quantisation "
+                                         "the sampler applies, so re-pooling at sample time changes nothing.",
+                                 extra_dict={"c2c_section": "Cleanup"}),
             ],
             outputs=[
-                io.Mask.Output("latent_mask"),
-                io.Mask.Output("token_preview"),
-                io.String.Output("report"),
+                io.Mask.Output("latent_mask", tooltip="Video-side latent mask [latent frames, height/16, width/16], "
+                                                      "1 = regenerate; max-pooled per 16 px cell and 2x2 token "
+                                                      "patch. For the noise_mask assembly (N4), not pixel use."),
+                io.Mask.Output("token_preview", tooltip="The latent mask upsampled back to pixel size, one frame per "
+                                                        "pixel frame of the snapped length, to see which 32 px "
+                                                        "token blocks will change."),
+                io.String.Output("report", tooltip="Plain-text summary: snapped frame count, latent frame count, "
+                                                   "mask shape, latent grid size, quantize/strength settings."),
             ],
         )
 

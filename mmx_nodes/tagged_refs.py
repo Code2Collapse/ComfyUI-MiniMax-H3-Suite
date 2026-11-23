@@ -22,6 +22,10 @@ from mmx_utils import tagged_refs as TR  # noqa: E402
 CATEGORY = "MiniMax H3/Conditioning"
 TAGGED_REFS = io.Custom("MMX_H3_TAGGED_REFERENCES")
 CHAIN_TIP = "Optional earlier Tagged node: chain them in the order you want them numbered."
+REFS_TIP = ("The tag registry: the chain's earlier entries plus this one (tags must be unique across the chain). "
+            "Wire to the next Tagged node's previous or to H3 Tagged Reference to Video's references.")
+STATUS_TIP = ("One line: what this node registered and the whole chain so far (tags, kinds, registry "
+              "fingerprint); also shown on the node.")
 
 
 def _image(x, label, min_frames=1):
@@ -46,7 +50,8 @@ class MiniMaxH3_TaggedPicture(io.ComfyNode):
             inputs=[io.Image.Input("image", tooltip="The picture. Only the first image of a batch is used."),
                     io.String.Input("tag", default="hero_face", tooltip="Write @hero_face in the prompt to use it."),
                     TAGGED_REFS.Input("previous", optional=True, tooltip=CHAIN_TIP)],
-            outputs=[TAGGED_REFS.Output(display_name="references"), io.String.Output(display_name="status")])
+            outputs=[TAGGED_REFS.Output(display_name="references", tooltip=REFS_TIP),
+                     io.String.Output(display_name="status", tooltip=STATUS_TIP)])
 
     @classmethod
     def execute(cls, image, tag, previous=None) -> io.NodeOutput:
@@ -71,7 +76,8 @@ class MiniMaxH3_TaggedVideo(io.ComfyNode):
                                     tooltip="Tag of the soundtrack. Blank: @<tag>_audio."),
                     io.Audio.Input("audio", optional=True, tooltip="The video's own soundtrack."),
                     TAGGED_REFS.Input("previous", optional=True, tooltip=CHAIN_TIP)],
-            outputs=[TAGGED_REFS.Output(display_name="references"), io.String.Output(display_name="status")])
+            outputs=[TAGGED_REFS.Output(display_name="references", tooltip=REFS_TIP),
+                     io.String.Output(display_name="status", tooltip=STATUS_TIP)])
 
     @classmethod
     def execute(cls, video, tag, audio_tag="", audio=None, previous=None) -> io.NodeOutput:
@@ -96,7 +102,8 @@ class MiniMaxH3_TaggedAudio(io.ComfyNode):
             inputs=[io.Audio.Input("audio", tooltip="Standalone reference audio."),
                     io.String.Input("tag", default="voice", tooltip="Write @voice in the prompt."),
                     TAGGED_REFS.Input("previous", optional=True, tooltip=CHAIN_TIP)],
-            outputs=[TAGGED_REFS.Output(display_name="references"), io.String.Output(display_name="status")])
+            outputs=[TAGGED_REFS.Output(display_name="references", tooltip=REFS_TIP),
+                     io.String.Output(display_name="status", tooltip=STATUS_TIP)])
 
     @classmethod
     def execute(cls, audio, tag, previous=None) -> io.NodeOutput:
@@ -122,13 +129,17 @@ class MiniMaxH3_TaggedReferenceToVideo(io.ComfyNode):
                          "native label. H3 takes at most 9 pictures, 3 videos and 3 standalone audios."),
             search_aliases=["tagged ref2va", "@tag reference to video", "prompt references"],
             inputs=[
-                io.Clip.Input("clip"),
+                io.Clip.Input("clip", tooltip="H3's text encoder: encodes the compiled prompt (core Reference to "
+                                              "Video)."),
                 TAGGED_REFS.Input("references", tooltip="The chain of H3 Tagged Picture / Video / Audio nodes."),
                 io.String.Input("prompt", multiline=True, dynamic_prompts=True,
                                 tooltip="Write @tags where the reference belongs, e.g. '<Subject 1> has the face of "
                                         "@hero_face and moves like @performance.'"),
-                io.Int.Input("width", default=1344, min=32, max=8192, step=32),
-                io.Int.Input("height", default=768, min=32, max=8192, step=32),
+                io.Int.Input("width", default=1344, min=32, max=8192, step=32,
+                             tooltip="Output width in pixels (multiple of 32) for core Reference to Video's empty "
+                                     "latent; ref_image_size = match scales the pictures to this pixel area."),
+                io.Int.Input("height", default=768, min=32, max=8192, step=32,
+                             tooltip="Output height in pixels (multiple of 32), see width."),
                 io.Int.Input("length", default=124, min=5, max=3600, step=17,
                              tooltip="Frame count at 24 fps (17k + 5)."),
                 io.Combo.Input("ref_image_size", options=["match", "max"], default="match",
@@ -143,8 +154,18 @@ class MiniMaxH3_TaggedReferenceToVideo(io.ComfyNode):
                                                            "text encoder)."),
                 io.Vae.Input("audio_vae", optional=True, tooltip="H3 audio VAE."),
             ],
-            outputs=[io.Conditioning.Output(display_name="positive"), io.Latent.Output(display_name="latent"),
-                     io.String.Output(display_name="compiled_prompt"), io.String.Output(display_name="report")])
+            outputs=[io.Conditioning.Output(display_name="positive",
+                                            tooltip="Core Reference to Video's conditioning: the compiled prompt with "
+                                                    "the used references attached. Wire to the guider."),
+                     io.Latent.Output(display_name="latent",
+                                      tooltip="Core Reference to Video's joint video + audio latent for width x "
+                                              "height x length. Wire to the sampler."),
+                     io.String.Output(display_name="compiled_prompt",
+                                      tooltip="The prompt as encoded: every used @tag replaced by its <Picture N> / "
+                                              "<Video N> / <Audio N> label."),
+                     io.String.Output(display_name="report",
+                                      tooltip="Text: '@tag -> label' per used reference, warnings (soft compliance), "
+                                              "and notes when vae / audio_vae is missing; also shown on the node.")])
 
     @classmethod
     def execute(cls, clip, references, prompt, width=1344, height=768, length=124, ref_image_size="match",

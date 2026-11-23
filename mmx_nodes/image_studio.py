@@ -400,9 +400,17 @@ class MiniMaxH3_ImageResolution(io.ComfyNode):
                                tooltip='Required only for aspect_ratio "source image".'),
             ],
             outputs=[
-                io.Int.Output("width"),
-                io.Int.Output("height"),
-                io.String.Output("report"),
+                io.Int.Output("width",
+                              tooltip="Canvas width in pixels, snapped to the chosen multiple and capped to "
+                                      "768×1344 total pixels when native_area_cap is on. Wire to an H3 Image "
+                                      "Prepare node's width."),
+                io.Int.Output("height",
+                              tooltip="Canvas height in pixels, snapped to the chosen multiple and capped to "
+                                      "768×1344 total pixels when native_area_cap is on. Wire to an H3 Image "
+                                      "Prepare node's height."),
+                io.String.Output("report",
+                                 tooltip="Text summary: width×height, megapixels (1024² units), ratio source, "
+                                         "multiple, cap state, and a warning when the canvas exceeds the native area."),
             ],
         )
 
@@ -439,7 +447,10 @@ class MiniMaxH3_ImageResolutionPreset(io.ComfyNode):
                     tooltip="Higher MP costs decode and attention; H3 detail does not scale linearly. "
                             "Start at native detail unless you have VRAM headroom.",
                 ),
-                io.Image.Input("source_image", optional=True),
+                io.Image.Input("source_image", optional=True,
+                               tooltip='Only read when aspect_ratio is "source image": its width/height ratio is '
+                                       "used (pixels are not used). Error if that option is chosen and nothing "
+                                       "is connected."),
                 io.Float.Input("custom_megapixels", default=2.0, min=0.10, max=64.0, step=0.10, optional=True,
                                tooltip='Only when resolution_profile is "custom megapixels".', extra_dict={'c2c_show_if': {'resolution_profile': ['custom megapixels']}}),
                 io.Boolean.Input(
@@ -449,9 +460,16 @@ class MiniMaxH3_ImageResolutionPreset(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Int.Output("width"),
-                io.Int.Output("height"),
-                io.String.Output("report"),
+                io.Int.Output("width",
+                              tooltip="Canvas width in pixels on H3's 32-pixel grid, fitted to the profile's "
+                                      "megapixels and the aspect ratio. Wire to an H3 Image Prepare node's width."),
+                io.Int.Output("height",
+                              tooltip="Canvas height in pixels on H3's 32-pixel grid, fitted to the profile's "
+                                      "megapixels and the aspect ratio. Wire to an H3 Image Prepare node's height."),
+                io.String.Output("report",
+                                 tooltip="Text summary: width×height, megapixels (1024² units), ratio source, "
+                                         "profile, and whether the canvas is within, limited to, or above the "
+                                         "native 768×1344 area."),
             ],
         )
 
@@ -475,7 +493,10 @@ class MiniMaxH3_ImagePrepare(io.ComfyNode):
                 "Prepare T2I, I2I, or REF2VA conditioning plus an empty H3 AV latent for still-image sampling."
             ),
             inputs=[
-                io.Clip.Input("clip"),
+                io.Clip.Input("clip",
+                              tooltip="H3 text encoder. Encodes the (optionally wrapped) prompt; in "
+                                      "image_to_image it also sees the fitted source, in reference_edit the "
+                                      "reference images, as vision input."),
                 io.Combo.Input(
                     "mode",
                     options=[
@@ -490,8 +511,12 @@ class MiniMaxH3_ImagePrepare(io.ComfyNode):
                 io.String.Input("prompt", default="", multiline=True,
                                 tooltip="Describe ONE final still. Video phrasing ('pan left', 'over 3 seconds') "
                                         "makes the temporal packet wander between frames."),
-                io.Int.Input("width", default=1344, min=32, max=16384, step=32),
-                io.Int.Input("height", default=768, min=32, max=16384, step=32),
+                io.Int.Input("width", default=1344, min=32, max=16384, step=32,
+                             tooltip="Canvas width in pixels, rounded to the nearest multiple of 32. The empty "
+                                     "latent is width/16 wide; sources are fitted to this width."),
+                io.Int.Input("height", default=768, min=32, max=16384, step=32,
+                             tooltip="Canvas height in pixels, rounded to the nearest multiple of 32. The empty "
+                                     "latent is height/16 tall; sources are fitted to this height."),
                 io.Combo.Input("frame_preset", options=list(FRAME_PRESETS.keys()),
                                default=RECOMMENDED_FRAME_PROFILE,
                                tooltip="H3 denoises the whole packet jointly. More frames add temporal context "
@@ -506,24 +531,69 @@ class MiniMaxH3_ImagePrepare(io.ComfyNode):
                 io.Combo.Input("reference_size", options=["match_generation_area", "max_identity_2048"],
                                default="max_identity_2048",
                                tooltip="REF2VA encode resolution. max_identity_2048 keeps more identity detail.", extra_dict={'c2c_show_if': {'mode': ['image_to_image (FL2VA)', 'reference_edit (REF2VA)']}}),
-                io.Vae.Input("vae", optional=True),
-                io.Image.Input("source_image", optional=True),
-                io.Image.Input("reference_image_2", optional=True),
-                io.Image.Input("reference_image_3", optional=True),
-                io.Image.Input("reference_image_4", optional=True),
-                io.Image.Input("reference_image_5", optional=True),
-                io.Image.Input("reference_image_6", optional=True),
-                io.Image.Input("reference_image_7", optional=True),
-                io.Image.Input("reference_image_8", optional=True),
-                io.Image.Input("reference_image_9", optional=True),
+                io.Vae.Input("vae", optional=True,
+                             tooltip="H3 video VAE that encodes the source / reference images to latents. "
+                                     "Required in image_to_image and reference_edit modes; unused in text_to_image."),
+                io.Image.Input("source_image", optional=True,
+                               tooltip="Image to edit (first image of the batch). image_to_image: fitted to the "
+                                       "canvas and pinned as frame 0 (one-frame profile: used as <Picture 1>). "
+                                       "reference_edit: <Picture 1>. Ignored in text_to_image."),
+                io.Image.Input("reference_image_2", optional=True,
+                               tooltip="Extra REF2VA reference, reference_edit mode only (ignored otherwise). "
+                                       "Connected references are numbered <Picture 2>..<Picture 9> in socket "
+                                       "order, skipping empty sockets; first image of the batch is used."),
+                io.Image.Input("reference_image_3", optional=True,
+                               tooltip="Extra REF2VA reference, reference_edit mode only. Numbered as the next "
+                                       "<Picture N> after the connected sockets above it; first image of the "
+                                       "batch is used."),
+                io.Image.Input("reference_image_4", optional=True,
+                               tooltip="Extra REF2VA reference, reference_edit mode only. Numbered as the next "
+                                       "<Picture N> after the connected sockets above it; first image of the "
+                                       "batch is used."),
+                io.Image.Input("reference_image_5", optional=True,
+                               tooltip="Extra REF2VA reference, reference_edit mode only. Numbered as the next "
+                                       "<Picture N> after the connected sockets above it; first image of the "
+                                       "batch is used."),
+                io.Image.Input("reference_image_6", optional=True,
+                               tooltip="Extra REF2VA reference, reference_edit mode only. Numbered as the next "
+                                       "<Picture N> after the connected sockets above it; first image of the "
+                                       "batch is used."),
+                io.Image.Input("reference_image_7", optional=True,
+                               tooltip="Extra REF2VA reference, reference_edit mode only. Numbered as the next "
+                                       "<Picture N> after the connected sockets above it; first image of the "
+                                       "batch is used."),
+                io.Image.Input("reference_image_8", optional=True,
+                               tooltip="Extra REF2VA reference, reference_edit mode only. Numbered as the next "
+                                       "<Picture N> after the connected sockets above it; first image of the "
+                                       "batch is used."),
+                io.Image.Input("reference_image_9", optional=True,
+                               tooltip="Extra REF2VA reference, reference_edit mode only (up to 9 pictures in "
+                                       "total). Numbered as the next <Picture N> after the connected sockets "
+                                       "above it; first image of the batch is used."),
             ],
             outputs=[
-                io.Conditioning.Output("positive"),
-                io.Latent.Output("h3_latent"),
-                io.Image.Output("fitted_source"),
-                io.Int.Output("requested_frames"),
-                io.String.Output("optimized_prompt"),
-                io.String.Output("report"),
+                io.Conditioning.Output("positive",
+                                       tooltip="CONDITIONING for the sampler's positive input: the encoded prompt, "
+                                               "plus the source as a frame-0 keyframe latent (image_to_image) or "
+                                               "the reference latents (reference_edit, native transport)."),
+                io.Latent.Output("h3_latent",
+                                 tooltip="Empty (all-zero) H3 audio-video LATENT: video width/16 × height/16 × the "
+                                         "profile's latent frames, plus decode hints. Wire to the sampler, then "
+                                         "to H3 Image Exact Frame Decode."),
+                io.Image.Output("fitted_source",
+                                tooltip="The source image resized to width×height with source_fit (IMAGE, 1 frame). "
+                                        "A black frame in text_to_image mode. Useful as source_image for frame "
+                                        "selection or tone lock."),
+                io.Int.Output("requested_frames",
+                              tooltip="Frame count of the chosen frame_preset (1, 5, 9, 13 or 20 frames); "
+                                      "the decoder keeps this many frames."),
+                io.String.Output("optimized_prompt",
+                                 tooltip="The exact text given to the text encoder: the prompt wrapped in still-image "
+                                         "and preservation instructions when optimize_prompt is on, else the "
+                                         "trimmed prompt."),
+                io.String.Output("report",
+                                 tooltip="Text summary: mode, canvas, frame profile and packet size, checkpoint "
+                                         "advice, inputs that were ignored, and prompt warnings."),
             ],
         )
 
@@ -551,21 +621,44 @@ class MiniMaxH3_TextToImagePrepare(io.ComfyNode):
             category=CATEGORY,
             description="FL2VA text-to-image conditioning and empty H3 latent for still generation.",
             inputs=[
-                io.Clip.Input("clip"),
+                io.Clip.Input("clip",
+                              tooltip="H3 text encoder that encodes the (optionally wrapped) prompt. No image "
+                                      "input is used in text-to-image."),
                 io.String.Input("prompt", default="", multiline=True,
                                 tooltip="One finished still — not a shot list or storyboard."),
-                io.Int.Input("width", default=1344, min=32, max=16384, step=32),
-                io.Int.Input("height", default=768, min=32, max=16384, step=32),
+                io.Int.Input("width", default=1344, min=32, max=16384, step=32,
+                             tooltip="Canvas width in pixels, rounded to the nearest multiple of 32. The empty "
+                                     "latent is width/16 wide."),
+                io.Int.Input("height", default=768, min=32, max=16384, step=32,
+                             tooltip="Canvas height in pixels, rounded to the nearest multiple of 32. The empty "
+                                     "latent is height/16 tall."),
                 io.Combo.Input("quality_profile", options=list(FRAME_PRESETS.keys()),
-                               default=RECOMMENDED_FRAME_PROFILE),
-                io.Boolean.Input("optimize_for_still", default=True),
+                               default=RECOMMENDED_FRAME_PROFILE,
+                               tooltip="How many frames (1, 5, 9, 13 or 20) H3 denoises jointly for the still. "
+                                       "More frames cost more compute; the one-frame profile needs the separate "
+                                       "H3 image VAE to decode sharply."),
+                io.Boolean.Input("optimize_for_still", default=True,
+                                 tooltip="On: prefixes the prompt with fixed instructions for one finished still "
+                                         "(no collage, motion, cuts or audio). Off: the prompt is used as typed. "
+                                         "Does not change sampling."),
             ],
             outputs=[
-                io.Conditioning.Output("positive"),
-                io.Latent.Output("h3_latent"),
-                io.Int.Output("requested_frames"),
-                io.String.Output("image_prompt"),
-                io.String.Output("report"),
+                io.Conditioning.Output("positive",
+                                       tooltip="CONDITIONING with the encoded prompt, for the sampler's positive "
+                                               "input."),
+                io.Latent.Output("h3_latent",
+                                 tooltip="Empty (all-zero) H3 audio-video LATENT: video width/16 × height/16 × the "
+                                         "profile's latent frames, plus decode hints. Wire to the sampler, then "
+                                         "to H3 Image Exact Frame Decode."),
+                io.Int.Output("requested_frames",
+                              tooltip="Frame count of the chosen quality_profile (1, 5, 9, 13 or 20 frames); "
+                                      "the decoder keeps this many frames."),
+                io.String.Output("image_prompt",
+                                 tooltip="The exact text given to the text encoder (wrapped when "
+                                         "optimize_for_still is on)."),
+                io.String.Output("report",
+                                 tooltip="Text summary: canvas, frame profile and packet size, checkpoint advice, "
+                                         "and prompt warnings (e.g. motion or camera words)."),
             ],
         )
 
@@ -589,28 +682,61 @@ class MiniMaxH3_ImageToImagePrepare(io.ComfyNode):
             category=CATEGORY,
             description="Multi-frame FL2VA anchor or one-frame REF2VA-conditioned image editing.",
             inputs=[
-                io.Clip.Input("clip"),
-                io.Vae.Input("vae"),
-                io.Image.Input("source_image"),
-                io.String.Input("edit_instruction", default="", multiline=True),
-                io.Int.Input("width", default=1344, min=32, max=16384, step=32),
-                io.Int.Input("height", default=768, min=32, max=16384, step=32),
+                io.Clip.Input("clip",
+                              tooltip="H3 text encoder. Encodes the (optionally wrapped) edit instruction with "
+                                      "the fitted source image as vision input."),
+                io.Vae.Input("vae",
+                             tooltip="H3 video VAE that encodes the fitted source: as the frame-0 keyframe latent "
+                                     "(multi-frame profiles) or as the <Picture 1> reference latent (one-frame "
+                                     "profile)."),
+                io.Image.Input("source_image",
+                               tooltip="Image to edit; only the first image of the batch is used. It is fitted to "
+                                       "width×height with source_fit before encoding."),
+                io.String.Input("edit_instruction", default="", multiline=True,
+                                tooltip="What to change in the source, as one final still. Refer to the source as "
+                                        "<Picture 1>. Motion, camera or timeline words add a warning to the report."),
+                io.Int.Input("width", default=1344, min=32, max=16384, step=32,
+                             tooltip="Canvas width in pixels, rounded to the nearest multiple of 32. The source is "
+                                     "fitted to this width; the latent is width/16 wide."),
+                io.Int.Input("height", default=768, min=32, max=16384, step=32,
+                             tooltip="Canvas height in pixels, rounded to the nearest multiple of 32. The source "
+                                     "is fitted to this height; the latent is height/16 tall."),
                 io.Combo.Input("quality_profile", options=list(FRAME_PRESETS.keys()),
                                default=RECOMMENDED_FRAME_PROFILE,
                                tooltip="One frame switches to REF2VA-style conditioning and needs the image VAE."),
                 io.Float.Input("source_fidelity", default=0.75, min=0.0, max=1.0, step=0.05,
                                tooltip="Prompt preservation strength — not sampler denoise.", extra_dict={'c2c_show_if': {'optimize_for_still': [True]}}),
                 io.Combo.Input("source_fit", options=["crop_center", "contain_pad", "stretch"],
-                               default="crop_center"),
-                io.Boolean.Input("optimize_for_still", default=True),
+                               default="crop_center",
+                               tooltip="How the source maps to the canvas: crop_center scales to fill and crops "
+                                       "the overflow; contain_pad fits inside and pads with repeated edge pixels; "
+                                       "stretch resizes without keeping the aspect ratio."),
+                io.Boolean.Input("optimize_for_still", default=True,
+                                 tooltip="On: wraps the instruction in fixed text (<Picture 1> is the source, one "
+                                         "finished still, a preservation sentence chosen by source_fidelity). "
+                                         "Off: the instruction is used as typed."),
             ],
             outputs=[
-                io.Conditioning.Output("positive"),
-                io.Latent.Output("h3_latent"),
-                io.Image.Output("fitted_source"),
-                io.Int.Output("requested_frames"),
-                io.String.Output("image_prompt"),
-                io.String.Output("report"),
+                io.Conditioning.Output("positive",
+                                       tooltip="CONDITIONING for the sampler's positive input: encoded instruction "
+                                               "plus the source latent (frame-0 keyframe, or <Picture 1> reference "
+                                               "for the one-frame profile)."),
+                io.Latent.Output("h3_latent",
+                                 tooltip="Empty (all-zero) H3 audio-video LATENT: video width/16 × height/16 × the "
+                                         "profile's latent frames, plus decode hints. Wire to the sampler, then "
+                                         "to H3 Image Exact Frame Decode."),
+                io.Image.Output("fitted_source",
+                                tooltip="The source resized to width×height with source_fit (IMAGE, 1 frame), as "
+                                        "it was encoded. Useful as source_image for frame selection or tone lock."),
+                io.Int.Output("requested_frames",
+                              tooltip="Frame count of the chosen quality_profile (1, 5, 9, 13 or 20 frames); "
+                                      "the decoder keeps this many frames."),
+                io.String.Output("image_prompt",
+                                 tooltip="The exact text given to the text encoder (wrapped when "
+                                         "optimize_for_still is on)."),
+                io.String.Output("report",
+                                 tooltip="Text summary: canvas, frame profile and packet size, checkpoint advice, "
+                                         "and prompt warnings."),
             ],
         )
 
@@ -640,39 +766,99 @@ class MiniMaxH3_ReferenceEditPrepare(io.ComfyNode):
             category=CATEGORY,
             description="REF2VA editing with up to nine ordered references.",
             inputs=[
-                io.Clip.Input("clip"),
-                io.Vae.Input("vae"),
-                io.Image.Input("source_image"),
+                io.Clip.Input("clip",
+                              tooltip="H3 text encoder. Encodes the (optionally wrapped) instruction with every "
+                                      "connected reference image as vision input."),
+                io.Vae.Input("vae",
+                             tooltip="H3 video VAE that encodes each reference image to a reference latent "
+                                     "(native transport). Not used for encoding with semantic transport."),
+                io.Image.Input("source_image",
+                               tooltip="<Picture 1>, the main reference to edit; only the first image of the batch "
+                                       "is used."),
                 io.String.Input("edit_instruction", default="", multiline=True,
                                 tooltip="Refer to inputs as <Picture 1>, <Picture 2>, …"),
-                io.Int.Input("width", default=1344, min=32, max=16384, step=32),
-                io.Int.Input("height", default=768, min=32, max=16384, step=32),
+                io.Int.Input("width", default=1344, min=32, max=16384, step=32,
+                             tooltip="Canvas width in pixels, rounded to the nearest multiple of 32. The latent is "
+                                     "width/16 wide; also sets the reference area for match_generation_area."),
+                io.Int.Input("height", default=768, min=32, max=16384, step=32,
+                             tooltip="Canvas height in pixels, rounded to the nearest multiple of 32. The latent is "
+                                     "height/16 tall; also sets the reference area for match_generation_area."),
                 io.Combo.Input("quality_profile", options=list(FRAME_PRESETS.keys()),
-                               default=RECOMMENDED_FRAME_PROFILE),
-                io.Float.Input("source_fidelity", default=0.60, min=0.0, max=1.0, step=0.05, extra_dict={'c2c_show_if': {'optimize_for_still': [True]}}),
+                               default=RECOMMENDED_FRAME_PROFILE,
+                               tooltip="How many frames (1, 5, 9, 13 or 20) H3 denoises jointly for the still. "
+                                       "More frames cost more compute; the one-frame profile needs the separate "
+                                       "H3 image VAE to decode sharply."),
+                io.Float.Input("source_fidelity", default=0.60, min=0.0, max=1.0, step=0.05,
+                               tooltip="Chooses the preservation sentence added to the prompt (not sampler "
+                                       "denoise): below 0.5 keep <Picture 1> recognizable, 0.5-0.8 keep its "
+                                       "identity traits, 0.8+ preserve only traits the instruction does not mention.",
+                               extra_dict={'c2c_show_if': {'optimize_for_still': [True]}}),
                 io.Combo.Input("source_fit", options=["crop_center", "contain_pad", "stretch"],
-                               default="crop_center"),
+                               default="crop_center",
+                               tooltip="How <Picture 1> is fitted to the canvas for the fitted_source output: "
+                                       "crop_center fills and crops, contain_pad fits and pads with edge pixels, "
+                                       "stretch ignores aspect ratio. References are encoded at their own size."),
                 io.Combo.Input("reference_detail", options=["match_generation_area", "max_identity_2048"],
-                               default="match_generation_area"),
-                io.Boolean.Input("optimize_for_still", default=True),
-                io.Image.Input("reference_image_2", optional=True),
-                io.Image.Input("reference_image_3", optional=True),
-                io.Image.Input("reference_image_4", optional=True),
-                io.Image.Input("reference_image_5", optional=True),
-                io.Image.Input("reference_image_6", optional=True),
-                io.Image.Input("reference_image_7", optional=True),
-                io.Image.Input("reference_image_8", optional=True),
-                io.Image.Input("reference_image_9", optional=True),
+                               default="match_generation_area",
+                               tooltip="Encode size of each reference: match_generation_area scales it to about "
+                                       "the canvas area; max_identity_2048 limits the short edge to 2048 px. "
+                                       "Never upscales; snapped to 32 px. Larger costs more VRAM."),
+                io.Boolean.Input("optimize_for_still", default=True,
+                                 tooltip="On: wraps the instruction in fixed text (picture roles, one finished "
+                                         "still, a preservation sentence chosen by source_fidelity). Off: the "
+                                         "instruction is used as typed."),
+                io.Image.Input("reference_image_2", optional=True,
+                               tooltip="Extra reference. Connected references are numbered <Picture 2>..<Picture 9> "
+                                       "in socket order, skipping empty sockets; first image of the batch is used."),
+                io.Image.Input("reference_image_3", optional=True,
+                               tooltip="Extra reference, numbered as the next <Picture N> after the connected "
+                                       "sockets above it; first image of the batch is used."),
+                io.Image.Input("reference_image_4", optional=True,
+                               tooltip="Extra reference, numbered as the next <Picture N> after the connected "
+                                       "sockets above it; first image of the batch is used."),
+                io.Image.Input("reference_image_5", optional=True,
+                               tooltip="Extra reference, numbered as the next <Picture N> after the connected "
+                                       "sockets above it; first image of the batch is used."),
+                io.Image.Input("reference_image_6", optional=True,
+                               tooltip="Extra reference, numbered as the next <Picture N> after the connected "
+                                       "sockets above it; first image of the batch is used."),
+                io.Image.Input("reference_image_7", optional=True,
+                               tooltip="Extra reference, numbered as the next <Picture N> after the connected "
+                                       "sockets above it; first image of the batch is used."),
+                io.Image.Input("reference_image_8", optional=True,
+                               tooltip="Extra reference, numbered as the next <Picture N> after the connected "
+                                       "sockets above it; first image of the batch is used."),
+                io.Image.Input("reference_image_9", optional=True,
+                               tooltip="Extra reference (up to 9 pictures in total), numbered as the next "
+                                       "<Picture N> after the connected sockets above it; first image of the "
+                                       "batch is used."),
                 io.Combo.Input("reference_transport", options=["native", "semantic (experimental)"],
-                               default="native", optional=True, extra_dict={'c2c_section': 'Experimental'}),
+                               default="native", optional=True,
+                               tooltip="native: references go to the vision encoder AND as VAE reference latents "
+                                       "(needs vae). semantic (experimental): vision encoder only, no VAE latents; "
+                                       "identity and fine detail may change.",
+                               extra_dict={'c2c_section': 'Experimental'}),
             ],
             outputs=[
-                io.Conditioning.Output("positive"),
-                io.Latent.Output("h3_latent"),
-                io.Image.Output("fitted_source"),
-                io.Int.Output("requested_frames"),
-                io.String.Output("image_prompt"),
-                io.String.Output("report"),
+                io.Conditioning.Output("positive",
+                                       tooltip="CONDITIONING for the sampler's positive input: the encoded instruction "
+                                               "plus the reference latents (native transport)."),
+                io.Latent.Output("h3_latent",
+                                 tooltip="Empty (all-zero) H3 audio-video LATENT: video width/16 × height/16 × the "
+                                         "profile's latent frames, plus decode hints. Wire to the sampler, then "
+                                         "to H3 Image Exact Frame Decode."),
+                io.Image.Output("fitted_source",
+                                tooltip="<Picture 1> resized to width×height with source_fit (IMAGE, 1 frame). "
+                                        "Useful as source_image for frame selection or tone lock."),
+                io.Int.Output("requested_frames",
+                              tooltip="Frame count of the chosen quality_profile (1, 5, 9, 13 or 20 frames); "
+                                      "the decoder keeps this many frames."),
+                io.String.Output("image_prompt",
+                                 tooltip="The exact text given to the text encoder (wrapped when "
+                                         "optimize_for_still is on)."),
+                io.String.Output("report",
+                                 tooltip="Text summary: canvas, frame profile, reference count and encode sizes, "
+                                         "missing <Picture N> mentions, ignored batch images, and prompt warnings."),
             ],
         )
 
@@ -706,19 +892,43 @@ class MiniMaxH3_ImageDecode(io.ComfyNode):
             category=CATEGORY,
             description="Decode the requested temporal frame profile from a sampled H3 latent.",
             inputs=[
-                io.Latent.Input("samples"),
-                io.Vae.Input("vae"),
+                io.Latent.Input("samples",
+                                tooltip="Sampled H3 LATENT from an H3 Image Prepare packet. Only the video part is "
+                                        "decoded (audio ignored); the packet's frame-profile and output-strategy "
+                                        "hints are read from it."),
+                io.Vae.Input("vae",
+                             tooltip="H3 video VAE used to decode the video latent (the one-frame profile expects "
+                                     "the H3 image VAE)."),
                 io.Combo.Input("decode_mode", options=["temporal", "single_latent_slice"],
-                               default="temporal", optional=True),
-                io.Int.Input("latent_index", default=0, min=0, max=4096, optional=True, extra_dict={'c2c_show_if': {'decode_mode': ['single_latent_slice']}}),
+                               default="temporal", optional=True,
+                               tooltip="temporal: decode the whole video latent and keep the requested profile "
+                                       "frames. single_latent_slice: decode one latent frame on its own, giving one "
+                                       "image per batch item."),
+                io.Int.Input("latent_index", default=0, min=0, max=4096, optional=True,
+                             tooltip="single_latent_slice only: 0-based latent frame to decode. Must exist in the "
+                                     "latent, otherwise the node stops with an error.",
+                             extra_dict={'c2c_show_if': {'decode_mode': ['single_latent_slice']}}),
                 io.Combo.Input("spatial_decode", options=["native", "full_image (experimental)"],
-                               default="native", optional=True, extra_dict={'c2c_show_if': {'decode_mode': ['single_latent_slice']}}),
+                               default="native", optional=True,
+                               tooltip="single_latent_slice only. native: the VAE's normal (possibly tiled) decode. "
+                                       "full_image (experimental): turns VAE tiling off for this decode and "
+                                       "reserves more VRAM.",
+                               extra_dict={'c2c_show_if': {'decode_mode': ['single_latent_slice']}}),
             ],
             outputs=[
-                io.Image.Output("frames"),
-                io.Int.Output("decoded_frames"),
-                io.String.Output("report"),
-                io.Int.Output("recommended_index"),
+                io.Image.Output("frames",
+                                tooltip="IMAGE batch: the requested profile frames for each latent batch item "
+                                        "(temporal), or one image per batch item (single slice). Wire to H3 Image "
+                                        "Single Output."),
+                io.Int.Output("decoded_frames",
+                              tooltip="Number of images in the frames output."),
+                io.String.Output("report",
+                                 tooltip="Text summary: natural vs kept frame counts, batch items, and the "
+                                         "preferred still per batch item with its score."),
+                io.Int.Output("recommended_index",
+                              tooltip="Index of the preferred still for the first batch item, chosen by the "
+                                      "packet's output strategy (stable_quality or first_stable_edit); 0 in "
+                                      "single_latent_slice. Wire to H3 Image Single Output recommended_index."),
             ],
         )
 
@@ -826,7 +1036,9 @@ class MiniMaxH3_ImageFrameSelector(io.ComfyNode):
             category=CATEGORY,
             description="Select one decoded still by index or quality metric.",
             inputs=[
-                io.Image.Input("frames"),
+                io.Image.Input("frames",
+                               tooltip="Decoded IMAGE batch to choose from, usually H3 Image Exact Frame Decode's "
+                                       "frames output."),
                 io.Combo.Input(
                     "strategy",
                     options=[
@@ -837,22 +1049,60 @@ class MiniMaxH3_ImageFrameSelector(io.ComfyNode):
                     tooltip="sharpest picks edge energy — motion blur mid-transition scores high and "
                             "looks wrong. stable_quality penalises neighbour disagreement.",
                 ),
-                io.Int.Input("manual_index", default=0, min=0, max=4096, extra_dict={'c2c_show_if': {'strategy': ['manual_index']}}),
-                io.Int.Input("skip_first_frames", default=0, min=0, max=128, extra_dict={'c2c_section': 'Candidates', 'c2c_show_if': {'strategy': ['stable_quality', 'balanced_edit', 'best_quality', 'most_similar_to_source', 'sharpest']}}),
-                io.Float.Input("candidate_start", default=0.0, min=0.0, max=1.0, step=0.05, extra_dict={'c2c_section': 'Candidates', 'c2c_show_if': {'strategy': ['stable_quality', 'balanced_edit', 'best_quality', 'most_similar_to_source', 'sharpest']}}),
-                io.Float.Input("candidate_end", default=1.0, min=0.0, max=1.0, step=0.05, extra_dict={'c2c_section': 'Candidates', 'c2c_show_if': {'strategy': ['stable_quality', 'balanced_edit', 'best_quality', 'most_similar_to_source', 'sharpest']}}),
-                io.Float.Input("similarity_weight", default=0.60, min=0.0, max=1.0, step=0.05, extra_dict={'c2c_show_if': {'strategy': ['balanced_edit']}}),
-                io.Int.Input("top_k", default=4, min=1, max=16, extra_dict={'c2c_show_if': {'emit_candidate_batch': [True], 'strategy': ['stable_quality', 'balanced_edit', 'best_quality', 'most_similar_to_source', 'sharpest']}}),
-                io.Image.Input("source_image", optional=True),
-                io.Boolean.Input("emit_candidate_batch", default=False, optional=True, extra_dict={'c2c_section': 'Output'}),
-                io.Int.Input("recommended_index", optional=True, force_input=True),
+                io.Int.Input("manual_index", default=0, min=0, max=4096,
+                             tooltip="manual_index strategy only: 0-based frame to output; values past the last "
+                                     "frame are clamped to the last frame.",
+                             extra_dict={'c2c_show_if': {'strategy': ['manual_index']}}),
+                io.Int.Input("skip_first_frames", default=0, min=0, max=128,
+                             tooltip="Scored strategies only: frames before this index are never candidates. "
+                                     "The window starts at the later of this and candidate_start. 0 = no skip.",
+                             extra_dict={'c2c_section': 'Candidates', 'c2c_show_if': {'strategy': ['stable_quality', 'balanced_edit', 'best_quality', 'most_similar_to_source', 'sharpest']}}),
+                io.Float.Input("candidate_start", default=0.0, min=0.0, max=1.0, step=0.05,
+                               tooltip="Scored strategies only: start of the candidate window as a 0-1 fraction of "
+                                       "the batch length (0 = first frame).",
+                               extra_dict={'c2c_section': 'Candidates', 'c2c_show_if': {'strategy': ['stable_quality', 'balanced_edit', 'best_quality', 'most_similar_to_source', 'sharpest']}}),
+                io.Float.Input("candidate_end", default=1.0, min=0.0, max=1.0, step=0.05,
+                               tooltip="Scored strategies only: end of the candidate window as a 0-1 fraction of the "
+                                       "batch length (1 = through the last frame). At least one frame always remains.",
+                               extra_dict={'c2c_section': 'Candidates', 'c2c_show_if': {'strategy': ['stable_quality', 'balanced_edit', 'best_quality', 'most_similar_to_source', 'sharpest']}}),
+                io.Float.Input("similarity_weight", default=0.60, min=0.0, max=1.0, step=0.05,
+                               tooltip="balanced_edit only: score = weight × similarity to source_image + "
+                                       "(1 - weight) × stable-quality score. 1 = pure similarity, 0 = pure "
+                                       "stable quality.",
+                               extra_dict={'c2c_show_if': {'strategy': ['balanced_edit']}}),
+                io.Int.Input("top_k", default=4, min=1, max=16,
+                             tooltip="With emit_candidate_batch on: how many highest-scoring candidates go to "
+                                     "candidate_batch_debug (best first, limited to the window size).",
+                             extra_dict={'c2c_show_if': {'emit_candidate_batch': [True], 'strategy': ['stable_quality', 'balanced_edit', 'best_quality', 'most_similar_to_source', 'sharpest']}}),
+                io.Image.Input("source_image", optional=True,
+                               tooltip="Reference for most_similar_to_source and balanced_edit (colour and edge "
+                                       "difference to its first image). Without it those strategies fall back to "
+                                       "best_quality / stable_quality."),
+                io.Boolean.Input("emit_candidate_batch", default=False, optional=True,
+                                 tooltip="Off: selected_image is the one chosen frame and candidate_batch_debug is "
+                                         "empty. On: selected_image passes the whole batch and candidate_batch_debug "
+                                         "holds the top_k candidates (or the chosen frame for fixed strategies).",
+                                 extra_dict={'c2c_section': 'Output'}),
+                io.Int.Input("recommended_index", optional=True, force_input=True,
+                             tooltip="Frame index used by the decode_recommended strategy; wire from H3 Image Exact "
+                                     "Frame Decode recommended_index. Unconnected: frame 0."),
             ],
             outputs=[
-                io.Image.Output("selected_image"),
-                io.Image.Output("candidate_batch_debug"),
-                io.Int.Output("selected_index"),
-                io.Float.Output("selected_score"),
-                io.String.Output("report"),
+                io.Image.Output("selected_image",
+                                tooltip="IMAGE: the chosen frame (1 image), or the complete input batch when "
+                                        "emit_candidate_batch is on."),
+                io.Image.Output("candidate_batch_debug",
+                                tooltip="IMAGE batch for inspection: the top_k scored candidates (or the chosen frame "
+                                        "for fixed strategies) when emit_candidate_batch is on; an empty batch "
+                                        "otherwise."),
+                io.Int.Output("selected_index",
+                              tooltip="0-based index of the chosen frame within the input batch."),
+                io.Float.Output("selected_score",
+                                tooltip="Score of the chosen frame under the effective strategy (relative to the "
+                                        "other candidates, roughly 0-1); always 1.0 for fixed strategies."),
+                io.String.Output("report",
+                                 tooltip="Text summary: chosen frame, requested and effective strategy, the score "
+                                         "components, candidate window and any fallback warning."),
             ],
         )
 
@@ -882,27 +1132,63 @@ class MiniMaxH3_ImageSamplingPreset(io.ComfyNode):
                 "wrong sampler/step pairs look washed or crunchy."
             ),
             inputs=[
-                io.Model.Input("model"),
+                io.Model.Input("model",
+                               tooltip="H3 MODEL (with any LoRA already applied). A clone gets the profile's video "
+                                       "and audio sigma shift; the input model is not changed."),
                 io.Combo.Input(
                     "sampling_profile",
                     options=list(SAMPLING_PROFILES.keys()) + [CUSTOM_SAMPLING_PROFILE] + list(LEGACY_SAMPLING_PROFILES.keys()),
                     default="base quality | RES 20 steps",
+                    tooltip="Preset of sampler, scheduler, steps and video/audio shift (denoise 1.0). Turbo / "
+                            "LightX profiles assume the matching speed LoRA is loaded. 'custom' uses the controls "
+                            "below; the older names are kept for saved workflows.",
                 ),
                 io.Combo.Input("custom_sampler", options=list(comfy.samplers.SAMPLER_NAMES),
-                               default="res_multistep", optional=True, extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
-                io.Combo.Input("custom_scheduler", options=scheduler_options, default="simple", optional=True, extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
-                io.Int.Input("custom_steps", default=20, min=1, max=10000, optional=True, extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
-                io.Float.Input("custom_denoise", default=1.0, min=0.0, max=1.0, step=0.01, optional=True, extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
-                io.Float.Input("custom_shift_video", default=12.0, min=0.01, max=100.0, step=0.01, optional=True, extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
-                io.Float.Input("custom_shift_audio", default=3.0, min=0.01, max=100.0, step=0.01, optional=True, extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
-                io.Float.Input("custom_beta_alpha", default=0.6, min=0.01, max=50.0, step=0.01, optional=True, extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
-                io.Float.Input("custom_beta_beta", default=0.6, min=0.01, max=50.0, step=0.01, optional=True, extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
+                               default="res_multistep", optional=True,
+                               tooltip="custom profile only: ComfyUI sampler returned on the sampler output.",
+                               extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
+                io.Combo.Input("custom_scheduler", options=scheduler_options, default="simple", optional=True,
+                               tooltip="custom profile only: scheduler that builds the sigmas. beta_custom uses "
+                                       "the beta scheduler with custom_beta_alpha / custom_beta_beta.",
+                               extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
+                io.Int.Input("custom_steps", default=20, min=1, max=10000, optional=True,
+                             tooltip="custom profile only: number of sampling steps (the sigmas output has "
+                                     "steps + 1 values).",
+                             extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
+                io.Float.Input("custom_denoise", default=1.0, min=0.0, max=1.0, step=0.01, optional=True,
+                               tooltip="custom profile only: 1 = full schedule; below 1 a longer schedule is built "
+                                       "and only its last steps are kept (partial denoise); 0 = empty sigmas, no "
+                                       "sampling.",
+                               extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
+                io.Float.Input("custom_shift_video", default=12.0, min=0.01, max=100.0, step=0.01, optional=True,
+                               tooltip="custom profile only: flow sigma shift for the video stream. Higher spends "
+                                       "more steps at high noise. Presets use 12 (6 for 768p Turbo).",
+                               extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
+                io.Float.Input("custom_shift_audio", default=3.0, min=0.01, max=100.0, step=0.01, optional=True,
+                               tooltip="custom profile only: flow sigma shift for H3's audio stream (presets use "
+                                       "3). Image output does not decode audio.",
+                               extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
+                io.Float.Input("custom_beta_alpha", default=0.6, min=0.01, max=50.0, step=0.01, optional=True,
+                               tooltip="custom profile with scheduler beta_custom only: alpha of the beta-"
+                                       "distribution step spacing. Ignored by other schedulers.",
+                               extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
+                io.Float.Input("custom_beta_beta", default=0.6, min=0.01, max=50.0, step=0.01, optional=True,
+                               tooltip="custom profile with scheduler beta_custom only: beta of the beta-"
+                                       "distribution step spacing. Ignored by other schedulers.",
+                               extra_dict={'c2c_show_if': {'sampling_profile': [CUSTOM_SAMPLING_PROFILE]}}),
             ],
             outputs=[
-                io.Model.Output("model"),
-                io.Sampler.Output("sampler"),
-                io.Sigmas.Output("sigmas"),
-                io.String.Output("report"),
+                io.Model.Output("model",
+                                tooltip="Clone of the input MODEL with the video/audio sigma shift patched in. Use "
+                                        "this model (not the original) in the sampler."),
+                io.Sampler.Output("sampler",
+                                  tooltip="SAMPLER object for SamplerCustom / SamplerCustomAdvanced."),
+                io.Sigmas.Output("sigmas",
+                                 tooltip="SIGMAS schedule (steps + 1 values) computed on the shifted model; empty "
+                                         "when denoise is 0."),
+                io.String.Output("report",
+                                 tooltip="Text summary: profile, sampler, scheduler, steps, denoise, shifts and the "
+                                         "sampling backend used."),
             ],
         )
 
@@ -959,8 +1245,12 @@ class MiniMaxH3_DetailToneLock(io.ComfyNode):
                              tooltip="Separates broad tone from fine detail in pixels."),
             ],
             outputs=[
-                io.Image.Output("image"),
-                io.String.Output("report"),
+                io.Image.Output("image",
+                                tooltip="IMAGE at the source's size and frame count: source + refinement_strength × "
+                                        "(refined detail with the source's blurred tone put back), clamped 0-1."),
+                io.String.Output("report",
+                                 tooltip="Text summary: source size and the tone_lock, refinement_strength and "
+                                         "detail_radius used."),
             ],
         )
 

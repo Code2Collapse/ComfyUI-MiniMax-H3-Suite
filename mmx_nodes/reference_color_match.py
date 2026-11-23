@@ -97,7 +97,9 @@ class MiniMaxH3_ReferenceColorMatch(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Image.Output("images"),
+                io.Image.Output("images", tooltip="The frames with the subject's Oklab chroma (and L when "
+                                              "match_lightness is on) pulled toward the reference inside "
+                                              "edit_mask; pixels outside the mask are the input unchanged."),
                 io.String.Output(
                     "report",
                     tooltip="Per-frame chroma shift removed, with Oklab +a (red) called out.",

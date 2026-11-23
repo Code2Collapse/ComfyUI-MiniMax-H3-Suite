@@ -29,13 +29,20 @@ class MiniMaxH3_SigmaShiftLocked(io.ComfyNode):
                 "unless you disable ratio_lock to dial audio independently."
             ),
             inputs=[
-                io.Model.Input("model"),
+                io.Model.Input(
+                    "model",
+                    tooltip="MiniMax H3 MODEL. Cloned; its model_sampling is replaced by an AV sampling object with "
+                            "the shifts below (the noise scale of the original is kept).",
+                ),
                 io.Float.Input(
                     "shift_video",
                     default=TRAINED_SHIFT_VIDEO,
                     min=0.01,
                     max=100.0,
                     step=0.01,
+                    tooltip="Sigma shift of the video schedule, sigma(t) = shift*t / (1 + (shift-1)*t). Higher keeps "
+                            "sigma high for longer. H3 was trained with 12. Also stored in transformer_options for "
+                            "other H3 nodes.",
                 ),
                 io.Float.Input(
                     "shift_audio",
@@ -43,14 +50,22 @@ class MiniMaxH3_SigmaShiftLocked(io.ComfyNode):
                     min=0.01,
                     max=100.0,
                     step=0.01, extra_dict={"c2c_show_if": {"ratio_lock": [False]}},
+                    tooltip="Sigma shift of the audio schedule. Used as typed only when ratio_lock is off; with "
+                            "ratio_lock on it is replaced by shift_video / ratio. H3 was trained with 3.",
                 ),
-                io.Boolean.Input("ratio_lock", default=True),
+                io.Boolean.Input("ratio_lock", default=True,
+                                 tooltip="On: shift_audio = shift_video / ratio (the report notes when the typed "
+                                         "shift_audio was overridden). Off: shift_audio is used as typed."),
                 io.Float.Input("ratio", default=TRAINED_SHIFT_RATIO, min=0.1, max=100.0, step=0.01,
-                               extra_dict={"c2c_show_if": {"ratio_lock": [True]}}),
+                               extra_dict={"c2c_show_if": {"ratio_lock": [True]}},
+                               tooltip="Video/audio shift ratio used when ratio_lock is on. Default 4 = the trained "
+                                       "12/3 pair."),
             ],
             outputs=[
-                io.Model.Output("model"),
-                io.String.Output("report"),
+                io.Model.Output("model", tooltip="Clone of the model with the patched video/audio sigma shifts. "
+                                                 "Wire it to the scheduler/sampler."),
+                io.String.Output("report", tooltip="Text: the video and audio shifts applied, any ratio_lock override "
+                                                   "of shift_audio, and the ratio when the lock is on."),
             ],
         )
 

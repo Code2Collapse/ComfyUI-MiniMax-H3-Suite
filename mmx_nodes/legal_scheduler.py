@@ -33,7 +33,11 @@ class MiniMaxH3_LegalScheduler(io.ComfyNode):
                 "Wire BasicScheduler sigmas → this → SamplerCustomAdvanced."
             ),
             inputs=[
-                io.Sigmas.Input("sigmas"),
+                io.Sigmas.Input(
+                    "sigmas",
+                    tooltip="Sigma schedule to check (e.g. from BasicScheduler). Must be 1-D, finite, in [0, 1], "
+                            "strictly decreasing and end at 0; a split schedule (non-zero last sigma) is refused.",
+                ),
                 io.Model.Input(
                     "model",
                     optional=True,
@@ -43,12 +47,21 @@ class MiniMaxH3_LegalScheduler(io.ComfyNode):
                     "scheduler",
                     options=["simple", "sgm_uniform", "karras", "exponential", "beta"],
                     default="simple",
+                    tooltip="Scheduler that made the sigmas, for the report only: anything but simple adds an "
+                            "OFF-CONTRACT note. When model is connected, the scheduler measured from the sigmas is "
+                            "used instead.",
                 ),
-                io.Float.Input("denoise", default=1.0, min=0.0, max=1.0, step=0.01),
+                io.Float.Input("denoise", default=1.0, min=0.0, max=1.0, step=0.01,
+                               tooltip="Denoise that made the sigmas, for the report only: below 1 adds a partial "
+                                       "denoise note. When model is connected, the denoise measured from the sigmas "
+                                       "is used instead."),
             ],
             outputs=[
-                io.Sigmas.Output("sigmas"),
-                io.String.Output("report"),
+                io.Sigmas.Output("sigmas", tooltip="The input sigmas, unchanged, when they are legal (the node "
+                                                   "raises an error otherwise). Wire to SamplerCustomAdvanced."),
+                io.String.Output("report", tooltip="Text: how scheduler/denoise were determined, 'H3 sigma schedule OK' "
+                                                   "plus any warnings, and turbo step-contract notes when a Turbo "
+                                                   "LoRA model is connected."),
             ],
         )
 

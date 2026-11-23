@@ -90,23 +90,41 @@ class MiniMaxH3_RegionMask(io.ComfyNode):
                 "When depth is connected, H3_TRANSFORM is required to validate plate vs crop space."
             ),
             inputs=[
-                io.Image.Input("images"),
-                H3TransformType.Input("transform", optional=True),
+                io.Image.Input("images", tooltip="Full-size PLATE frames (not crops). Sets the mask size and frame "
+                                                 "count, and is the backdrop of the preview."),
+                H3TransformType.Input("transform", optional=True,
+                                      tooltip="H3_TRANSFORM from H3 Track + Crop. Required when depth is wired: "
+                                              "checks images match its source size and maps crop-space depth "
+                                              "back into the plate through the crop boxes."),
                 io.Image.Input(
                     "depth",
                     optional=True,
                     tooltip="Depth from N9 (crop space) or plate depth — transform required when connected.",
                 ),
-                io.Combo.Input("mode", options=list(REGION_MODES), default="sky"),
-                io.Mask.Input("painted_mask", optional=True),
+                io.Combo.Input("mode", options=list(REGION_MODES), default="sky",
+                               tooltip="sky: 1 where the depth value is ABOVE one clip-wide threshold (higher value "
+                                       "read as far). ground: the rest. painted: painted_mask used as is. With no "
+                                       "depth a top 0 -> bottom 1 ramp is the depth, so sky = lower part."),
+                io.Mask.Input("painted_mask", optional=True,
+                              tooltip="painted mode only (required there): your mask, 1 = region. Resized "
+                                      "bilinearly to the plate. Current code applies its FIRST frame to every "
+                                      "frame."),
                 io.Float.Input("horizon_bias", default=0.0, min=-1.0, max=1.0, step=0.01,
+                               tooltip="sky / ground: moves the threshold. threshold = min + (0.5 + bias) x "
+                                       "(max - min) of the clip's depth. Negative = more pixels count as far (sky); "
+                                       "-0.5 / +0.5 reach all / none.",
                                extra_dict={"c2c_show_if": {"mode": ["sky", "ground"]}}),
-                io.Int.Input("feather_px", default=4, min=0, max=128),
+                io.Int.Input("feather_px", default=4, min=0, max=128,
+                             tooltip="Gaussian feather of the mask edge in plate pixels (kernel 2N+1). 0 = hard "
+                                     "binary edge."),
             ],
             outputs=[
-                io.Mask.Output("region_mask"),
-                io.Image.Output("preview"),
-                io.String.Output("report"),
+                io.Mask.Output("region_mask", tooltip="Pixel-space MASK at plate size, one per frame, 1 = the chosen "
+                                                      "region (feathered). Feed to H3 Mask Prep."),
+                io.Image.Output("preview", tooltip="Plate frames with the mask tinted blue (45% overlay) for "
+                                                   "checking."),
+                io.String.Output("report", tooltip="Plain-text summary: mode, bias, feather, frame size, and the "
+                                                   "threshold used or the no-depth ramp fallback."),
             ],
         )
 

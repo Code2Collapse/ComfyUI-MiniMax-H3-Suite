@@ -86,8 +86,11 @@ class MiniMaxH3_AudioQualityGate(io.ComfyNode):
                                        "passthrough output) and nothing failing is saved."),
             ],
             outputs=[
-                io.Boolean.Output("passed"),
-                io.String.Output("report"),
+                io.Boolean.Output("passed", tooltip="True when mel L1, centroid drift, RMS ratio and low-mel ratio "
+                                                    "are all within their thresholds."),
+                io.String.Output("report", tooltip="The measured values against the thresholds and the failed "
+                                                   "checks; starts with 'FAILED' on a failure. Also shown on the "
+                                                   "node."),
                 io.Audio.Output("generated_out", tooltip="The checked audio, unchanged: wire it on to your Save so "
                                                           "a failed gate (on_fail = stop the run) stops before it."),
             ],

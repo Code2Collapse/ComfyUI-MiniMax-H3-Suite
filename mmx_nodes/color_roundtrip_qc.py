@@ -47,15 +47,24 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
                 "Use the HDR probe [0, 0.5, 1, 4, 16] in tests — values above 1.0 must survive."
             ),
             inputs=[
-                io.Image.Input("image"),
+                io.Image.Input("image", tooltip="Scene-linear frames in scene_colorspace. Only the FIRST frame is "
+                                                "round-tripped; a scene-linear frame whose peak is <= 1.0 fails as "
+                                                "'clamped to SDR'."),
                 io.Combo.Input(
                     "scene_colorspace",
                     options=colorspaces,
                     default=default_scene,
+                    tooltip="OCIO colorspace of the input; the round trip goes scene -> display/view -> back to "
+                            "this space.",
                 ),
-                io.Combo.Input("display", options=displays, default=default_display),
-                io.Combo.Input("view", options=views, default=default_view),
-                io.Float.Input("tolerance", default=1e-4, min=0.0, max=1.0, step=1e-6, extra_dict={'c2c_section': 'Check'}),
+                io.Combo.Input("display", options=displays, default=default_display,
+                               tooltip="OCIO display of the view transform under test; must hold the chosen view."),
+                io.Combo.Input("view", options=views, default=default_view,
+                               tooltip="OCIO view under test; a non-invertible view shows up as round-trip error."),
+                io.Float.Input("tolerance", default=1e-4, min=0.0, max=1.0, step=1e-6,
+                               tooltip="Largest allowed absolute per-channel difference (scene-linear units) "
+                                       "between input and round-tripped frame; above it the check fails.",
+                               extra_dict={'c2c_section': 'Check'}),
                 # C2C L9.39: appended. A gate whose bool feeds nothing never ran (not an output node) and could
                 # not stop anything; it is an output node now, and this decides what a failure does.
                 io.Combo.Input("on_fail", options=["report only", "stop the run"], default="report only",
@@ -65,10 +74,15 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
                                        "passthrough output) and nothing failing is saved."),
             ],
             outputs=[
-                io.Boolean.Output("passed"),
-                io.Float.Output("max_error"),
-                io.String.Output("report"),
-                io.Image.Output("error_map"),
+                io.Boolean.Output("passed", tooltip="True when max_error <= tolerance, every value above 1.0 stays "
+                                                    "above 1.0 after the round trip, and the input was not SDR-"
+                                                    "clamped."),
+                io.Float.Output("max_error", tooltip="Largest absolute per-channel difference between the first "
+                                                     "frame and its round trip (scene-linear units)."),
+                io.String.Output("report", tooltip="Text: OCIO config source, max error vs tolerance with the worst "
+                                                   "channel, HDR probe note; starts with 'FAILED' on failure."),
+                io.Image.Output("error_map", tooltip="IMAGE of the first frame's per-pixel max absolute error over "
+                                                     "R/G/B (one channel, not normalised), at the input size."),
                 io.Image.Output("image_out", tooltip="The checked image, unchanged: wire it on so a failed gate "
                                                       "(on_fail = stop the run) stops before what comes next."),
             ],

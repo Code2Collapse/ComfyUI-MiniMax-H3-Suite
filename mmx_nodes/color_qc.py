@@ -40,7 +40,9 @@ class MiniMaxH3_ColorQC(io.ComfyNode):
                 "a banding heuristic and deltaE_OK against the reference - all in metrics_json for A/B tables."
             ),
             inputs=[
-                io.Image.Input("images"),
+                io.Image.Input("images", tooltip="Decoded clip as display sRGB frames (VAE Decode output); every "
+                                                 "frame is measured, sRGB-decoded to linear for the luma / DR / "
+                                                 "headroom metrics."),
                 io.Image.Input(
                     "reference",
                     optional=True,
@@ -48,8 +50,11 @@ class MiniMaxH3_ColorQC(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.String.Output("report"),
-                io.Image.Output("preview"),
+                io.String.Output("report", tooltip="Text summary of the clip metrics (colourfulness, luma DR, "
+                                                   "clipped fraction, headroom, texture, flicker, Oklab distance)."),
+                io.Image.Output("preview", tooltip="One 256x48 IMAGE strip: grey bar = luma p1..p99, red bar = "
+                                                   "clipped fraction, green bar = colourfulness (/109), thumbnail "
+                                                   "of the first frame at the right."),
                 # appended last (L8.06): saved links to report / preview keep their slots
                 io.String.Output("metrics_json", tooltip="Every number above plus per-frame lists, as JSON."),
             ],

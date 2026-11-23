@@ -32,7 +32,10 @@ class MiniMaxH3_TemporalDeflicker(io.ComfyNode):
                         "difference is coherent - an arm, an ear moving faster than its own width - the filter fades "
                         "out. Optionally only inside a mask (e.g. the regenerated subject). The first and last "
                         "frames pass through.",
-            inputs=[io.Image.Input("images"),
+            inputs=[io.Image.Input("images",
+                                   tooltip="Frame sequence (IMAGE batch) to deflicker. Needs 3 or more frames (fewer "
+                                           "pass through unchanged); first and last frames are not changed; an "
+                                           "alpha channel is passed through."),
                     io.Float.Input("amount", default=0.9, min=0.0, max=1.0, step=0.05,
                                    tooltip="How much of the boil is removed."),
                     io.Int.Input("radius", default=0, min=0, max=64,
@@ -44,7 +47,12 @@ class MiniMaxH3_TemporalDeflicker(io.ComfyNode):
                                    tooltip="Coarse change (0-255 scale) below which the filter works fully.", extra_dict={'c2c_section': 'Motion'}),
                     io.Float.Input("motion_high", default=8.0, min=0.5, max=128.0, step=0.5,
                                    tooltip="Coarse change (0-255 scale) above which the filter is off.", extra_dict={'c2c_section': 'Motion'})],
-            outputs=[io.Image.Output("images"), io.String.Output("report")],
+            outputs=[io.Image.Output("images",
+                                     tooltip="IMAGE batch, same size and frame count as the input, with the static "
+                                             "boil removed (only inside mask when one is connected)."),
+                     io.String.Output("report",
+                                      tooltip="JSON: frames, mean_change and max_change (mean absolute 0-1 pixel "
+                                              "change per frame), and the radius actually used.")],
         )
 
     @classmethod
@@ -87,7 +95,9 @@ class MiniMaxH3_TemporalMatteChatterCorrector(io.ComfyNode):
                         "whole subject for a few frames no longer pastes the plate back over the new cast (it reads "
                         "as flicker). A pixel the subject really leaves stays uncovered. With bboxes (crop boxes) the "
                         "masks are judged in plate space, where the set holds still while a follow-cam crop moves.",
-            inputs=[io.Mask.Input("masks"),
+            inputs=[io.Mask.Input("masks",
+                                  tooltip="Mask sequence (MASK batch, 1 = subject) whose short dropouts are closed. "
+                                          "Crop-space masks need bboxes to be judged in plate space."),
                     io.Int.Input("window", default=24, min=1, max=240,
                                  tooltip="Frames a dropout may last and still be closed."),
                     io.BoundingBox.Input("bboxes", optional=True, force_input=True,
@@ -100,7 +110,14 @@ class MiniMaxH3_TemporalMatteChatterCorrector(io.ComfyNode):
                                      tooltip="Also close a dropout at the very start or end of the take. Only for a "
                                              "subject that holds still: a moving subject's next 'window' frames of "
                                              "path would be painted into the first frames.")],
-            outputs=[io.Mask.Output("masks"), io.String.Output("report")],
+            outputs=[io.Mask.Output("masks",
+                                    tooltip="MASK batch, same size and frame count as the input, values 0-1: the "
+                                            "input with dropouts of up to window frames filled in (coverage only "
+                                            "added, never removed)."),
+                     io.String.Output("report",
+                                      tooltip="JSON: frames, window, frames_bridged (indices that gained coverage, "
+                                              "first 200), mean_added coverage fraction, and the space (mask or "
+                                              "plate).")],
         )
 
     @classmethod

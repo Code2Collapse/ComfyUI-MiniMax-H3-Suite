@@ -197,7 +197,13 @@ class MiniMaxH3_ContextTaperNoise(io.ComfyNode):
                              tooltip="Block size in pixels for grid_mode = block_size.",
                              extra_dict={"c2c_section": "Pattern", "c2c_show_if": {"grid_mode": ["block_size"]}}),
             ],
-            outputs=[io.Image.Output(display_name="images"), io.String.Output(display_name="alpha_schedule")],
+            outputs=[io.Image.Output(display_name="images",
+                                     tooltip="Same IMAGE batch with block noise blended into the last tail_frames "
+                                             "frames (earlier frames unchanged). Wire to Motion Context's "
+                                             "context_frames only, never on as the next clip's source."),
+                     io.String.Output(display_name="alpha_schedule",
+                                      tooltip="Text: which frames got noise, pattern, block grid, seed and the noise "
+                                              "amount (alpha) per frame. Also shown on the node.")],
         )
 
     @classmethod
@@ -232,14 +238,23 @@ class MiniMaxH3_ContextLatentTaperNoise(io.ComfyNode):
                 io.Int.Input("ramp_steps", default=2, min=1, max=64,
                              tooltip="Latent steps at the end that ramp down (one step is up to 4 frames).",
                              extra_dict={"c2c_section": "Ramp"}),
-                io.Int.Input("seed", default=0, min=0, max=_MAX_SEED, control_after_generate=True),
+                io.Int.Input("seed", default=0, min=0, max=_MAX_SEED, control_after_generate=True,
+                             tooltip="Seed of the CPU generator for the gaussian noise; the same seed gives the same "
+                                     "noise on every latent step of the tail."),
                 io.Combo.Input("noise_scale", options=["match_latent_std", "unit"], default="match_latent_std",
                                optional=True,
                                tooltip="match_latent_std scales the noise to the window's own spread, so alpha means "
                                        "the same at any latent scale. unit = plain N(0, 1).",
                                        extra_dict={"c2c_section": "Ramp"}),
             ],
-            outputs=[io.Latent.Output(display_name="context_latent"), io.String.Output(display_name="alpha_schedule")],
+            outputs=[io.Latent.Output(display_name="context_latent",
+                                      tooltip="Same AV latent with gaussian noise blended into the last latent steps "
+                                              "of the video stream; audio unchanged. Wire to Motion Context's "
+                                              "context_latent only; do not decode it."),
+                     io.String.Output(display_name="alpha_schedule",
+                                      tooltip="Text: which latent steps got noise, noise scale and seed, the alpha per "
+                                              "step, and a warning when the tail does not start on a latent-cycle "
+                                              "boundary. Also shown on the node.")],
         )
 
     @classmethod

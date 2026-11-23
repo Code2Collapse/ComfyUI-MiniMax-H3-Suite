@@ -45,7 +45,8 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
                 "one_euro_preview is causal preview only."
             ),
             inputs=[
-                io.Image.Input("images"),
+                io.Image.Input("images", tooltip="Source clip (IMAGE batch, one frame per entry). Only RGB is cropped; "
+                                                 "its size is the src_size stored in the transform for H3 Stitch Back."),
                 io.Mask.Input(
                     "subject_mask",
                     optional=True,
@@ -58,15 +59,25 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
                     optional=True,
                     tooltip='Per-frame boxes as JSON: [[x1,y1,x2,y2], null, ...]. Works alone for tests.',
                 ),
-                io.Float.Input("crop_factor", default=2.5, min=1.2, max=8.0, step=0.1),
+                io.Float.Input("crop_factor", default=2.5, min=1.2, max=8.0, step=0.1,
+                               tooltip="tv_lp / one_euro_preview: square crop side = larger side of the subject "
+                                       "box x this factor (clamped to the frame's short side). follow_camera: "
+                                       "margin around the subject. Higher = subject smaller in the crop."),
                 io.Combo.Input(
                     "canvas_mode",
                     options=["manual", "auto_no_downscale", "auto_capped_768"],
                     default="manual",
+                    tooltip="Pixel size the crops are resampled to. manual: canvas_width x canvas_height. "
+                            "auto_no_downscale / auto_capped_768: H3's adapt_canvas on the square crop size, "
+                            "which yields 768x768 (the cap only clamps the value fed to adapt_canvas).",
                 ),
                 io.Int.Input("canvas_width", default=512, min=128, max=1344, step=32,
+                             tooltip="manual canvas_mode: crop output width in pixels (step 32, the H3 canvas "
+                                     "multiple). follow_camera also uses width/height as the crop aspect.",
                              extra_dict={"c2c_show_if": {"canvas_mode": ["manual"]}}),
                 io.Int.Input("canvas_height", default=512, min=128, max=1344, step=32,
+                             tooltip="manual canvas_mode: crop output height in pixels (step 32). tv_lp / "
+                                     "one_euro_preview plan a square box, so a non-square canvas stretches it.",
                              extra_dict={"c2c_show_if": {"canvas_mode": ["manual"]}}),
                 io.Combo.Input(
                     "planner_mode",
@@ -78,16 +89,32 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
                             "opening up), crop_factor is the margin around the subject (1.45 = tight).",
                 ),
                 io.Float.Input("movement_cost", default=1.0, min=0.05, max=16.0, step=0.05,
+                               tooltip="tv_lp: L1 cost per pixel of crop movement between frames, weighed "
+                                       "against a 0.001 pull toward the subject centre. Higher = the crop holds "
+                                       "still longer and moves in fewer, straighter pans.",
                                extra_dict={"c2c_section": "Tracking", "c2c_show_if": {"planner_mode": ["tv_lp"]}}),
                 io.Boolean.Input("lock_size", default=True,
+                                 tooltip="tv_lp / one_euro_preview: on = crop side is the median subject size x "
+                                         "crop_factor x safety_margin; off = the median without safety_margin. "
+                                         "Either way one size is used for the whole clip.",
                                  extra_dict={"c2c_section": "Tracking", "c2c_show_if": {"planner_mode": ["tv_lp", "one_euro_preview"]}}),
                 io.Float.Input("safety_margin", default=1.12, min=1.0, max=2.0, step=0.01,
+                               tooltip="Multiplier on the median crop size when lock_size is on (and on the "
+                                       "one_euro_preview anchor size), so frames larger than the median still "
+                                       "fit. 1.0 = no extra room. Clamped to the frame's short side.",
                                extra_dict={"c2c_section": "Tracking", "c2c_show_if": {"planner_mode": ["tv_lp", "one_euro_preview"]}}),
                 io.Boolean.Input("smooth_detection", default=True,
+                                 tooltip="one_euro_preview: pre-smooth the detected subject centres with a "
+                                         "zero-phase One Euro filter (forward + backward pass averaged) before "
+                                         "building the boxes. Off = raw detection centres.",
                                  extra_dict={"c2c_section": "Tracking", "c2c_show_if": {"planner_mode": ["one_euro_preview"]}}),
                 io.Float.Input("one_euro_min_cutoff", default=1.0, min=0.05, max=10.0, step=0.05,
+                               tooltip="one_euro_preview: One Euro minimum cutoff frequency (Hz, 24 fps assumed) "
+                                       "for the crop centre. Lower = smoother but laggier path.",
                                extra_dict={"c2c_section": "Tracking", "c2c_show_if": {"planner_mode": ["one_euro_preview"]}}),
                 io.Float.Input("one_euro_beta", default=0.05, min=0.0, max=5.0, step=0.01,
+                               tooltip="one_euro_preview: One Euro speed coefficient. Higher = the cutoff rises "
+                                       "with subject speed, so fast moves lag less; 0 = fixed cutoff.",
                                extra_dict={"c2c_section": "Tracking", "c2c_show_if": {"planner_mode": ["one_euro_preview"]}}),
                 io.Float.Input("min_crop", default=0.0, min=0.0, max=1.0, step=0.01, optional=True,
                                tooltip="follow_camera: the smallest crop height, as a share of the frame height "
@@ -98,11 +125,18 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
                              extra_dict={"c2c_show_if": {"planner_mode": ["follow_camera (smooth zoom)"]}}),
             ],
             outputs=[
-                io.Image.Output("crops"),
-                H3TransformType.Output("transform"),
-                io.Image.Output("preview"),
-                io.String.Output("report"),
-                io.String.Output("boxes_json"),
+                io.Image.Output("crops", tooltip="IMAGE batch, one bilinear sub-pixel RGB crop per input frame, "
+                                                 "at the canvas size. This is what H3 generates on."),
+                H3TransformType.Output("transform", tooltip="H3_TRANSFORM: per-frame float crop boxes (x, y, w, h "
+                                                            "in source pixels), canvas and source size, detection "
+                                                            "flags. Wire unchanged to H3 Stitch Back."),
+                io.Image.Output("preview", tooltip="Source frames (RGB, full batch) with each frame's crop box "
+                                                   "drawn as a 2-pixel green/red outline."),
+                io.String.Output("report", tooltip="Plain-text summary: planner mode and solver status, detected "
+                                                   "frames, canvas size, crop size in pixels."),
+                io.String.Output("boxes_json", tooltip='JSON {"src_size":[w,h],"canvas":[w,h],"frames":n,'
+                                                       '"boxes":[[x,y,w,h],...]}: the crop box per frame in '
+                                                       'source pixels (also drives the node preview widget).'),
             ],
         )
 

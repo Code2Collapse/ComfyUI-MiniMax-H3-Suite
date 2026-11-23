@@ -95,7 +95,10 @@ class MiniMaxH3_HDRFetchPolyHaven(io.ComfyNode):
                                tooltip="hdr = Radiance (smaller); exr = OpenEXR."),
                 io.Boolean.Input("wait", default=True, tooltip=WAIT_TIP),
             ],
-            outputs=[io.String.Output("hdri_folder"), io.String.Output("report")],
+            outputs=[io.String.Output("hdri_folder", tooltip="Absolute path of the HDRI download folder; wire to HDRI "
+                                                             "-> Clips 'hdri_folder'."),
+                     io.String.Output("report", tooltip="JSON summary of the finished download job (or a 'started in "
+                                                        "the background' note when wait is off).")],
             is_output_node=True,
         )
 
@@ -129,7 +132,9 @@ class MiniMaxH3_HDRFetchHuggingFace(io.ComfyNode):
             search_aliases=["hugging face dataset download", "hf hdr dataset"],
             inputs=[
                 io.String.Input("repo_id", default="", tooltip="owner/name of the repo."),
-                io.Combo.Input("repo_type", options=["dataset", "model"], default="dataset"),
+                io.Combo.Input("repo_type", options=["dataset", "model"], default="dataset",
+                               tooltip="Hugging Face repo kind used for the file listing and the snapshot download: "
+                                       "dataset = huggingface.co/datasets/<repo_id>, model = a model repo."),
                 io.String.Input("allow_patterns", default="*.exr, *.hdr",
                                 tooltip="Comma / newline separated glob patterns (e.g. 'hdri/*.exr')."),
                 io.Float.Input("cap_gb", default=5.0, min=0.01, max=10000.0, step=0.5,
@@ -139,7 +144,11 @@ class MiniMaxH3_HDRFetchHuggingFace(io.ComfyNode):
                 io.String.Input("revision", default="", tooltip="Branch / tag / commit; empty = main."),
                 io.Boolean.Input("wait", default=True, tooltip=WAIT_TIP),
             ],
-            outputs=[io.String.Output("folder"), io.String.Output("report")],
+            outputs=[io.String.Output("folder", tooltip="Absolute path of the download folder (output_folder "
+                                                        "resolved)."),
+                     io.String.Output("report", tooltip="JSON summary of the finished download job: repo, patterns, "
+                                                        "files and size (or a 'started in the background' note when "
+                                                        "wait is off).")],
             is_output_node=True,
         )
 
@@ -177,21 +186,35 @@ class MiniMaxH3_HDRHDRIToClips(io.ComfyNode):
                                 tooltip="Folder of .hdr / .exr panoramas (Fetch Poly Haven's output)."),
                 io.String.Input("output_folder", default="hdr_dataset/clips",
                                 tooltip="One sub-folder per clip. Relative = inside ComfyUI's output folder."),
-                io.Int.Input("clips_per_hdri", default=2, min=1, max=64),
+                io.Int.Input("clips_per_hdri", default=2, min=1, max=64,
+                             tooltip="Camera moves rendered per HDRI; each becomes its own clip folder "
+                                     "<hdri>_cNN with 'frames' EXR frames."),
                 io.Int.Input("frames", default=D.DEFAULT_FRAMES, min=22, max=1024,
                              tooltip="17k+5: 22, 39, 56, 73 (3 s at 24 fps), 90, 107, 124 ..."),
-                io.Int.Input("width", default=D.DRAFT_W, min=256, max=4096, step=32),
-                io.Int.Input("height", default=D.DRAFT_H, min=256, max=4096, step=32),
+                io.Int.Input("width", default=D.DRAFT_W, min=256, max=4096, step=32,
+                             tooltip="Render width in pixels; must be a multiple of 32 (H3: 16x VAE x 2x2 patch). "
+                                     "Default 1344 = H3 draft size."),
+                io.Int.Input("height", default=D.DRAFT_H, min=256, max=4096, step=32,
+                             tooltip="Render height in pixels; must be a multiple of 32 (H3: 16x VAE x 2x2 patch). "
+                                     "Default 768 = H3 draft size."),
                 io.Float.Input("fov_deg", default=60.0, min=20.0, max=120.0, step=1.0,
                                tooltip="Horizontal field of view at the start of the move."),
                 io.Combo.Input("motion", options=list(D.MOTIONS), default="mix",
                                tooltip="mix = a seeded choice of pan / tilt / push per clip."),
-                io.Combo.Input("exposure", options=list(D.EXPOSURES), default="grey_0.18"),
-                io.Int.Input("seed", default=0, min=0, max=2**31 - 1),
+                io.Combo.Input("exposure", options=list(D.EXPOSURES), default="grey_0.18",
+                               tooltip="grey_0.18 = scale each clip so the median Rec.709 luma of 5 probe views is "
+                                       "0.18 (1.0 = diffuse white); none = keep the HDRI's own values."),
+                io.Int.Input("seed", default=0, min=0, max=2**31 - 1,
+                             tooltip="Seeds the camera move per HDRI and clip index (same seed = same moves)."),
                 io.Int.Input("limit", default=0, min=0, max=100000, tooltip="Use only the first N HDRIs (0 = all)."),
                 io.Boolean.Input("wait", default=True, tooltip=WAIT_TIP),
             ],
-            outputs=[io.String.Output("clips_folder"), io.String.Output("report")],
+            outputs=[io.String.Output("clips_folder", tooltip="Absolute path of the clips folder (one sub-folder of "
+                                                              "half EXR frames + clip.json per clip); wire to Make "
+                                                              "Pairs 'clips_folder'."),
+                     io.String.Output("report", tooltip="JSON summary of the job: HDRIs, clips rendered / skipped, "
+                                                        "frames, size, clip ids (or a 'started in the background' "
+                                                        "note when wait is off).")],
             is_output_node=True,
         )
 
@@ -239,20 +262,31 @@ class MiniMaxH3_HDRMakePairs(io.ComfyNode):
                                 tooltip="HDRI -> Clips output (one folder per clip)."),
                 io.String.Input("output_folder", default="hdr_dataset/pairs",
                                 tooltip="Gets targets/, control/ and meta.jsonl. Relative = inside ComfyUI's output."),
-                io.Int.Input("seed", default=0, min=0, max=2**31 - 1),
+                io.Int.Input("seed", default=0, min=0, max=2**31 - 1,
+                             tooltip="Seeds per clip the exposure shift, the control CRF and which clips are "
+                                     "hard-clip / soft roll-off / unclipped."),
                 io.Float.Input("ev_range", default=1.5, min=0.0, max=6.0, step=0.1,
                                tooltip="Control exposure shift drawn from -ev_range..+ev_range stops per clip."),
                 io.Float.Input("unclipped_share", default=0.15, min=0.0, max=1.0, step=0.01,
                                tooltip="Share of clips whose SDR control keeps every highlight (order: 15 %)."),
-                io.Int.Input("crf_min", default=16, min=0, max=51),
-                io.Int.Input("crf_max", default=28, min=0, max=51),
+                io.Int.Input("crf_min", default=16, min=0, max=51,
+                             tooltip="Lowest h264 CRF for the SDR control .mp4 (lower = less compression); each clip "
+                                     "draws a seeded CRF in crf_min..crf_max. Must not exceed crf_max."),
+                io.Int.Input("crf_max", default=28, min=0, max=51,
+                             tooltip="Highest h264 CRF for the SDR control .mp4 (higher = more compression "
+                                     "artefacts). The log-HDR targets are always lossless."),
                 io.String.Input("caption_template", default=D.DEFAULT_CAPTION_TEMPLATE, multiline=True,
                                 tooltip="HDR Prompt template; {scene}, {lighting} and {camera} are filled per clip "
                                         "from the HDRI name / Poly Haven categories and the camera move."),
                 io.Int.Input("fps", default=24, min=1, max=120, tooltip="H3 trains at 24 fps."),
                 io.Boolean.Input("wait", default=True, tooltip=WAIT_TIP),
             ],
-            outputs=[io.String.Output("dataset_folder"), io.String.Output("report")],
+            outputs=[io.String.Output("dataset_folder", tooltip="Absolute path of the pairs folder (targets/, "
+                                                                "control/, meta.jsonl); wire to Train IC-LoRA "
+                                                                "'dataset_folder'."),
+                     io.String.Output("report", tooltip="JSON summary of the job: pair count, frames, targets / "
+                                                        "control / meta paths (or a 'started in the background' note "
+                                                        "when wait is off).")],
             is_output_node=True,
         )
 

@@ -95,9 +95,25 @@ class MiniMaxH3_SigmaPresets(io.ComfyNode):
                                tooltip="Optional: use this model's own sampling (its shift patches included) "
                                        "instead of the preset's."),
             ],
-            outputs=[io.Sigmas.Output(display_name="sigmas"), io.Sampler.Output(display_name="sampler"),
-                     io.Float.Output(display_name="cfg"), io.Int.Output(display_name="steps"),
-                     io.Image.Output(display_name="graph"), io.String.Output(display_name="how_to")],
+            outputs=[io.Sigmas.Output(display_name="sigmas",
+                                      tooltip="The preset's sigma schedule (steps+1 values, after denoise), from "
+                                              "ComfyUI's scheduler code. Wire to SamplerCustom(Advanced) sigmas."),
+                     io.Sampler.Output(display_name="sampler",
+                                       tooltip="The preset's sampler as a SAMPLER object. Wire to SamplerCustom "
+                                               "sampler."),
+                     io.Float.Output(display_name="cfg",
+                                     tooltip="The preset's CFG value from its source template. Use it on the "
+                                             "guider (e.g. CFGGuider cfg)."),
+                     io.Int.Output(display_name="steps",
+                                   tooltip="Number of sampling steps actually in the sigmas output (its length "
+                                           "minus 1)."),
+                     io.Image.Output(display_name="graph",
+                                     tooltip="IMAGE [1, 400, 720, 3]: sigma per step (plus H3's audio clock for H3 "
+                                             "presets). Also shown as the node preview."),
+                     io.String.Output(display_name="how_to",
+                                      tooltip="Plain text: sampler, steps, guidance/cfg, where the sigmas came from, "
+                                              "first/last sigma (and H3 audio clock), any LoRA needed, source "
+                                              "template, notes and wiring.")],
         )
 
     @classmethod

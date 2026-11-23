@@ -272,7 +272,12 @@ class MiniMaxH3_SetAVNoiseMask(io.ComfyNode):
                 io.Boolean.Input("audio_lock", default=False, optional=True,
                                  tooltip="Keep the whole sound (mask 0), e.g. to regenerate only the picture."),
             ],
-            outputs=[io.Latent.Output(display_name="latent"), io.String.Output(display_name="report")],
+            outputs=[io.Latent.Output(display_name="latent",
+                                      tooltip="The same samples with a two-stream noise mask: video [1,1,T,h,w] and "
+                                              "audio [1,1,2,ticks], 1 = generate, 0 = keep. Wire to the sampler."),
+                     io.String.Output(display_name="report",
+                                      tooltip="Text: how each stream's mask was made (reduced, kept, locked or all "
+                                              "generate) and the protected share of video cells and audio ticks.")],
         )
 
     @classmethod
@@ -289,8 +294,11 @@ class MiniMaxH3_ClearAVNoiseMask(io.ComfyNode):
             display_name="H3 Clear AV Noise Mask",
             category=CATEGORY,
             description="Remove the whole denoise mask (both streams) from an H3 AV latent; the samples are unchanged.",
-            inputs=[io.Latent.Input("latent")],
-            outputs=[io.Latent.Output(display_name="latent")],
+            inputs=[io.Latent.Input("latent", tooltip="An H3 AV latent whose noise mask (video and audio) is "
+                                                      "removed.")],
+            outputs=[io.Latent.Output(display_name="latent",
+                                      tooltip="The same latent with no noise_mask: the sampler generates every "
+                                              "video step and audio tick.")],
         )
 
     @classmethod
@@ -320,11 +328,19 @@ class MiniMaxH3_HardKeyframes(io.ComfyNode):
                 io.String.Input("positions", default="1, 18, 35",
                                 tooltip="Frame of each still, in the batch's order, e.g. 1, 18, 35."),
                 io.Combo.Input("indexing", options=["1-based", "0-based"], default="1-based",
+                               tooltip="How positions count frames: 1-based (the first frame is 1; single-frame "
+                                       "steps at 1, 18, 35 ...) or 0-based (the first frame is 0; 0, 17, 34 ...).",
                                extra_dict={"c2c_section": "Advanced"}),
                 io.Combo.Input("crop", options=["disabled", "center"], default="disabled",
                                tooltip="disabled stretches each still to the canvas; center crops it."),
             ],
-            outputs=[io.Latent.Output(display_name="latent"), io.String.Output(display_name="report")],
+            outputs=[io.Latent.Output(display_name="latent",
+                                      tooltip="The latent with each still encoded into its latent step and that step's "
+                                              "video mask set to 0 (kept); audio and other mask values unchanged. "
+                                              "Wire to the sampler's latent input."),
+                     io.String.Output(display_name="report",
+                                      tooltip="Text: which latent steps got keyframes, and a note for each position "
+                                              "inside a multi-frame step (with the nearest single-frame positions).")],
         )
 
     @classmethod

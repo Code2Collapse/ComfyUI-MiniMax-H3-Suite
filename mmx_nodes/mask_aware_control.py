@@ -378,10 +378,15 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                             "that is VAE-encoded for the sampler."),
                 io.Float.Input(
                     "sigma_start", default=1.0, min=0.0, max=1.0, step=0.01,
-                    optional=True, extra_dict={"c2c_section": "Schedule"}),
+                    optional=True, extra_dict={"c2c_section": "Schedule"},
+                    tooltip="The control is active only while the step's sigma is <= this value (a raw sigma, "
+                            "not core's start_percent). 1.0 = from the first step. Also where the schedule's "
+                            "fade starts."),
                 io.Float.Input(
                     "sigma_end", default=0.0, min=0.0, max=1.0, step=0.01,
-                    optional=True, extra_dict={"c2c_section": "Schedule"}),
+                    optional=True, extra_dict={"c2c_section": "Schedule"},
+                    tooltip="The control is active only while the step's sigma is >= this value (raw sigma). "
+                            "0.0 = to the last step. Also where the schedule's fade ends."),
                 # A16 Part III, appended: where this control applies, how its strength runs, crop alignment
                 io.Mask.Input(
                     "control_region", optional=True,
@@ -402,7 +407,9 @@ class MiniMaxH3_MaskAwareControlNet(io.ComfyNode):
                             "plate-sized control on a cropped target is then misaligned."),
             ],
             outputs=[
-                io.Model.Output("model"),
+                io.Model.Output("model", tooltip="A clone of the H3 model with the ControlNet patch registered; its "
+                                                 "residual is gated per latent row by the sampler's denoise mask. "
+                                                 "Wire to the sampler's model."),
                 io.String.Output(
                     "report",
                     tooltip="What was configured, and what to look for if the "

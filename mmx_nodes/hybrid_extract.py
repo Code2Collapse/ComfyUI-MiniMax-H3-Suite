@@ -91,25 +91,44 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
                 "Saves into the loras folder with a .report.json beside it."
             ),
             inputs=[
-                io.Combo.Input("ref_name", options=ckpt_names, default=ckpt_names[0]),
+                io.Combo.Input("ref_name", options=ckpt_names, default=ckpt_names[0],
+                               tooltip="R: the Ref2VA checkpoint (diffusion_models / unet), the base every delta is "
+                                       "taken from (S-R, F-R). Ignored when ref_path is set."),
                 io.String.Input(
                     "ref_path",
                     default="",
                     tooltip="Optional full path override (use for GGUF in unet/).",
                     extra_dict={"c2c_section": "Paths"},
                 ),
-                io.Combo.Input("fl_name", options=ckpt_names, default=ckpt_names[0]),
-                io.String.Input("fl_path", default="", extra_dict={"c2c_section": "Paths"}),
-                io.Combo.Input("sing_name", options=ckpt_names, default=ckpt_names[0]),
-                io.String.Input("sing_path", default="", extra_dict={"c2c_section": "Paths"}),
-                io.Int.Input("rank", default=256, min=8, max=512),
+                io.Combo.Input("fl_name", options=ckpt_names, default=ckpt_names[0],
+                               tooltip="F: the FL2VA checkpoint; its delta F-R is projected out of S-R when "
+                                       "fl_projection is on. Ignored when fl_path is set."),
+                io.String.Input("fl_path", default="", tooltip="Optional full file path of the FL2VA checkpoint; "
+                                                               "overrides fl_name (use for GGUF in unet/).",
+                                extra_dict={"c2c_section": "Paths"}),
+                io.Combo.Input("sing_name", options=ckpt_names, default=ckpt_names[0],
+                               tooltip="S: the Singularity checkpoint; the extracted residual starts from S-R. "
+                                       "Ignored when sing_path is set."),
+                io.String.Input("sing_path", default="", tooltip="Optional full file path of the Singularity "
+                                                                 "checkpoint; overrides sing_name (use for GGUF in "
+                                                                 "unet/).",
+                                extra_dict={"c2c_section": "Paths"}),
+                io.Int.Input("rank", default=256, min=8, max=512,
+                             tooltip="Maximum LoRA rank per layer (SVD of the residual); layers may keep fewer "
+                                     "singular values when the noise edge cuts them. Higher = larger file and more "
+                                     "RAM while extracting."),
                 io.Boolean.Input(
                     "fl_projection",
                     default=True,
                     tooltip="ON: H = (S-R) - a(F-R). OFF: H = S-R plain delta.",
                 ),
-                io.Int.Input("block_start", default=25, min=0, max=49, extra_dict={"c2c_section": "Blocks"}),
-                io.Int.Input("block_end", default=49, min=0, max=49, extra_dict={"c2c_section": "Blocks"}),
+                io.Int.Input("block_start", default=25, min=0, max=49,
+                             tooltip="First DiT block (inclusive) whose weights are extracted; must be <= block_end.",
+                             extra_dict={"c2c_section": "Blocks"}),
+                io.Int.Input("block_end", default=49, min=0, max=49,
+                             tooltip="Last DiT block (inclusive) whose weights are extracted; blocks outside the "
+                                     "range are skipped.",
+                             extra_dict={"c2c_section": "Blocks"}),
                 io.Float.Input(
                     "edge_margin",
                     default=1.1,
@@ -125,6 +144,8 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
                     "device",
                     options=["auto", "cpu", "cuda"],
                     default="auto", extra_dict={"c2c_section": "Performance"},
+                    tooltip="Where the checkpoint tensors are read and the SVD runs. auto = ComfyUI's torch device "
+                            "(else CUDA if available, else CPU).",
                 ),
                 io.String.Input(
                     "output_name",
@@ -148,8 +169,11 @@ class MiniMaxH3_HybridExtract(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.String.Output("lora_name"),
-                io.String.Output("report"),
+                io.String.Output("lora_name", tooltip="File name of the written .safetensors LoRA in the first loras "
+                                                      "folder (a .report.json sits beside it)."),
+                io.String.Output("report", tooltip="Markdown report: sources, variant, coverage, memory, rank, "
+                                                   "projection, block range, emitted / noise-only tensors and a "
+                                                   "per-block SVD table."),
             ],
         )
 

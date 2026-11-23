@@ -49,15 +49,19 @@ class MiniMaxH3_FrameRangeMask(io.ComfyNode):
                 ),
                 io.Int.Input("frame_count", default=81, min=1, max=100_000,
                              tooltip="Frames in the clip this mask must match."),
-                io.Int.Input("width", default=832, min=16, max=8192, step=8),
-                io.Int.Input("height", default=480, min=16, max=8192, step=8),
+                io.Int.Input("width", default=832, min=16, max=8192, step=8,
+                             tooltip="Mask width in px (match the clip's frames)."),
+                io.Int.Input("height", default=480, min=16, max=8192, step=8,
+                             tooltip="Mask height in px (match the clip's frames)."),
                 io.Boolean.Input(
                     "invert", default=False, optional=True,
                     tooltip="Mask the frames you did NOT list instead."),
             ],
             outputs=[
-                io.Mask.Output("mask"),
-                io.String.Output("report"),
+                io.Mask.Output("mask", tooltip="MASK [frame_count, height, width]: 1 on every pixel of a "
+                                               "selected frame, 0 elsewhere (swapped when invert is on)."),
+                io.String.Output("report", tooltip="Text: frames masked out of frame_count, size, inverted, and "
+                                                   "each parsed segment with its frame count."),
             ],
         )
 

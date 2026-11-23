@@ -30,7 +30,9 @@ class MiniMaxH3_DifferentialDenoise(io.ComfyNode):
             default=1.0, min=0.0, max=1.0, step=0.01, optional=True,
             tooltip="Blend the scheduled mask back toward the raw one. 1 = full schedule, 0 = ignore the schedule entirely. Dial down when the schedule is fighting the composite.",
         )
-        return [io.Model.Input("model"), ramp, blend]
+        return [io.Model.Input("model", tooltip="MODEL to patch. Cloned; its denoise-mask function is replaced so "
+                                                "every step thresholds the latent noise_mask with a soft ramp. Needs a "
+                                                "noise_mask on the latent to have any effect."), ramp, blend]
 
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -51,8 +53,9 @@ class MiniMaxH3_DifferentialDenoise(io.ComfyNode):
             ),
             inputs=cls._inputs(),
             outputs=[
-                io.Model.Output("model"),
-                io.String.Output("report"),
+                io.Model.Output("model", tooltip="Clone of the model with the soft-edge per-step mask function "
+                                                 "installed. Wire it to the sampler with a masked latent."),
+                io.String.Output("report", tooltip="One line: what the chosen softness does and the strength used."),
             ],
         )
 

@@ -46,13 +46,24 @@ class MiniMaxH3_SigmaInspector(io.ComfyNode):
                     optional=True,
                     tooltip="When connected, inspect this schedule. Otherwise synthesised from steps.",
                 ),
-                io.Int.Input("steps", default=20, min=2, max=200, extra_dict={"c2c_hide_if_linked": ["sigmas"]}),
-                io.Float.Input("shift_video", default=TRAINED_SHIFT_VIDEO, min=0.01, max=100.0, step=0.01),
-                io.Float.Input("shift_audio", default=TRAINED_SHIFT_AUDIO, min=0.01, max=100.0, step=0.01),
+                io.Int.Input("steps", default=20, min=2, max=200, extra_dict={"c2c_hide_if_linked": ["sigmas"]},
+                             tooltip="Used only when sigmas is not connected: builds a linear video schedule from "
+                                     "1 to 0 with this many steps (steps+1 sigma values)."),
+                io.Float.Input("shift_video", default=TRAINED_SHIFT_VIDEO, min=0.01, max=100.0, step=0.01,
+                               tooltip="Video sigma shift used to map each video sigma to the audio sigma and the "
+                                       "derivatives in the table. Set it to the shift your model uses (H3 trained: 12)."),
+                io.Float.Input("shift_audio", default=TRAINED_SHIFT_AUDIO, min=0.01, max=100.0, step=0.01,
+                               tooltip="Audio sigma shift used to compute sigma_a from each sigma_v. Set it to the "
+                                       "shift your model uses (H3 trained: 3)."),
             ],
             outputs=[
-                io.String.Output("report"),
-                io.String.Output("sigma_json"),
+                io.String.Output("report",
+                                 tooltip="Text table, one row per sigma: step, sigma_v, sigma_a, analytic and "
+                                         "finite-difference dsigma_a/dsigma_v, carry sigma_v/sigma_a, effective "
+                                         "video denoise."),
+                io.String.Output("sigma_json",
+                                 tooltip="Compact JSON with the shifts, the video sigmas and the same per-step "
+                                         "fields as the table; the node's live plot widget reads it."),
             ],
         )
 

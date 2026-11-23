@@ -63,9 +63,14 @@ class MiniMaxH3_HDRTrainICLoRA(io.ComfyNode):
                                 tooltip="Names the run and its checkpoints. Same name = resume."),
                 io.String.Input("output_folder", default="hdr_lora",
                                 tooltip="ai-toolkit training_folder. Relative = inside ComfyUI's output."),
-                io.Int.Input("steps", default=3000, min=1, max=1_000_000),
-                io.Float.Input("learning_rate", default=1e-4, min=1e-7, max=1e-2, step=1e-5, round=False),
-                io.Int.Input("save_every", default=250, min=1, max=100_000),
+                io.Int.Input("steps", default=3000, min=1, max=1_000_000,
+                             tooltip="Total optimiser steps written to the YAML (train.steps; batch size 1, no "
+                                     "gradient accumulation)."),
+                io.Float.Input("learning_rate", default=1e-4, min=1e-7, max=1e-2, step=1e-5, round=False,
+                               tooltip="AdamW8bit learning rate written to the YAML (train.lr)."),
+                io.Int.Input("save_every", default=250, min=1, max=100_000,
+                             tooltip="Write a LoRA checkpoint (bf16) every N steps; ai-toolkit keeps the newest 4. "
+                                     "Resume continues from the newest one."),
                 io.Int.Input("rank", default=16, min=1, max=512, tooltip="ref2va default 16."),
                 io.Int.Input("alpha", default=16, min=1, max=512, tooltip="ref2va default 16."),
                 io.Int.Input("resolution", default=768, min=256, max=2048, step=32,
@@ -82,7 +87,12 @@ class MiniMaxH3_HDRTrainICLoRA(io.ComfyNode):
                                  tooltip="Off (default): training runs in the background and the queue moves on. "
                                          "On: the node waits until training ends (ComfyUI's Cancel stops it)."),
             ],
-            outputs=[io.String.Output("report"), io.String.Output("yaml_path")],
+            outputs=[io.String.Output("report", tooltip="Text: ai-toolkit commit and H3 capability checks, dataset "
+                                                        "pairs / frames / size, resume point, YAML path, then the "
+                                                        "background job id and log (and final steps / loss when wait "
+                                                        "is on)."),
+                     io.String.Output("yaml_path", tooltip="Path of the ai-toolkit job YAML written under "
+                                                           "<output_folder>/a29_runs/<job_name>/ (also in a dry run).")],
             is_output_node=True,
         )
 
