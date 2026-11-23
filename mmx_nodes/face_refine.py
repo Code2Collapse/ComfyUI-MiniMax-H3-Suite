@@ -57,9 +57,15 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                 "plus the transform needed to paste the result back."
             ),
             inputs=[
-                io.Image.Input("images"),
-                io.Combo.Input("detector", options=dets, default=dets[0]),
-                io.Float.Input("confidence", default=0.35, min=0.05, max=0.95, step=0.05),
+                io.Image.Input("images",
+                               tooltip="Source video frames (IMAGE batch) to track the face in and crop from."),
+                io.Combo.Input("detector", options=dets, default=dets[0],
+                               tooltip="Ultralytics YOLO face detector from models/ultralytics (bbox) that finds "
+                                       "the face box in every frame. Loaded once and cached."),
+                io.Float.Input("confidence", default=0.35, min=0.05, max=0.95, step=0.05,
+                               tooltip="Minimum detector score (0-1) for a box to count, for the face detector and "
+                                       "the fallback detector. Lower finds more faces but more false boxes; frames "
+                                       "with no face are interpolated."),
                 io.Float.Input(
                     "crop_factor",
                     default=2.5,
@@ -87,6 +93,9 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                     ), extra_dict={"c2c_show_if": {"canvas_mode": ["manual"]}},
                 ),
                 io.Int.Input("canvas_height", default=512, min=128, max=1344, step=32,
+                             tooltip="Height in pixels of every crop (the H3 canvas). With canvas_width it sets "
+                                     "the crop aspect. Ignored when canvas_mode is not 'manual' (the auto modes "
+                                     "use a square canvas).",
                              extra_dict={"c2c_show_if": {"canvas_mode": ["manual"]}}),
                 io.Combo.Input(
                     "canvas_mode",
@@ -230,12 +239,24 @@ class MiniMaxH3_FaceTrackCrop(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Image.Output("crops"),
-                H3TransformType.Output("transform"),
-                io.Image.Output("preview"),
-                io.String.Output("report"),
-                io.Int.Output("canvas_w"),
-                io.Int.Output("canvas_h"),
+                io.Image.Output("crops",
+                                tooltip="IMAGE batch, one canvas_w×canvas_h face crop per input frame (smoothed "
+                                        "track). Feed to the H3 refine pass and to H3 Face Mask (SAM)."),
+                H3TransformType.Output("transform",
+                                       tooltip="Per-frame crop boxes, canvas and source size, detection flags and "
+                                               "fade weights. Needed by H3 Face Stitch Back, Face Mask (SAM) and "
+                                               "Face Transform Info."),
+                io.Image.Output("preview",
+                                tooltip="Source frames with the crop box drawn: green = face detected, yellow = body "
+                                        "fallback, red = interpolated across a gap."),
+                io.String.Output("report",
+                                 tooltip="Text summary: tracking/identity counts, detection rate, face and crop "
+                                         "sizes, magnification, jitter before/after smoothing, dropouts and warnings."),
+                io.Int.Output("canvas_w",
+                              tooltip="Final crop width in pixels (after canvas_mode). Wire to the H3 node's width."),
+                io.Int.Output("canvas_h",
+                              tooltip="Final crop height in pixels (after canvas_mode). Wire to the H3 node's "
+                                      "height."),
             ],
         )
 
@@ -299,9 +320,15 @@ class MiniMaxH3_FaceStitch(io.ComfyNode):
             category=CATEGORY,
             description="Composite H3-refined face crops back into the source frames.",
             inputs=[
-                io.Image.Input("base_images"),
-                io.Image.Input("refined_crops"),
-                H3TransformType.Input("transform"),
+                io.Image.Input("base_images",
+                               tooltip="The full frames the crops were taken from (same size as the transform's "
+                                       "source, else an error). The refined faces are pasted into a copy of these."),
+                io.Image.Input("refined_crops",
+                               tooltip="H3-refined face crops, one per frame, on the crop canvas. If the frame count "
+                                       "differs from base_images, only the shorter count is pasted."),
+                H3TransformType.Input("transform",
+                                      tooltip="The transform output of H3 Face Track + Crop for this clip: maps each "
+                                              "crop back to its box in the frame and supplies detection fade weights."),
                 io.Combo.Input(
                     "paste_region",
                     options=["face_only", "face_ellipse", "full_crop"],
@@ -406,7 +433,9 @@ class MiniMaxH3_FaceStitch(io.ComfyNode):
                     ),
                 ),
             ],
-            outputs=[io.Image.Output("images")],
+            outputs=[io.Image.Output("images",
+                                     tooltip="IMAGE batch: base_images with the refined faces composited in "
+                                             "(same size and frame count as base_images).")],
         )
 
     @classmethod
@@ -471,13 +500,23 @@ class MiniMaxH3_InjectVideoLatent(io.ComfyNode):
                 "BasicScheduler's denoise - NOT with SplitSigmas."
             ),
             inputs=[
-                io.Latent.Input("av_latent"),
-                io.Image.Input("images"),
-                io.Vae.Input("vae"),
+                io.Latent.Input("av_latent",
+                                tooltip="H3 joint audio-video LATENT (video + audio streams) whose video stream is "
+                                        "replaced. Sets the target latent size; its audio stream is kept as is."),
+                io.Image.Input("images",
+                               tooltip="Frames to encode into the video stream. Width/height must encode to the "
+                                       "latent's size (pixels/16), else an error; a frame count that encodes to a "
+                                       "different latent length is trimmed or padded, with a warning."),
+                io.Vae.Input("vae",
+                             tooltip="H3 video VAE used to encode the frames."),
             ],
             outputs=[
-                io.Latent.Output("av_latent"),
-                io.String.Output("report"),
+                io.Latent.Output("av_latent",
+                                 tooltip="Copy of the input LATENT with the encoded frames as its video stream. Sample "
+                                         "it with denoise below 1 (BasicScheduler) for img2img."),
+                io.String.Output("report",
+                                 tooltip="Text summary: encoded latent shape, stream count, input frame count and "
+                                         "size, and any temporal trim/pad warning."),
             ],
         )
 
@@ -532,9 +571,16 @@ class MiniMaxH3_FaceMaskSAM(io.ComfyNode):
                         "not be resident alongside the video model."
                     ),
                 ),
-                io.Custom("SAM_MODEL").Input("sam_model"),
-                H3TransformType.Input("transform"),
-                io.Float.Input("threshold", default=0.93, min=0.0, max=1.0, step=0.01),
+                io.Custom("SAM_MODEL").Input("sam_model",
+                                             tooltip="SAM model (Impact Pack SAMLoader). Prompted per frame with the "
+                                                     "face box and its centre point; moved to the device for the run "
+                                                     "and released afterwards."),
+                H3TransformType.Input("transform",
+                                      tooltip="The transform from H3 Face Track + Crop; its per-frame face rectangles "
+                                              "(canvas space) are the SAM box prompts and the fallback masks."),
+                io.Float.Input("threshold", default=0.93, min=0.0, max=1.0, step=0.01,
+                               tooltip="Passed to the SAM model's predict() as its score threshold (0-1). Higher "
+                                       "rejects more masks; frames with no accepted mask use sam_fallback."),
                 io.Int.Input(
                     "dilation",
                     default=0,
@@ -570,8 +616,12 @@ class MiniMaxH3_FaceMaskSAM(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Mask.Output("masks"),
-                io.String.Output("report"),
+                io.Mask.Output("masks",
+                               tooltip="MASK batch in crop-canvas space, one per frame (1 = face), dilated and "
+                                       "temporally averaged. Wire to H3 Face Stitch Back masks."),
+                io.String.Output("report",
+                                 tooltip="Text summary: frames segmented by SAM, frames that fell back (rectangle or "
+                                         "held mask), dilation, smoothing and mean mask coverage."),
             ],
         )
 
@@ -628,10 +678,16 @@ class MiniMaxH3_FaceTransformInfo(io.ComfyNode):
             category=CATEGORY,
             description="Print the per-frame transform - sanity-check tracking before spending GPU time.",
             inputs=[
-                H3TransformType.Input("transform"),
-                io.Int.Input("max_rows", default=12, min=1, max=400),
+                H3TransformType.Input("transform",
+                                      tooltip="The transform from H3 Face Track + Crop to print."),
+                io.Int.Input("max_rows", default=12, min=1, max=400,
+                             tooltip="Roughly how many frame rows to list: every (frames / max_rows)-th frame is "
+                                     "shown."),
             ],
-            outputs=[io.String.Output("info")],
+            outputs=[io.String.Output("info",
+                                      tooltip="Text table: frame count, canvas and source size, then per sampled "
+                                              "frame the crop box x/y/w/h in source pixels and its magnification. "
+                                              "Also printed to the console.")],
         )
 
     @classmethod
