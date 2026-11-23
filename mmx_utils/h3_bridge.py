@@ -138,11 +138,12 @@ def encode_audio_window(audio_vae, wave: torch.Tensor, frames: int, side: str, l
 
 
 def resize_frames(images: torch.Tensor, width: int, height: int, crop: str, chunk: int = 32) -> torch.Tensor:
-    import comfy.utils  # noqa: WPS433
+    # float Lanczos: core's goes through 8-bit PIL (clips > 1.0, quantises, even at the same size) - zero-offset plan
+    from mmx_utils.resample import common_upscale_float  # noqa: WPS433
     out = []
     for s in range(0, int(images.shape[0]), chunk):
         x = images[s:s + chunk, ..., :3].movedim(-1, 1)
-        out.append(comfy.utils.common_upscale(x, width, height, "lanczos", crop).movedim(1, -1))
+        out.append(common_upscale_float(x, width, height, "lanczos", crop).movedim(1, -1))
     return torch.cat(out, dim=0)
 
 

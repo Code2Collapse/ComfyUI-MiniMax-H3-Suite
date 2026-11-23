@@ -68,8 +68,9 @@ def step_offsets(latent_t: int) -> list[int]:
 
 
 def resize(image, width: int, height: int, crop: str):
+    from mmx_utils.resample import common_upscale_float  # float Lanczos: core's is 8-bit PIL (zero-offset plan)
     samples = image[..., :3].movedim(-1, 1)
-    samples = comfy.utils.common_upscale(samples, width, height, "lanczos", crop)
+    samples = common_upscale_float(samples, width, height, "lanczos", crop)
     return samples.movedim(1, -1)
 
 

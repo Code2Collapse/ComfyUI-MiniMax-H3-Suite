@@ -179,8 +179,9 @@ def set_av_noise_mask(latent, video_mask=None, audio_mask=None, video_lock=False
 
 
 def _resize(image, width, height, crop):
-    import comfy.utils  # noqa: WPS433
-    return comfy.utils.common_upscale(image[..., :3].movedim(-1, 1), width, height, "lanczos", crop).movedim(1, -1)
+    # float Lanczos: core's goes through 8-bit PIL (clips > 1.0, quantises, even at the same size) - zero-offset plan
+    from mmx_utils.resample import common_upscale_float  # noqa: WPS433
+    return common_upscale_float(image[..., :3].movedim(-1, 1), width, height, "lanczos", crop).movedim(1, -1)
 
 
 def parse_positions(text: str) -> list[int]:
