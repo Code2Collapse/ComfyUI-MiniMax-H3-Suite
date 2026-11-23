@@ -3,6 +3,19 @@
 ## Unreleased
 
 ### Fixed
+- **Zero offset on V2V** (owner order 2026-11-23; `docs/PLAN_h3_zero_offset.md`, bench `tools/h3_zero_offset_bench.py`):
+  - Subject Uncrop / Plate Restore / Stitch Back: a decode that the H3 VAE cut to a multiple of 16 is put back at
+    core's offset with the margins from the plate instead of being stretched into the box (5.02 px -> 0.0005 px).
+    Subject Crop records the crop size in each box (`metadata.mmx_crop_size`) and says so in its report.
+  - Lanczos resizes (Subject Crop / Uncrop, Source AV bridge, Motion Context, AV noise mask) run in float: core's went
+    through 8-bit PIL (HDR clipped at 1.0, 256 levels; 129.5/255 -> 7/255 on an HDR plate).
+  - Mask Prep and Mask To Latent Space reduce masks that are off the 16 px grid on the cells the VAE actually encodes
+    (182 / 118 masked cells left "keep" -> 0). On-grid masks are unchanged.
+  - Detail Reinject combines the generated low band with the plate's high band (the detail was counted twice: an
+    unchanged region came back 8.8/255 different and 0.43 px moved -> 0.025/255, 0 px).
+  - Source AV Latent, Masked Replace and the native audio lock pad the soundtrack to whole 1/40 s ticks before the
+    audio VAE: core cut up to 12.5 ms off the head (8.3 ms for 121 frames).
+  - The OpenCV fast paths of mask dilate / grow move a mask to the CPU before `.numpy()`.
 - Compact-node layout engine: a node removed right after it was created (paste then undo, a script that adds and
   removes) is no longer kept alive by the engine (about 185 KB each, measured in CNP). Same fix as CNP's engine (L9.01).
 

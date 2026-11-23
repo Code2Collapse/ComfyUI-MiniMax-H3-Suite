@@ -405,3 +405,13 @@ owner's packs. That code needs no third-party credit. Shared CNP code is carried
   Code2Collapse, 2026-11: V3 schema, run-time silence option, asset length check, LoRA chain node, appended outputs.
   Distributed as part of a GPL-3.0 work. The silence asset and all weights are not bundled; they stay under the
   MiniMax-H3 Community License.
+
+## Zero-offset references (ideas, no code copied, 2026-11-23)
+
+- **ComfyUI-Viggle-Remake** (Apache-2.0): padding the soundtrack to whole 800-sample latent frames before the audio
+  VAE so core's centre crop cannot shift it (`docs/PLAN_h3_zero_offset.md`, Z5). Re-implemented in
+  `mmx_utils/h3_geometry.py::pad_waveform_to_audio_hop`.
+- **ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles** by mo-akkakk (MIT): its `carry_mode = "prefix"` was compared with
+  H3 Continuation's tail pinning; same mechanism, nothing ported.
+- **NKD Basic Tools** (`nkd_frequency.py`, MIT): Detail Reinject's combine was corrected to its split / combine
+  semantics (low band of one image + high band of the other).
