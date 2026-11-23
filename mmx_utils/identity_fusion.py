@@ -76,8 +76,14 @@ def token_mask(mask: torch.Tensor | None, latent_t: int, latent_h: int, latent_w
     if m.ndim == 4:
         m = m[:, 0] if m.shape[1] == 1 else m[..., 0]
     t = m.shape[0]
-    idx = torch.linspace(0, t - 1, latent_t).round().long() if t != latent_t else torch.arange(t)
-    m = m[idx]
+    if t != latent_t and t >= 5 and (t - 5) % 17 == 0 and (t - 5) // 17 * 5 + 2 == latent_t:
+        # a PIXEL-frame mask on the H3 grid: each latent frame takes the max of its own pixel frames (1, 4, 4, 4, 4...),
+        # so a frame where the head enters or leaves is never dropped (docs/PLAN_h3_replacement_quality.md R6)
+        from .h3_grid import h3_pixel_frame_groups
+        m = torch.stack([m[a:b].amax(0) for a, b in h3_pixel_frame_groups(t)])
+    else:
+        idx = torch.linspace(0, t - 1, latent_t).round().long() if t != latent_t else torch.arange(t)
+        m = m[idx]
     m = F.interpolate(m[:, None], size=(latent_h, latent_w), mode="nearest")[:, 0]
     m = F.max_pool2d(m[:, None], kernel_size=2, stride=2)[:, 0]          # [T, H/2, W/2]
     return (m > 0.5).reshape(-1)

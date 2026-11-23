@@ -293,7 +293,7 @@ def track_face_crop(
     via_body = np.zeros(b, dtype=bool)
 
     ref_emb, app = None, None
-    n_ident, n_cont, n_conflict = 0, 0, 0
+    n_ident, n_cont, n_conflict, n_rejected = 0, 0, 0, 0
     multi = False
     try:
         probe = model.predict(to_bgr_u8(images[0]), conf=confidence, verbose=False)[0]
@@ -318,6 +318,13 @@ def track_face_crop(
                         f"({used} unambiguous frames)"
                     )
         except Exception as exc:
+            if identity_reference is not None:
+                # a reference the node silently ignores is worse than an error: the track would follow size and
+                # position and the report would look normal (docs/PLAN_h3_replacement_quality.md T3)
+                raise ValueError(
+                    f"identity_reference is connected but face identity cannot run ({exc}). Install insightface "
+                    "with its buffalo_l model, or disconnect identity_reference to track by position."
+                ) from exc
             print(f"[MiniMaxH3_FaceTrackCrop] identity matching unavailable ({exc})")
 
     last = None
@@ -332,15 +339,27 @@ def track_face_crop(
 
         box = None
         if len(boxes) == 1:
+            if ref_emb is not None:
+                # one face is not necessarily the performer: when the performer is out of frame an extra can be the
+                # only face. A confident mismatch is a missed frame (gap-filled), never a jump to someone else. A face
+                # the recogniser cannot read is accepted as before (docs/PLAN_h3_replacement_quality.md T2).
+                near = [c for c in embed_faces(app, frame_bgr) if iou(c[0], boxes[0]) > 0.3]
+                k, score = best_match(near, ref_emb)
+                if k is not None and score < identity_threshold:
+                    n_rejected += 1
+                    continue
             box = boxes[0]
             n_cont += 1
         elif last is None:
             if ref_emb is not None:
                 cands = embed_faces(app, frame_bgr)
-                k, _ = best_match(cands, ref_emb)
-                if k is not None:
+                k, score = best_match(cands, ref_emb)
+                if k is not None and score >= identity_threshold:
                     box = cands[k][0]
                     n_ident += 1
+                elif k is not None:
+                    n_rejected += 1                  # faces read, none is the performer: not picked by size
+                    continue
             if box is None:
                 if select == "most_central":
                     fc = (w / 2.0, h / 2.0)
@@ -548,6 +567,9 @@ def track_face_crop(
     report = (
         f"tracking: {n_cont} by continuity, {n_conflict} ambiguous "
         f"({n_ident} resolved by face identity)\n"
+        f"identity: {'on' if ref_emb is not None else 'off'}"
+        + (f", {n_rejected} frame(s) whose faces were not the performer left as gaps" if n_rejected else "")
+        + "\n"
         f"frames={b}  face={found} ({found / b * 100:.0f}%)  "
         f"body-fallback={int(via_body.sum())}  interpolated={b - int(known.sum())}\n"
         f"face height  min={sz.min():.0f}px  mean={sz.mean():.0f}px  max={sz.max():.0f}px\n"

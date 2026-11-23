@@ -137,6 +137,14 @@ point back within 1 px.
 
 ## Things to know
 
+- **Offset in these six graphs (2026-11-23 audit, R5).** They feed the cropped plate through core Reference to Video,
+  which re-sizes `<Video 1>` to its own 768-short-edge canvas: when the crop is not that canvas the plate reaches the
+  model offset by up to half a token against the target. The task workflows (`workflows/tasks/`) use H3 Image +
+  Reference to Video with `ref_video_fit` = target grid (zero offset), and the Remake workflows
+  (`workflows/replace/`) share one canvas by construction. See `docs/PLAN_h3_replacement_quality.md`.
+- **A reference batch is one picture** unless you use H3 Image + Reference to Video with `image_batches` = every
+  image (core Reference to Video takes image 0 of each slot).
+
 - H3 has no face or expression input. Identity comes from `<Picture N>` and structure and expression only from
   pixels: the kept plate, a reference video, or the ControlNet's control video. Expression transfer (task 4) relies
   on the model reading `<Video 2>` as the expression source, and that is untested.

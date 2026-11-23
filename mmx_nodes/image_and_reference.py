@@ -64,6 +64,7 @@ MAX_RESOLUTION = getattr(_comfy_nodes, "MAX_RESOLUTION", 16384)
 
 
 REF_VIDEO_FITS = ("core canvas", "target grid (zero offset)")
+IMAGE_BATCHES = ("first image only", "every image")
 
 
 def _names(prefix: str, count: int) -> list[str]:
@@ -158,6 +159,15 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                             "every token of it lands exactly on the output's token: use it when the "
                             "reference video is a spatial anchor. Costs more reference tokens.",
                             extra_dict={"c2c_section": "References"}),
+                # appended last (docs/PLAN_h3_replacement_quality.md R1): the default keeps saved workflows unchanged
+                io.Combo.Input(
+                    "image_batches", options=list(IMAGE_BATCHES), default=IMAGE_BATCHES[0],
+                    optional=True,
+                    tooltip="A ref_image slot given a BATCH (H3 Reference Bank identity, H3 Subject Memory "
+                            "anchors): 'first image only' uses image 0, as ComfyUI's own Reference to Video does - "
+                            "the report then says how many were left out. 'every image' makes each image of the "
+                            "batch its own <Picture N>, in order (numbering shifts for the slots after it).",
+                    extra_dict={"c2c_section": "References"}),
             ],
             outputs=[
                 io.Conditioning.Output(display_name="positive"),
@@ -174,7 +184,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
     def execute(cls, clip, vae, audio_vae, prompt, width, height, length,
                 first_frame=None, last_frame=None, ref_image_size="match",
                 ref_images=None, ref_videos=None, ref_video_audios=None,
-                ref_audios=None, ref_video_fit=REF_VIDEO_FITS[0]) -> io.NodeOutput:
+                ref_audios=None, ref_video_fit=REF_VIDEO_FITS[0],
+                image_batches=IMAGE_BATCHES[0]) -> io.NodeOutput:
         if _IMPORT_ERROR is not None:
             raise RuntimeError(
                 "H3 Image + Reference to Video needs ComfyUI's built-in MiniMax "
@@ -215,21 +226,28 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
         geo_notes: list[str] = []
         n_images = n_videos = n_audios = 0
 
-        for img in (ref_images or {}).values():
+        batch_notes: list[str] = []
+        for slot, img in (ref_images or {}).items():
             if img is None:
                 continue
-            h, w = int(img.shape[1]), int(img.shape[2])
-            scale = reference_scale(width, height, w, h, ref_image_size)
-            tw, th = canvas_size(w, h, scale)
-            resized = _resize(img[:1], tw, th, "disabled")
-            ref_items.append({"type": "image", "data": resized})
-            ref_blocks.append({
-                "kind": "image",
-                "latent_h": th // LATENT_STRIDE,
-                "latent_w": tw // LATENT_STRIDE,
-                "latent": vae.encode(resized),
-            })
-            n_images += 1
+            count = int(img.shape[0]) if img.ndim == 4 else 1
+            if count > 1 and image_batches != IMAGE_BATCHES[1]:
+                batch_notes.append(f"{slot}: a batch of {count} images - only the first is used ({count - 1} left "
+                                   "out). Set image_batches to 'every image' to use them all.")
+            singles = [img[i:i + 1] for i in range(count)] if image_batches == IMAGE_BATCHES[1] else [img[:1]]
+            for single in singles:
+                h, w = int(single.shape[1]), int(single.shape[2])
+                scale = reference_scale(width, height, w, h, ref_image_size)
+                tw, th = canvas_size(w, h, scale)
+                resized = _resize(single, tw, th, "disabled")
+                ref_items.append({"type": "image", "data": resized})
+                ref_blocks.append({
+                    "kind": "image",
+                    "latent_h": th // LATENT_STRIDE,
+                    "latent_w": tw // LATENT_STRIDE,
+                    "latent": vae.encode(resized),
+                })
+                n_images += 1
 
         ref_video_audios = ref_video_audios or {}
         for name, video_frames in (ref_videos or {}).items():
@@ -320,6 +338,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                           ref_image_size, int(length), int(frame_count))
         if geo_notes:
             report += "\n\nGeometry (A16):\n  " + "\n  ".join(geo_notes)
+        if batch_notes:
+            report += "\n\nReference batches:\n  " + "\n  ".join(batch_notes)
         return io.NodeOutput(cond, latent, report)
 
 
