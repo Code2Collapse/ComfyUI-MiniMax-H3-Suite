@@ -233,6 +233,9 @@ def lock_audio_chunk_into_latent(
     waveform, input_sr = prepare_mono_batch_waveform(audio_chunk)
     vae_rate = int(getattr(audio_vae, "audio_sample_rate", 32000))
     waveform, vae_rate, _ = fit_waveform_to_vae_rate(waveform, input_sr, vae_rate)
+    # whole 1/40 s ticks: core's encode centre-crops otherwise and the locked sound sat up to 12.5 ms early (Z5)
+    from .h3_geometry import pad_waveform_to_audio_hop
+    waveform, _ = pad_waveform_to_audio_hop(waveform, vae_rate)
     encoded = audio_vae.encode(waveform.movedim(1, -1))
     encoded, _ = fit_encoded_audio_to_target(encoded, int(target_audio.shape[-1]))
     video_mask, audio_mask = build_video_only_denoise_masks(

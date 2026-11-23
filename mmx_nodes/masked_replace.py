@@ -107,6 +107,9 @@ class MiniMaxH3_MaskedReplace(io.ComfyNode):
                 raise RuntimeError(
                     f"H3 Masked Replace: audio resample {sr}→{vae_sr} failed: {exc}"
                 ) from exc
+        # whole 1/40 s ticks: core's encode centre-crops otherwise and the locked sound sat up to 12.5 ms early (Z5)
+        from mmx_utils.h3_geometry import pad_waveform_to_audio_hop  # noqa: WPS433
+        wf, _ = pad_waveform_to_audio_hop(wf, vae_sr)
         try:
             z = audio_vae.encode(wf.movedim(1, -1))
         except Exception as exc:

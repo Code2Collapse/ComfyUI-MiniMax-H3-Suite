@@ -42,9 +42,14 @@ def _nested(parts):
 
 
 def _encode_audio(audio_vae, audio):
-    from comfy_extras.nodes_audio import VAEEncodeAudio  # noqa: WPS433 - core's own audio encode
-    out = VAEEncodeAudio.execute(audio_vae, audio)
-    return (out[0] if isinstance(out, (tuple, list)) else out.args[0])["samples"]
+    """Core's VAEEncodeAudio (resample to the VAE rate, encode), with the waveform padded at the END to whole
+    1/40 s ticks first: core's encode centre-crops it otherwise and the kept sound sat up to 12.5 ms early (Z5)."""
+    import comfy.audio  # noqa: WPS433
+    sr = int(audio["sample_rate"])
+    vae_sr = int(getattr(audio_vae, "audio_sample_rate", 44100))
+    wave = audio["waveform"] if vae_sr == sr else comfy.audio.resample(audio["waveform"], sr, vae_sr)
+    wave, _ = geo.pad_waveform_to_audio_hop(wave, vae_sr)
+    return audio_vae.encode(wave.movedim(1, -1))
 
 
 def fit_audio_ticks(samples: torch.Tensor, ticks: int) -> tuple[torch.Tensor, str]:

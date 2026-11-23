@@ -55,6 +55,24 @@ def expected_audio_ticks(frames: int) -> int:
     return int(round(int(frames) / FPS * AUDIO_TICKS_PER_SECOND))
 
 
+def pad_waveform_to_audio_hop(waveform, sample_rate: int):
+    """Zero-pad a waveform [..., samples] at the END to whole 1/40 s ticks (800 samples at 32 kHz).
+
+    Core's VAE.encode centre-crops its input to a multiple of the audio VAE's downscale ratio (comfy/sd.py
+    ``vae_encode_crop_pixels``, ``crop_input`` True, ``downscale_ratio`` 800 for the H3 audio VAE): a soundtrack that
+    is not a whole number of ticks lost (samples % 800) // 2 samples at the HEAD - up to 12.5 ms - and every kept tick
+    sat that much early against the picture. Padding the tail instead keeps sample 0 at tick 0 (zero-offset plan, Z5;
+    the same fix as Viggle-Remake's audio encode, Apache-2.0, idea only). Returns (waveform, samples added)."""
+    import torch
+    hop = int(sample_rate) // AUDIO_TICKS_PER_SECOND
+    if hop <= 0 or int(sample_rate) % AUDIO_TICKS_PER_SECOND:
+        return waveform, 0
+    extra = (-int(waveform.shape[-1])) % hop
+    if not extra:
+        return waveform, 0
+    return torch.nn.functional.pad(waveform, (0, extra)), extra
+
+
 def is_legal_frame_count(n: int) -> bool:
     return int(n) >= 5 and int(n) % 17 == 5
 
@@ -185,7 +203,7 @@ def plate_scale(bbox: dict[str, Any] | None, target_px: tuple[int, int]) -> floa
 __all__ = [
     "AUDIO_TICKS_PER_SECOND", "FPS", "H3GeometryError", "LATENT_STRIDE", "PATCH", "TOKEN_PX",
     "describe_offset", "expected_audio_ticks", "frame_count_for_latent_t", "is_legal_frame_count",
-    "mask_token_coverage", "nearest_legal_frame_counts", "plate_scale", "pool_video_mask_like_core",
+    "mask_token_coverage", "nearest_legal_frame_counts", "pad_waveform_to_audio_hop", "plate_scale", "pool_video_mask_like_core",
     "rope_extent", "rope_grid", "stream_offset_px", "vae_crop_margins",
 ]
 
