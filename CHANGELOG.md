@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Fixed (replacement, round 2 - docs/PLAN_h3_replacement_quality.md s9)
+- The six character-replacement workflows put the plate (`<Video 1>`) on the target grid: node 15 migrated in place
+  to H3 Image + Reference to Video (same node ids); new `ref_video_fit` choice *target grid for <Video 1>, core canvas
+  for the rest* keeps a driving clip on core's canvas (R5).
+- H3 Temporal Subject Tracker: `masks` carries accepted masks only (T5); a precomputed track no longer loops at a
+  review (T4); `reid_interval` 12 for new nodes and an appended `jump_2d` loss rule, off (T6); refuses a pick made in
+  a window that does not start at frame 0 when the Selector gets the new `window_json` (T1).
+- H3 Face Mask SAM: the report names rectangle-fallback frames; appended `sam_fallback` hold option (T7).
+- H3 Subject Memory: appended `track_json` cuts approved frames to the subject (R3).
+- H3 Identity Fusion Controller: stays on for the positive half under batched CFG (R7).
+- Anchor Studio / Tracker: frames go to numpy through `.cpu()` (device scan L8.33).
+
 ### Added
 - **Viggle Remake on H3** (category `MiniMax H3/Replace`; design `docs/PLAN_h3_replacement_quality.md`): H3 Remake
   Conditioning (Viggle), H3 Remake Keyframe Until, H3 Remake Noise, H3 Remake Prefix - ported from the reference

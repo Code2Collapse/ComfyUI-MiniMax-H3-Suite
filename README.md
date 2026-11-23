@@ -741,6 +741,13 @@ Fixed on the way (identity side): H3 Image + Reference to Video can use every im
 the Tracker refuses a pick made after frame 0; Face Track + Crop no longer jumps to a lone extra when an identity
 reference is connected, and a reference it cannot use is an error.
 
+Round 2 (2026-11-23): the six character-replacement workflows put the plate on the target grid (node 15 is now H3
+Image + Reference to Video, same ids; old saved copies still load); the Tracker outputs accepted masks only, no longer
+loops at a review on a precomputed track, checks appearance every 12 frames on new nodes and has an optional 2-D jump
+rule; the Selector takes `window_json` so a later pick is caught; Face Mask SAM names its rectangle-fallback frames
+(optional hold); Subject Memory can cut approved frames to the subject (`track_json`); Identity Fusion stays on under
+batched CFG. Details: `docs/PLAN_h3_replacement_quality.md` section 9.
+
 ## H3 Identity Fusion Controller (experimental)
 
 RefMod and the reference size decide **what** reference goes in. This node decides **where**, **when** and **how

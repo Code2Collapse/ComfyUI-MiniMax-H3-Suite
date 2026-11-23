@@ -160,3 +160,22 @@ local (owner rule: never pushed).
 
 T4-T7, R3 (subject-cropped memory examples), R5 (rewrite the six workflows in the live front end), G1-G4 (geometry
 agent), real-weight A/B of Remake vs the spine with the bench on the GPU box.
+
+## 9. Round 2 (branch replace-quality-2, 2026-11-23): the follow-ups
+
+Tests first; each new test failed on origin/main before its fix (18 failed, evidence
+`docs/evidence/replace_quality_2026-11-23/rq2_mustfail_before_fixes.txt` in the work area).
+
+| ID | Fix | Saved workflows |
+|---|---|---|
+| R5 | The six `workflows/character_replacement/` graphs migrated **in place** (same node ids, same links): node 15 core `MiniMaxH3ReferenceToVideo` -> `MiniMaxH3_ImageAndReferenceToVideo`, character `ref_image_1`, plate `ref_video_1`, driving clip `ref_video_2`. New `ref_video_fit` choice (appended to the options, default unchanged): *target grid for `<Video 1>`, core canvas for the rest* - the plate on the target grid (zero offset), a driving clip (another shot) on core's canvas, not cover-cropped. | A copy saved before still loads and runs as before (core's node). |
+| T5 | Tracker `masks` output = the accepted masks of the window (from `masks/`); a frame the loss rule rejected, or not decided yet, is empty. | Output content changes only on frames that were wrong. |
+| T4 | Backend *masks input*: the cursor frame takes the seed (the mask the user confirmed or re-identification took) instead of the precomputed mask, so a bad precomputed frame cannot fail again at its own seed; the track advances. | Same results where the precomputed track was right (the window seed is that same mask). |
+| T7 | Face Mask SAM: the report names the frames that fell back and says *plain RECTANGLE*; new appended `sam_fallback` = *hold nearest SAM mask (experimental)* moves the nearest segmented frame's mask with the face rect. | Default `face rect` = old behaviour. |
+| T6 | `reid_interval` default 12 for a NEW node (a saved workflow restores its own value). 2-D jump rule as an appended `jump_2d` (off); its setting enters the track key only when on, so tracks under way keep their key. | Unchanged (saved value; option off). |
+| R3 | Subject Memory: appended `track_json` (the Tracker's): each approved frame is cut to the subject's box + 15 %; a frame without the subject is left out and the notes say which. Without it: whole frames, as before. | Unchanged without the input. |
+| R7 | Identity Fusion under real CFG with cond + uncond in one batch: the positive chunks get the bias, the negative chunks plain attention (each chunk's `cond_or_uncond` passed to an inner override such as NegPiP). Before: off for the whole batch. | Experimental node; behaviour changes only in batched CFG (where it was silently off). |
+| T1+ | Multi-Subject Selector: appended `window_json` (H3 Frame Window's): the pick records `clip_frame` / `source_frame`; the Tracker refuses a pick whose clip frame is not 0 (a pick on row 0 of a window starting at frame 7 is frame 7). Wired in task 16 and the three Remake workflows. | Without the input: as before. |
+| L8.33 | Anchor Studio / Tracker: frames reach numpy through `.detach().cpu()`. Both flagged paths already received CPU tensors (`_fit(... .cpu())`, `_Source.read(... .cpu())`), so the new GPU-stand-in tests passed before and after: they pin it. | - |
+
+Still open: T4 for the SAM 3 backend is unchanged (it re-tracks from the seed, no loop); G1-G4 (geometry agent).

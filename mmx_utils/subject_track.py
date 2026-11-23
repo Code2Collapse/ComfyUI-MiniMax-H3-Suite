@@ -206,9 +206,10 @@ def scaled_box(box, from_size, to_size) -> list[float]:
 # ── the loss rule ────────────────────────────────────────────────────────────────────────────────────────────────
 
 def loss_reason(mask, areas: list[float], last_box, width: int, *, area_ratio: float = 0.35,
-                jump: float = 0.15) -> str | None:
+                jump: float = 0.15, two_d: bool = False) -> str | None:
     """Why the tracked mask is no longer the subject, or None. ``areas``: the accepted areas so far (the median of the
-    last 5 is the reference)."""
+    last 5 is the reference). ``two_d``: the centre jump is measured in 2-D (a vertical swap counts too; T6), else
+    horizontally (the reference's rule)."""
     b = BD.bbox(mask)
     if b is None:
         return "no mask"
@@ -218,6 +219,8 @@ def loss_reason(mask, areas: list[float], last_box, width: int, *, area_ratio: f
         return f"area {area:.0f} px is under {float(area_ratio):.0%} of the recent {recent:.0f} px"
     if last_box is not None:
         d = abs((b[0] + b[2]) / 2 - (last_box[0] + last_box[2]) / 2)
+        if two_d:
+            d = float(np.hypot(d, (b[1] + b[3]) / 2 - (last_box[1] + last_box[3]) / 2))
         if d > float(jump) * width:
             return f"the centre jumped {d:.0f} px (over {float(jump):.0%} of the width)"
     return None

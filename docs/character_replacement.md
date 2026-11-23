@@ -26,7 +26,7 @@ plate video ─┬────────────────────�
 mask video ──┴─> H3 Subject Crop ──> cropped plate ─┐                   │
                     │  head_room_masks ─────────────┼─> latent mask ─┐   │
                     │  bboxes ──────────────────────┼───────────────┼─> H3 Subject Uncrop ─> video
-character image ────┼─> Reference to Video <────────┘               │        ^
+character image ────┼─> Image + Ref to Video <──────┘               │        ^
 H3 Family Presets ──> Prompt Preview & Edit ──> (prompt)            │        │
                                        │                            v        │
                                        └──> Masked Replace ──> guards ──> sampler ──> decode
@@ -40,8 +40,12 @@ H3 Family Presets ──> Prompt Preview & Edit ──> (prompt)            │ 
 3. **MiniMax H3 Prompt Preview & Edit** shows that prompt after a run. Typing in its box turns `use_edited_text`
    on, and from then on your edit is sent instead. Turn it off to take the template again, for example after
    changing the family. For a free-form prompt, the Promptor LLM director still works in its place. **MiniMax H3 Prompt Writer v2** can stand in for Family Presets: the same template, refined from a plain-language brief by a local or cloud model, with the template as its fallback.
-4. **Reference To Video** (core) takes the character as `ref_image_0` and the cropped plate as `ref_video_0`. Tasks 2
-   and 4 also take the driving clip as `ref_video_1`.
+4. **H3 Image + Reference to Video** takes the character as `ref_image_1` and the cropped plate as `ref_video_1`.
+   Tasks 2 and 4 also take the driving clip as `ref_video_2`. `ref_video_fit` = *target grid for `<Video 1>`, core
+   canvas for the rest*: every token of the plate lands on the output's token (zero offset), while the driving clip,
+   another shot, keeps core's canvas instead of being cover-cropped. (Until 2026-11-23 these graphs used core
+   Reference To Video, which re-sized the plate to its own 768 canvas: up to half a token off. Same node id 15;
+   older copies you saved still load and run as before.)
 5. **H3 Mask To Latent Space**: `head_room_masks` becomes the latent mask. **H3 Masked Replace** then keeps
    everything outside it.
 6. The sampling guards (**Protected Layer Guard**, **Accelerator Conflict**, **Sigma Shift (Ratio Locked)**,
@@ -91,7 +95,7 @@ H3 Family Presets ──> Prompt Preview & Edit ──> (prompt)            │ 
 8. **Optional, experimental: face close-up.** Lynx gives its identity path a tight, aligned face. The H3 equivalent
    is a second reference. Run **H3 Face Track + Crop** on the character image (`crop_factor` about 1.6). It needs
    an ultralytics face detector such as `face_yolov8m.pt` in `models/ultralytics/bbox`. Wire its `crops` output into
-   Reference to Video `ref_image_1`. Then turn on `face_closeup_reference` on Family Presets, which names
+   Image + Reference to Video `ref_image_2`. Then turn on `face_closeup_reference` on Family Presets, which names
    it `<Picture 2>`, the authority for facial identity. Expression transfer ignores it. This is not A/B-tested yet;
    see run E below.
 9. **Prompt.** Set `subject_name` on Family Presets, for example "a woman in a red coat". Add details in
@@ -137,11 +141,11 @@ point back within 1 px.
 
 ## Things to know
 
-- **Offset in these six graphs (2026-11-23 audit, R5).** They feed the cropped plate through core Reference to Video,
-  which re-sizes `<Video 1>` to its own 768-short-edge canvas: when the crop is not that canvas the plate reaches the
-  model offset by up to half a token against the target. The task workflows (`workflows/tasks/`) use H3 Image +
-  Reference to Video with `ref_video_fit` = target grid (zero offset), and the Remake workflows
-  (`workflows/replace/`) share one canvas by construction. See `docs/PLAN_h3_replacement_quality.md`.
+- **Offset fixed in these six graphs (2026-11-23, R5).** They used to feed the cropped plate through core Reference
+  to Video, which re-sizes `<Video 1>` to its own 768-short-edge canvas: when the crop was not that canvas the plate
+  reached the model offset by up to half a token. Migrated in place (same node ids, same links): node 15 is now
+  H3 Image + Reference to Video with `<Video 1>` on the target grid. A copy you saved before still loads and runs
+  unchanged (core's node); open the shipped file again for the fix. See `docs/PLAN_h3_replacement_quality.md`.
 - **A reference batch is one picture** unless you use H3 Image + Reference to Video with `image_batches` = every
   image (core Reference to Video takes image 0 of each slot).
 

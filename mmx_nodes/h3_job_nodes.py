@@ -1252,7 +1252,29 @@ def _chosen_frames(j: J.Job, sid: int) -> list[str]:
     return _pngs(_attempt_dir(j, sid, int(s["takes"].get(s.get("take") or "main", len(s["attempts"])))))
 
 
-def subject_memory(j: J.Job, bank: dict | None, seg_id: int | None, *, max_anchors: int = 4) -> dict:
+EXAMPLE_PAD = 0.15                                 # the subject box grows this share of its size on each side
+
+
+def _example_box(path: str, track: dict, media_first: int) -> list[int] | None:
+    """The tracked subject's box (source pixels, padded, clamped) on the accepted frame ``path`` (frame_<global>.png),
+    or None when the subject is not in that frame (R3, docs/PLAN_h3_replacement_quality.md)."""
+    try:
+        g = int(Path(path).stem.rsplit("_", 1)[1])
+    except (IndexError, ValueError):
+        return None
+    b = (track.get("boxes") or {}).get(str(g - int(media_first)))
+    if not b:
+        return None
+    img = _read_png16(path)
+    h, w = int(img.shape[0]), int(img.shape[1])
+    x0, y0, x1, y1 = (float(v) for v in b)
+    dx, dy = round(EXAMPLE_PAD * (x1 - x0)), round(EXAMPLE_PAD * (y1 - y0))
+    box = [max(0, int(x0) - dx), max(0, int(y0) - dy), min(w, int(x1) + dx), min(h, int(y1) + dy)]
+    return box if box[2] > box[0] and box[3] > box[1] else None
+
+
+def subject_memory(j: J.Job, bank: dict | None, seg_id: int | None, *, max_anchors: int = 4,
+                   track: dict | None = None) -> dict:
     """Rebuilt from the job manifest on every read, so a rejected generation can never be in it: identity from the
     bank; approved examples (each accepted segment's last frame, nearest first) and the appearance baseline from the
     ACCEPTED segments of the CURRENT scene only - a cut starts over with the bank alone."""
@@ -1271,7 +1293,10 @@ def subject_memory(j: J.Job, bank: dict | None, seg_id: int | None, *, max_ancho
             continue
         files += fr
         if len(examples) < int(max_anchors):
-            examples.append({"segment": sid, "take": j.seg(sid).get("take") or "main", "path": fr[-1]})
+            ex = {"segment": sid, "take": j.seg(sid).get("take") or "main", "path": fr[-1]}
+            if track is not None:
+                ex["box"] = _example_box(fr[-1], track, int((j.m.get("spec") or {}).get("media_first") or 0))
+            examples.append(ex)
     baseline, sampled = None, 0
     if files:
         files.sort()
@@ -1298,6 +1323,14 @@ def subject_memory(j: J.Job, bank: dict | None, seg_id: int | None, *, max_ancho
     return mem
 
 
+def _example_image(e: dict, cut: bool) -> torch.Tensor:
+    img = _read_png16(e["path"])
+    if cut and e.get("box"):
+        x0, y0, x1, y1 = e["box"]
+        img = img[y0:y1, x0:x1]
+    return img
+
+
 class MiniMaxH3_SubjectMemory(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -1312,7 +1345,13 @@ class MiniMaxH3_SubjectMemory(io.ComfyNode):
                     io.String.Input("job", default="h3_job", tooltip="Used when 'segment' is not connected."),
                     io.String.Input("bank", optional=True, force_input=True, tooltip="From H3 Reference Bank."),
                     io.Int.Input("max_anchors", default=4, min=0, max=32,
-                                 tooltip="Approved frames to add after the identity images (nearest segments first).")],
+                                 tooltip="Approved frames to add after the identity images (nearest segments first)."),
+                    # appended last (R3): without it the examples stay whole frames, as before
+                    io.String.Input("track_json", optional=True, force_input=True,
+                                    tooltip="H3 Temporal Subject Tracker's track_json: each approved frame is cut to "
+                                            "the subject's box (15% margin) instead of the whole frame - other people "
+                                            "and the background are not fed back as identity; a frame without the "
+                                            "subject is left out.")],
             outputs=[io.Image.Output("anchors", tooltip="Identity images, then approved frames of this scene."),
                      io.String.Output("memory", tooltip="h3.subject_memory v1 (also written to <job>/memory.json)."),
                      io.String.Output("notes")],
@@ -1325,21 +1364,32 @@ class MiniMaxH3_SubjectMemory(io.ComfyNode):
         return j, (int(seg["segment"]) if "segment" in seg else None)
 
     @classmethod
-    def fingerprint_inputs(cls, segment=None, job="h3_job", bank=None, max_anchors=4):
+    def fingerprint_inputs(cls, segment=None, job="h3_job", bank=None, max_anchors=4, track_json=None):
         try:
             j, sid = cls._open(segment, job)
-            return f"{j.state_token()}|{sid}|{_sha(bank or '')}|{max_anchors}"
+            tail = f"|{_sha(track_json)}" if str(track_json or "").strip() else ""
+            return f"{j.state_token()}|{sid}|{_sha(bank or '')}|{max_anchors}{tail}"
         except Exception:  # noqa: BLE001 - let execute say what is wrong
             return f"none|{_sha(segment or '')}"
 
     @classmethod
-    def execute(cls, segment=None, job="h3_job", bank=None, max_anchors=4) -> io.NodeOutput:
+    def execute(cls, segment=None, job="h3_job", bank=None, max_anchors=4, track_json=None) -> io.NodeOutput:
         try:
             j, sid = cls._open(segment, job)
         except J.JobError as exc:
             raise ValueError(f"H3 Subject Memory: {exc}") from exc
         b = _json(bank, BANK, "H3 Subject Memory") if str(bank or "").strip() else None
-        mem = subject_memory(j, b, sid, max_anchors=max_anchors)
+        track = None
+        if str(track_json or "").strip():
+            try:
+                track = json.loads(track_json)
+            except ValueError as exc:
+                raise ValueError(f"H3 Subject Memory: 'track_json' is not H3 Temporal Subject Tracker's track_json "
+                                 f"({exc}).") from exc
+            if not isinstance(track, dict) or "boxes" not in track:
+                raise ValueError("H3 Subject Memory: 'track_json' has no 'boxes' - connect H3 Temporal Subject "
+                                 "Tracker's track_json.")
+        mem = subject_memory(j, b, sid, max_anchors=max_anchors, track=track)
         # the approved anchor is identity too (H3 Anchor Approval promises it reaches every segment): after the bank's
         # identity images, before the examples; one already in the bank (Approval's bank output) is not repeated
         # (docs/PLAN_h3_replacement_quality.md R2)
@@ -1348,7 +1398,8 @@ class MiniMaxH3_SubjectMemory(io.ComfyNode):
                     if a.get("path") and a.get("sha256") not in in_bank and os.path.isfile(a["path"])]
         imgs = [_load_ref(e["path"], "H3 Subject Memory") for e in mem["identity"]] + \
                [_read_png16(a["path"]) for a in approved] + \
-               [_read_png16(e["path"]) for e in mem["examples"]]
+               [_example_image(e, track is not None) for e in mem["examples"]
+                if track is None or e.get("box")]
         anchors = _stack_fitted(imgs) if imgs else _blocker(
             "H3 Subject Memory: nothing to anchor this scene yet - connect an H3 Reference Bank with an identity "
             "image, or leave 'anchors' unconnected for prompt-only shots.")
@@ -1356,10 +1407,14 @@ class MiniMaxH3_SubjectMemory(io.ComfyNode):
                                             f"approved frame(s) from scene {(mem['scene'] or 0) + 1}")
         if approved:
             notes += f"; {len(approved)} approved anchor(s) added after the identity images"
-        if mem["examples"]:
-            notes += ("; approved frames are whole generated frames (not cropped to the subject) - wire 'anchors' "
-                      "into a reference input that takes every image (H3 Image + Reference image_batches = every "
-                      "image, or H3 Remake Replace references)")
+        if mem["examples"] and track is None:
+            notes += ("; approved frames are whole generated frames (connect the Tracker's track_json to cut them to "
+                      "the subject) - wire 'anchors' into a reference input that takes every image (H3 Image + "
+                      "Reference image_batches = every image, or H3 Remake Replace references)")
+        elif track is not None:
+            gone = [e["segment"] for e in mem["examples"] if not e.get("box")]
+            if gone:
+                notes += f"; the subject is not in the last frame of segment(s) {gone}: those frames are left out"
         return io.NodeOutput(anchors, json.dumps(mem), notes)
 
 

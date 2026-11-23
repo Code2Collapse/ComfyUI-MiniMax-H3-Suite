@@ -557,6 +557,17 @@ class MiniMaxH3_FaceMaskSAM(io.ComfyNode):
                         "you will likely see the mask edge shimmer."
                     ), extra_dict={"c2c_section": "Mask"},
                 ),
+                # appended last (T7): the default keeps saved workflows' rectangle
+                io.Combo.Input(
+                    "sam_fallback",
+                    options=["face rect", "hold nearest SAM mask (experimental)"],
+                    default="face rect",
+                    optional=True,
+                    tooltip=(
+                        "A frame SAM cannot segment: the face rectangle (a box edge can pop in a feathered paste; "
+                        "the report names those frames), or the nearest segmented frame's mask moved with the face."
+                    ), extra_dict={"c2c_section": "Mask"},
+                ),
             ],
             outputs=[
                 io.Mask.Output("masks"),
@@ -573,6 +584,7 @@ class MiniMaxH3_FaceMaskSAM(io.ComfyNode):
         threshold=0.93,
         dilation=0,
         temporal_smooth=5,
+        sam_fallback="face rect",
     ) -> io.NodeOutput:
         if crops.ndim == 3:
             crops = crops.unsqueeze(0)
@@ -602,6 +614,7 @@ class MiniMaxH3_FaceMaskSAM(io.ComfyNode):
             temporal_smooth=int(temporal_smooth),
             interrupt_check=_interrupt,
             progress_cb=progress,
+            fallback=str(sam_fallback),
         )
         return io.NodeOutput(masks, report)
 

@@ -22,7 +22,7 @@
    "outputs": [],
    "properties": {},
    "widgets_values": [
-    "# Keep identity change pose\nThe character from the reference moves like the driving video (<Video 2>); the shot's framing stays.\n\n**Inputs**: Load Video `plate` (the shot) and `subject mask` (white = replace; any segmenter, saved as a\nvideo); Load Image `character` (the new character; for match-proportions the shoulders must be visible). Load Video `driving` = <Video 2>.\n**Pose control**: Load Video `pose render` = a drawn pose video of the DRIVING clip (DWPose / SDPose render), through H3 Mask-Aware ControlNet (no control on kept plate).\n**Head Size Mode**: `match character proportions` - set the SAME mode on H3 Subject Crop and H3 Family Presets.\n**Order**: crop around the subject (head room) -> structured prompt (Family Presets -> editable in Prompt\nEditor) -> Reference to Video (<Picture 1> character, <Video 1> cropped plate) -> latent mask from\nhead_room_masks -> Masked Replace -> sample -> decode -> Subject Uncrop with head_room_masks -> save.\n**Prompt**: Family Presets writes a fixed template; run once and the Prompt Editor shows it - type in it\nto send your edit instead (use_edited_text turns on; turn it off to take the template again).\n**Settings**: starting values (official H3 r2v template: res_multistep, simple, 20 steps, guider cfg 1);\nnot yet validated on H3 weights. Full guide: docs/character_replacement.md in the MiniMax H3 Suite."
+    "# Keep identity change pose\nThe character from the reference moves like the driving video (<Video 2>); the shot's framing stays.\n\n**Inputs**: Load Video `plate` (the shot) and `subject mask` (white = replace; any segmenter, saved as a\nvideo); Load Image `character` (the new character; for match-proportions the shoulders must be visible). Load Video `driving` = <Video 2>.\n**Pose control**: Load Video `pose render` = a drawn pose video of the DRIVING clip (DWPose / SDPose render), through H3 Mask-Aware ControlNet (no control on kept plate).\n**Head Size Mode**: `match character proportions` - set the SAME mode on H3 Subject Crop and H3 Family Presets.\n**Order**: crop around the subject (head room) -> structured prompt (Family Presets -> editable in Prompt\nEditor) -> Reference to Video (<Picture 1> character, <Video 1> cropped plate) -> latent mask from\nhead_room_masks -> Masked Replace -> sample -> decode -> Subject Uncrop with head_room_masks -> save.\n**Prompt**: Family Presets writes a fixed template; run once and the Prompt Editor shows it - type in it\nto send your edit instead (use_edited_text turns on; turn it off to take the template again).\n**Settings**: starting values (official H3 r2v template: res_multistep, simple, 20 steps, guider cfg 1);\nnot yet validated on H3 weights. Full guide: docs/character_replacement.md in the MiniMax H3 Suite.\n\n**2026-11-23 (R5):** the cropped plate now goes in through **H3 Image + Reference to Video** with `ref_video_fit` = target grid for `<Video 1>`: every token of the plate lands on the output's token (core Reference to Video re-sized it to its own 768 canvas: up to half a token off). The character is `ref_image_1` (= `<Picture 1>`)."
    ],
    "widgets_values_named": {
     "text": "# Keep identity change pose\nThe character from the reference moves like the driving video (<Video 2>); the shot's framing stays.\n\n**Inputs**: Load Video `plate` (the shot) and `subject mask` (white = replace; any segmenter, saved as a\nvideo); Load Image `character` (the new character; for match-proportions the shoulders must be visible). Load Video `driving` = <Video 2>.\n**Pose control**: Load Video `pose render` = a drawn pose video of the DRIVING clip (DWPose / SDPose render), through H3 Mask-Aware ControlNet (no control on kept plate).\n**Head Size Mode**: `match character proportions` - set the SAME mode on H3 Subject Crop and H3 Family Presets.\n**Order**: crop around the subject (head room) -> structured prompt (Family Presets -> editable in Prompt\nEditor) -> Reference to Video (<Picture 1> character, <Video 1> cropped plate) -> latent mask from\nhead_room_masks -> Masked Replace -> sample -> decode -> Subject Uncrop with head_room_masks -> save.\n**Prompt**: Family Presets writes a fixed template; run once and the Prompt Editor shows it - type in it\nto send your edit instead (use_edited_text turns on; turn it off to take the template again).\n**Settings**: starting values (official H3 r2v template: res_multistep, simple, 20 steps, guider cfg 1);\nnot yet validated on H3 weights. Full guide: docs/character_replacement.md in the MiniMax H3 Suite."
@@ -971,14 +971,14 @@
   },
   {
    "id": 15,
-   "type": "MiniMaxH3ReferenceToVideo",
+   "type": "MiniMaxH3_ImageAndReferenceToVideo",
    "pos": [
     1268.396484375,
     420
    ],
    "size": [
     400,
-    364
+    460
    ],
    "flags": {},
    "order": 14,
@@ -993,110 +993,143 @@
     {
      "localized_name": "vae",
      "name": "vae",
-     "shape": 7,
      "type": "VAE",
      "link": 16
     },
     {
      "localized_name": "audio_vae",
      "name": "audio_vae",
-     "shape": 7,
      "type": "VAE",
      "link": 17
     },
     {
-     "localized_name": "ref_image_0",
-     "name": "ref_images.ref_image_0",
-     "shape": 7,
+     "localized_name": "first_frame",
+     "name": "first_frame",
      "type": "IMAGE",
-     "link": 22
+     "link": null,
+     "shape": 7
+    },
+    {
+     "localized_name": "last_frame",
+     "name": "last_frame",
+     "type": "IMAGE",
+     "link": null,
+     "shape": 7
     },
     {
      "localized_name": "ref_image_1",
      "name": "ref_images.ref_image_1",
-     "shape": 7,
      "type": "IMAGE",
-     "link": null
+     "link": 22,
+     "shape": 7
     },
     {
-     "localized_name": "ref_video_0",
-     "name": "ref_videos.ref_video_0",
-     "shape": 7,
+     "localized_name": "ref_image_2",
+     "name": "ref_images.ref_image_2",
      "type": "IMAGE",
-     "link": 23
+     "link": null,
+     "shape": 7
     },
     {
      "localized_name": "ref_video_1",
      "name": "ref_videos.ref_video_1",
-     "shape": 7,
      "type": "IMAGE",
-     "link": 25
+     "link": 23,
+     "shape": 7
     },
     {
      "localized_name": "ref_video_2",
      "name": "ref_videos.ref_video_2",
-     "shape": 7,
      "type": "IMAGE",
-     "link": null
+     "link": 25,
+     "shape": 7
     },
     {
-     "localized_name": "ref_video_audio_0",
-     "name": "ref_video_audios.ref_video_audio_0",
-     "shape": 7,
-     "type": "AUDIO",
-     "link": null
+     "localized_name": "ref_video_3",
+     "name": "ref_videos.ref_video_3",
+     "type": "IMAGE",
+     "link": null,
+     "shape": 7
     },
     {
-     "localized_name": "ref_audio_0",
-     "name": "ref_audios.ref_audio_0",
-     "shape": 7,
+     "localized_name": "ref_video_audio_1",
+     "name": "ref_video_audios.ref_video_audio_1",
      "type": "AUDIO",
-     "link": null
+     "link": null,
+     "shape": 7
+    },
+    {
+     "localized_name": "ref_audio_1",
+     "name": "ref_audios.ref_audio_1",
+     "type": "AUDIO",
+     "link": null,
+     "shape": 7
     },
     {
      "localized_name": "prompt",
      "name": "prompt",
      "type": "STRING",
+     "link": 18,
      "widget": {
       "name": "prompt"
-     },
-     "link": 18
+     }
     },
     {
      "localized_name": "width",
      "name": "width",
      "type": "INT",
+     "link": 19,
      "widget": {
       "name": "width"
-     },
-     "link": 19
+     }
     },
     {
      "localized_name": "height",
      "name": "height",
      "type": "INT",
+     "link": 20,
      "widget": {
       "name": "height"
-     },
-     "link": 20
+     }
     },
     {
      "localized_name": "length",
      "name": "length",
      "type": "INT",
+     "link": 21,
      "widget": {
       "name": "length"
-     },
-     "link": 21
+     }
     },
     {
      "localized_name": "ref_image_size",
      "name": "ref_image_size",
      "type": "COMBO",
+     "link": null,
+     "shape": 7,
      "widget": {
       "name": "ref_image_size"
-     },
-     "link": null
+     }
+    },
+    {
+     "localized_name": "ref_video_fit",
+     "name": "ref_video_fit",
+     "type": "COMBO",
+     "link": null,
+     "shape": 7,
+     "widget": {
+      "name": "ref_video_fit"
+     }
+    },
+    {
+     "localized_name": "image_batches",
+     "name": "image_batches",
+     "type": "COMBO",
+     "link": null,
+     "shape": 7,
+     "widget": {
+      "name": "image_batches"
+     }
     }
    ],
    "outputs": [
@@ -1115,25 +1148,36 @@
      "links": [
       28
      ]
+    },
+    {
+     "localized_name": "report",
+     "name": "report",
+     "type": "STRING",
+     "links": null
     }
    ],
    "properties": {
-    "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+    "Node name for S&R": "MiniMaxH3_ImageAndReferenceToVideo"
    },
    "widgets_values": [
     "",
     1344,
     768,
     124,
-    "max"
+    "max",
+    "target grid for <Video 1>, core canvas for the rest",
+    "first image only"
    ],
    "widgets_values_named": {
     "prompt": "",
     "width": 1344,
     "height": 768,
     "length": 124,
-    "ref_image_size": "max"
-   }
+    "ref_image_size": "max",
+    "ref_video_fit": "target grid for <Video 1>, core canvas for the rest",
+    "image_batches": "first image only"
+   },
+   "title": "H3 Image + Reference to Video (<Video 1> on the target grid)"
   },
   {
    "id": 16,
@@ -2865,7 +2909,7 @@
    7,
    0,
    15,
-   3,
+   5,
    "IMAGE"
   ],
   [
@@ -2873,7 +2917,7 @@
    8,
    0,
    15,
-   5,
+   7,
    "IMAGE"
   ],
   [
@@ -2881,7 +2925,7 @@
    38,
    0,
    15,
-   6,
+   8,
    "IMAGE"
   ],
   [
@@ -2889,7 +2933,7 @@
    11,
    0,
    15,
-   10,
+   12,
    "STRING"
   ],
   [
@@ -2897,7 +2941,7 @@
    9,
    0,
    15,
-   11,
+   13,
    "INT"
   ],
   [
@@ -2905,7 +2949,7 @@
    9,
    1,
    15,
-   12,
+   14,
    "INT"
   ],
   [
@@ -2913,7 +2957,7 @@
    9,
    2,
    15,
-   13,
+   15,
    "INT"
   ],
   [
