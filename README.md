@@ -1334,3 +1334,9 @@ Whether long H3 jobs (H3 Job Controller, Subject Track) may queue their next run
 
 A drop-down in this pack's node panels with a long option (an OCIO view name, a long file name) no longer runs
 past the node edge: it shrinks to the panel and ends the text with "...". The full name is still in the list.
+
+## A tooltip on every socket (2026-11-23)
+
+Every input and output of every Suite node (202 nodes) now has a tooltip that says what it does: units, what 0 and
+the extremes do, which mode it applies to, and H3 limits such as 17k+5 frames and multiples of 32. Hover a socket or a
+widget to read it. Node ids, inputs, defaults and behaviour are unchanged, so saved workflows load as before.
