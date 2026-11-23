@@ -29,9 +29,10 @@ def main() -> int:
         return 0
     kwargs = {"model_path": req["model_path"], "n_ctx": int(req["n_ctx"]), "n_gpu_layers": int(req["n_gpu_layers"]),
               "verbose": False}
-    if req.get("handler") and req.get("mmproj"):
-        kwargs["chat_handler"] = getattr(llama_chat_format, req["handler"])(clip_model_path=req["mmproj"], verbose=False)
     try:
+        if req.get("handler") and req.get("mmproj"):
+            kwargs["chat_handler"] = getattr(llama_chat_format, req["handler"])(clip_model_path=req["mmproj"],
+                                                                                verbose=False)
         llm = llama_cpp.Llama(**kwargs)
         kw = {"messages": req["messages"], "temperature": float(req["temperature"]), "top_p": float(req["top_p"]),
               "max_tokens": int(req["max_tokens"])}

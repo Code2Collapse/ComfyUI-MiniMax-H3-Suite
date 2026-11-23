@@ -54,7 +54,7 @@ class Reference:
             if self.has_audio:
                 detail += ", has its own audio track"
         elif self.kind == "audio" and self.source == PLATE_AUDIO_SOURCE:
-            detail = "audio, the synchronized audio track of <Video 1>; reuse it in the target"
+            detail = "audio, the synchronized audio track of <Video 1>"
         elif self.kind == "audio":
             detail += (", attached as audio" if self.sent else
                        ", not analyzed by the model; role must come only from the user's brief")

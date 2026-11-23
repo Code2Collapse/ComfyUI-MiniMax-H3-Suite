@@ -68,12 +68,18 @@ def resolve_model(model_id: str, preset: dict | None, root: str) -> tuple[str, s
     return os.path.join(root, mid.replace("/", "--")), mid, revision
 
 
+PARTIAL_MARK = ".mmx_download_incomplete"
+
+
 def _present(folder: str) -> bool:
-    return os.path.isfile(os.path.join(folder, "config.json"))
+    """A model folder is usable when it has config.json and no unfinished download of ours."""
+    return (os.path.isfile(os.path.join(folder, "config.json"))
+            and not os.path.exists(os.path.join(folder, PARTIAL_MARK)))
 
 
 def download(repo: str, revision: str | None, target: str, trust_remote_code: bool,
-             progress: Callable[[str], None]) -> None:
+             progress: Callable[[str], None], check_interrupt: Callable[[], None] | None = None) -> None:
+    """File by file; files already complete are skipped by huggingface_hub, so a stopped download resumes."""
     hub = _import("huggingface_hub")
     patterns = BASE_PATTERNS + (("*.py",) if trust_remote_code else ())
     try:
@@ -88,10 +94,29 @@ def download(repo: str, revision: str | None, target: str, trust_remote_code: bo
     total = sum(int(getattr(s, "size", 0) or 0) for s in files)
     progress(f"downloading {repo} ({len(files)} files, {total / 2**30:.2f} GB) to {target}")
     t0 = time.perf_counter()
+    os.makedirs(target, exist_ok=True)
+    mark = os.path.join(target, PARTIAL_MARK)
+    with open(mark, "w", encoding="utf-8") as fh:
+        fh.write(f"{repo}@{info.sha or revision}\n")
     for i, s in enumerate(files, 1):
+        if check_interrupt is not None:
+            check_interrupt()
         progress(f"download {i}/{len(files)}: {s.rfilename} ({int(getattr(s, 'size', 0) or 0) / 2**20:.1f} MB)")
-        hub.hf_hub_download(repo, s.rfilename, revision=info.sha or revision, local_dir=target)
+        try:
+            hub.hf_hub_download(repo, s.rfilename, revision=info.sha or revision, local_dir=target)
+        except Exception as e:  # noqa: BLE001
+            raise WriterError(f"Download of {s.rfilename} from {repo} failed ({type(e).__name__}: {e}); run the node "
+                              f"again to resume.") from None
+    os.remove(mark)
     progress(f"downloaded {repo} in {time.perf_counter() - t0:.1f} s")
+
+
+def _interrupt():
+    try:
+        import comfy.model_management as mm
+        return mm.throw_exception_if_processing_interrupted
+    except Exception:  # noqa: BLE001
+        return None
 
 
 class _Interrupt:
@@ -111,12 +136,14 @@ class HFProvider:
         root = D.llm_dir()
         folder, repo, revision = resolve_model(settings.model_id, settings.preset, root)
         if not _present(folder):
+            if repo is None and os.path.exists(os.path.join(folder, PARTIAL_MARK)):
+                raise WriterError(f"{folder} holds an unfinished download; run with its repo id to resume it.")
             if repo is None:
                 raise WriterError(f"{folder} has no config.json: it is not a transformers model folder.")
             if not D.downloads_allowed(settings.downloads):
                 raise WriterError(f"{repo} is not in {root} and downloads are off ({D.why_not(settings.downloads)}). "
                                   f"Download it to {folder}, or allow downloads.")
-            download(repo, revision, folder, bool(settings.trust_remote_code), progress)
+            download(repo, revision, folder, bool(settings.trust_remote_code), progress, _interrupt())
         self.folder = folder
         self.model = repo or os.path.basename(folder)
         self.name = f"huggingface transformers ({self.model})"

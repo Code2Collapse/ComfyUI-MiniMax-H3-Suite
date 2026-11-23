@@ -57,6 +57,8 @@ def _music(brief: str) -> str:
 def _role(mode: Mode, ref: Reference) -> str:
     if ref.kind == "audio":
         if ref.source == PLATE_AUDIO_SOURCE:
+            if mode.key == "Continuation":
+                return "the synchronized audio track of <Video 1>, referenced so the new sound continues it"
             return "the synchronized audio track of <Video 1>, reused in the target video"
         return "an audio reference; its role comes only from the brief"
     if ref.kind == "video" and ref.ref == "<Video 1>":
@@ -72,6 +74,8 @@ def _role(mode: Mode, ref: Reference) -> str:
 def _retention(mode: Mode, ref: Reference) -> str:
     if ref.kind == "audio":
         if ref.source == PLATE_AUDIO_SOURCE:
+            if mode.key == "Continuation":
+                return f"{ref.ref} is referenced: the target's sound continues its audible character."
             return f"{ref.ref} is reused as the target video's sound."
         return f"{ref.ref} is referenced in the role the brief gives it."
     if ref.kind == "video" and ref.ref == "<Video 1>" and mode.key in ("V2VEdit", "Replacement"):

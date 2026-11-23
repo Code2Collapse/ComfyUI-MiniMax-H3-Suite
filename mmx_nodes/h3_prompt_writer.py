@@ -32,7 +32,7 @@ from mmx_utils.h3_writer.providers import (  # noqa: E402
     Settings,
     open_provider,
 )
-from mmx_utils.llm_http import scrub  # noqa: E402
+from mmx_utils.llm_http import OFFLINE_ENV, offline, scrub  # noqa: E402
 
 DEFAULT_NEGATIVE = "blurry, low quality, distorted faces, extra limbs, flicker, watermark, subtitles, garbled text"
 _LLM = [p for p in PROVIDERS if p != TEMPLATE]
@@ -189,6 +189,8 @@ class MiniMaxH3_H3PromptWriter(io.ComfyNode):
             if m.key in ("V2VEdit", "Replacement", "Continuation") and keep_plate_audio:
                 if media.add_plate_audio(refs) is not None:
                     notes.append("plate audio: <Video 1> has sound; it is kept as an audio reference")
+                elif any(r.ref == "<Video 1>" and r.has_audio for r in refs):
+                    notes.append("plate audio: not added - the 3-audio / 12-reference limit is reached")
             refs = assembly.validate(m, brief, float(duration_seconds), aspect_ratio, refs, notes)
             negative_out = negative.strip() or DEFAULT_NEGATIVE
 
@@ -207,6 +209,9 @@ class MiniMaxH3_H3PromptWriter(io.ComfyNode):
                 report.append(f"time: {time.perf_counter() - t0:.2f} s")
                 return io.NodeOutput(prompt, negative_out, "\n".join(report))
 
+            if provider in HTTP_PROVIDERS and offline():
+                raise WriterError(f"{OFFLINE_ENV} is set (no network): {provider} is not used. Pick template (no LLM) "
+                                  f"or a local provider, or unset {OFFLINE_ENV}.")
             progress = dl.Progress(_node_id(), report)
             preset = catalog.lookup(model_preset) if provider in (HF_LOCAL, GGUF_LOCAL) else None
             if preset is not None and preset.get("provider") != ("hf" if provider == HF_LOCAL else "gguf"):

@@ -20,6 +20,7 @@ from typing import Any, Callable
 from mmx_utils import llm_http as L
 
 from .modes import WriterError
+from .text import strip_thinking
 
 TEMPLATE = "template (no LLM)"
 HF_LOCAL = "huggingface transformers (local)"
@@ -198,7 +199,7 @@ class HttpProvider:
             u = r.get("usageMetadata") or {}
             usage = {"prompt_tokens": int(u.get("promptTokenCount") or 0),
                      "completion_tokens": int(u.get("candidatesTokenCount") or 0)}
-        return {"text": text, "finish_reason": finish, "usage": usage}
+        return {"text": strip_thinking(text), "finish_reason": finish, "usage": usage}
 
     def complete(self, messages: list[dict[str, Any]], temperature: float = 1.0, top_p: float = 0.95,
                  max_tokens: int = 2048, seed: int | None = None,

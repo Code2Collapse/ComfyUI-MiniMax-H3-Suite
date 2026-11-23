@@ -17,19 +17,19 @@ NEVER_DOWNLOAD_SETTING = "c2c.models.neverDownload"
 
 
 def never_download() -> bool:
+    try:
+        from mmx_utils.llm_http import offline
+        if offline():
+            return True
+    except Exception:  # noqa: BLE001
+        pass
     env = os.environ.get("C2C_NO_DOWNLOADS")
     if env is not None and env != "":
         return env == "1"
     try:
         from mmx_utils import _c2c_saved_setting
-        if _c2c_saved_setting.get(NEVER_DOWNLOAD_SETTING, False) is True:
-            return True
+        return _c2c_saved_setting.get(NEVER_DOWNLOAD_SETTING, False) is True
     except Exception:  # noqa: BLE001 - no settings module: nothing saved
-        pass
-    try:
-        from mmx_utils.llm_http import offline
-        return offline()
-    except Exception:  # noqa: BLE001
         return False
 
 

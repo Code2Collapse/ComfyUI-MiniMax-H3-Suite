@@ -107,8 +107,11 @@ def run_worker(request: dict[str, Any], timeout: float, check_interrupt: Callabl
     """Send one request to a fresh child; poll for interrupt; return its JSON reply. Raises WriterError."""
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
-    proc = popen([sys.executable, "-I", WORKER], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                 stderr=subprocess.PIPE, env=env, creationflags=flags)
+    try:
+        proc = popen([sys.executable, "-I", WORKER], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                     stderr=subprocess.PIPE, env=env, creationflags=flags)
+    except OSError as e:
+        raise WriterError(f"Could not start the llama.cpp child process ({e}).") from None
     payload = json.dumps(request).encode("utf-8")
     t0 = time.monotonic()
     out = err = b""
@@ -131,7 +134,8 @@ def run_worker(request: dict[str, Any], timeout: float, check_interrupt: Callabl
         proc.communicate()
         raise
     if proc.returncode != 0:
-        raise WriterError(explain_exit(int(proc.returncode)) + ".")
+        tail = [ln for ln in (err or b"").decode("utf-8", "replace").splitlines() if ln.strip()][-1:]
+        raise WriterError(explain_exit(int(proc.returncode)) + (f" ({tail[0][:200]})" if tail else "") + ".")
     lines = [ln for ln in out.decode("utf-8", "replace").splitlines() if ln.strip()]
     try:
         reply = json.loads(lines[-1])
@@ -159,7 +163,8 @@ class GGUFProvider:
             if not D.downloads_allowed(settings.downloads):
                 raise WriterError(f"{filename} from {repo} is not in {root} and downloads are off "
                                   f"({D.why_not(settings.downloads)}). Put it at {path}, or allow downloads.")
-            self._download(repo, revision, [f for f in (filename, mmproj_name) if f], os.path.dirname(path))
+            self._download(repo, revision, [f for f in (filename, mmproj_name) if f],
+                           os.path.join(root, repo.replace("/", "--")))
         self.path = path
         self.model = os.path.basename(path)
         self.name = f"gguf llama.cpp ({self.model})"

@@ -15,7 +15,7 @@ from typing import Any
 from .guides import reference_base_excerpt
 from .media import PLATE_AUDIO_SOURCE, Reference
 from .modes import ASPECT_RATIOS, Mode, WriterError, final_contract
-from .references import canonical_reference_tags
+from .references import reference_tags
 from .system_prompts import resolve_system_prompt
 from .text import normalize_unicode_text
 
@@ -54,7 +54,7 @@ def validate(mode: Mode, brief: str, duration: float, aspect_ratio: str, refs: l
     if missing_tag:
         raise WriterError(f"{missing_tag[0]} refers to removed or unavailable media. Replace or remove this tag in "
                           f"the brief.")
-    unknown = sorted(canonical_reference_tags(brief) - available)
+    unknown = sorted(reference_tags(brief) - available)
     if unknown:
         raise WriterError(f"{unknown[0]} doesn't exist. Connect that reference or remove the tag from the brief.")
     return refs
@@ -91,6 +91,11 @@ def build(mode: Mode, brief: str, duration: float, aspect_ratio: str, refs: list
     plate_audio = any(r.source == PLATE_AUDIO_SOURCE for r in refs)
     for r in refs:
         r.sent = bool(r.data) and ((r.kind in ("image", "video") and send_visual) or (r.kind == "audio" and send_audio))
+    if any(r.sent and r.kind == "audio" for r in refs):
+        # ours: the ported wrapper assumes audio is never heard; here the clips are attached, so say so
+        system_parts.append("For this request the audio references marked 'attached as audio' ARE attached and "
+                            "audible to you: use what is audible in them only in the roles the brief assigns, and "
+                            "never invent audio content that is not there.")
     references = "\n".join(r.manifest_line() for r in refs) or "None"
     user_text = (
         f"Mode: {mode.key}\n"
