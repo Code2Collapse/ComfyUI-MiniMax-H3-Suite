@@ -405,8 +405,7 @@ class MiniMaxH3_SubjectCrop(io.ComfyNode):
                                      tooltip="Optional: crop exactly at these boxes instead of planning - wire the "
                                              "bboxes of a Subject Crop run on the WHOLE clip (or one box). A job "
                                              "that runs Subject Crop per window otherwise plans each window on its "
-                                             "own and the crop moves between segments.",
-                                     extra_dict={"c2c_section": "Given boxes"}),
+                                             "own and the crop moves between segments."),
                 io.Int.Input("bboxes_first_frame", default=0, min=0, max=10_000_000, optional=True,
                              tooltip="Which of the given per-frame boxes is this batch's first frame (the window's "
                                      "start in the whole clip). Ignored for a single box.",
