@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, Callable
 
 import torch
 import torch.nn.functional as F
@@ -52,6 +52,51 @@ def border_ramp_alpha(
 _EVIDENCE_INSET_PX = 2
 _SHIFT_DEADBAND_PX = 0.01
 _AFFINE_MAX_SAMPLES = 200_000
+
+
+VAE_STRIDE = 16
+
+
+def vae_kept_size(w: int, h: int, stride: int = VAE_STRIDE) -> tuple[int, int, int, int]:
+    """(kept_w, kept_h, left, top): what core's VAE encode keeps of a w x h frame (comfy/sd.py vae_encode_crop_pixels:
+    each side centre-cropped to a multiple of ``stride``, the odd pixel going to the right / bottom)."""
+    w, h, s = int(w), int(h), int(stride)
+    return w // s * s, h // s * s, (w % s) // 2, (h % s) // 2
+
+
+def expected_crop_size(box: dict, default_w: int, default_h: int) -> tuple[int, int]:
+    """The size Subject Crop emitted for ``box`` (its ``metadata.mmx_crop_size``), else the box's own size."""
+    meta = box.get("metadata") if isinstance(box, dict) else None
+    size = meta.get("mmx_crop_size") if isinstance(meta, dict) else None
+    if isinstance(size, (list, tuple)) and len(size) == 2:
+        try:
+            return int(size[0]), int(size[1])
+        except (TypeError, ValueError):
+            pass
+    return int(default_w), int(default_h)
+
+
+def recover_vae_crop(crop: torch.Tensor, expected_w: int, expected_h: int, fill: torch.Tensor | Callable[[], torch.Tensor],
+                     stride: int = VAE_STRIDE) -> tuple[torch.Tensor, list[int]]:
+    """Put back what the H3 VAE silently cut (zero-offset plan, Z1).
+
+    Core's video VAE centre-crops each side of its input to a multiple of 16 before encoding, so a crop that was not
+    on that grid decodes SMALLER and shifted by up to 7 px. Stretching it back into the plate box was a 5 px offset
+    (measured). When ``crop`` [h, w, C] is exactly what the VAE keeps of an ``expected_w`` x ``expected_h`` crop, it is
+    placed at core's offset inside ``fill`` (the plate at the crop's geometry, [expected_h, expected_w, C]) and the
+    margins come from the plate. Returns (crop at the expected size, [left, top, right, bottom] margins restored);
+    any other size is returned unchanged with zero margins.
+    """
+    ch, cw = int(crop.shape[0]), int(crop.shape[1])
+    kw, kh, left, top = vae_kept_size(expected_w, expected_h, stride)
+    if (cw, ch) == (int(expected_w), int(expected_h)) or (cw, ch) != (kw, kh):
+        return crop, [0, 0, 0, 0]
+    base = fill() if callable(fill) else fill
+    if tuple(base.shape[:2]) != (int(expected_h), int(expected_w)):
+        raise ValueError(f"recover_vae_crop: fill is {tuple(base.shape[:2])}, expected {(expected_h, expected_w)}")
+    out = base[..., : crop.shape[-1]].to(device=crop.device, dtype=crop.dtype).clone()
+    out[top:top + kh, left:left + kw, :] = crop
+    return out, [left, top, int(expected_w) - kw - left, int(expected_h) - kh - top]
 
 
 def interior_mask(h: int, w: int) -> torch.Tensor:
@@ -137,12 +182,12 @@ def _rect_morph_cv2(mask: torch.Tensor, px: int, erode: bool):
     except Exception:  # noqa: BLE001 - OpenCV is optional: the torch path is the reference
         return None
     k = np.ones((2 * int(px) + 1, 2 * int(px) + 1), np.uint8)
-    arr = mask.detach().to(torch.float32).contiguous().numpy()
+    arr = mask.detach().to(device="cpu", dtype=torch.float32).contiguous().numpy()  # never .numpy() off-CPU
     if erode:
         out = cv2.erode(arr, k, borderType=cv2.BORDER_CONSTANT, borderValue=float("inf"))
     else:
         out = cv2.dilate(arr, k, borderType=cv2.BORDER_CONSTANT, borderValue=-float("inf"))
-    return torch.from_numpy(out).to(mask.dtype)
+    return torch.from_numpy(out).to(device=mask.device, dtype=mask.dtype)
 
 
 def _grow_mask(mask: torch.Tensor, px: int) -> torch.Tensor:
@@ -319,6 +364,13 @@ def _build_ring(
     return ring, ring_count, ring_ok
 
 
+def _recover_for_box(crop: torch.Tensor, box: dict, plate_crop: torch.Tensor) -> tuple[torch.Tensor, list[int]]:
+    """``crop`` with the VAE's cut margins put back from ``plate_crop`` (the plate's box region) - see recover_vae_crop."""
+    bh, bw = int(plate_crop.shape[0]), int(plate_crop.shape[1])
+    ew, eh = expected_crop_size(box, bw, bh)
+    return recover_vae_crop(crop, ew, eh, lambda: _resize_hwc(plate_crop, eh, ew).to(crop.device))
+
+
 def restore_frames(
     cropped_images: torch.Tensor,
     original_images: torch.Tensor,
@@ -364,7 +416,8 @@ def restore_frames(
         b = boxes[i]
         x, y, w, h = (int(round(b[k])) for k in ("x", "y", "width", "height"))
         plate_crop = out[i, y : y + h, x : x + w, :]
-        gen_crop = _resize_hwc(cropped_images[i], h, w)
+        gen_src, vae_margins = _recover_for_box(cropped_images[i], b, plate_crop)
+        gen_crop = _resize_hwc(gen_src, h, w)
         if streaming:
             plate_crop = plate_crop.to(cd)
             gen_crop = gen_crop.to(cd)
@@ -392,6 +445,7 @@ def restore_frames(
             "colour_magnitude_linear": 0.0,
             "skipped_registration": not ring_ok,
             "skipped_colour": not ring_ok,
+            "vae_margins_restored": vae_margins,
         }
 
         if ring_ok:
@@ -470,7 +524,7 @@ def restore_frames(
         rec = fd["rec"]
         if streaming:
             plate_crop = out[i, y : y + h, x : x + w, :].to(cd)
-            working = _resize_hwc(cropped_images[i], h, w).to(cd)
+            working = _resize_hwc(_recover_for_box(cropped_images[i], boxes[i], plate_crop)[0], h, w).to(cd)
             em = (
                 torch.ones(h, w, device=cd, dtype=torch.float32)
                 if no_edit_mask
@@ -543,6 +597,9 @@ def restore_frames(
     if temporal_lag_check:
         summary_parts.append(f"temporal_lag_best={best_lag}" + (" WARN≠0" if best_lag != 0 else ""))
     summary_parts.append(f"shifts_applied={applied} refused={refused}")
+    vae_fixed = sum(1 for f in per_frame if any(f.get("vae_margins_restored") or []))
+    if vae_fixed:
+        summary_parts.append(f"vae_cut_margins_restored_frames={vae_fixed}")
 
     report: dict[str, Any] = {
         "frames": per_frame,
@@ -604,7 +661,11 @@ def protected_paste_frames(cropped_images: torch.Tensor, original_images: torch.
     for i, b in enumerate(boxes):
         x, y, w, h = (int(round(b[k])) for k in ("x", "y", "width", "height"))
         src_h, src_w = int(cropped_images[i].shape[0]), int(cropped_images[i].shape[1])
-        crop = resize_image(cropped_images[i], w, h)
+        ew, eh = expected_crop_size(b, w, h)
+        plate_box = out[i, y:y + h, x:x + w, :]
+        src, vae_margins = recover_vae_crop(cropped_images[i], ew, eh,
+                                            lambda: resize_image(plate_box, ew, eh).to(cropped_images.device))
+        crop = resize_image(src, w, h)
         m = resize_mask(cropped_masks[i], w, h) if cropped_masks is not None else None
         alpha = protect_alpha(mode, h, w, x, y, img_h, img_w, feather, m, out.device, out.dtype)
         region = out[i, y:y + h, x:x + w, :]
@@ -622,6 +683,7 @@ def protected_paste_frames(cropped_images: torch.Tensor, original_images: torch.
             "blended_px": int(((alpha > 0) & (alpha < 1)).sum()),
             "replaced_px": int((alpha >= 1).sum()),
             "max_change_where_preserved": outside_change,
+            "vae_margins_restored": vae_margins,
         })
     return out, ledger
 
@@ -644,6 +706,11 @@ def ledger_report(ledger: list[dict], mode: str) -> str:
              + ("(bit-exact)" if worst == 0.0 else "- NOT exact, report this"),
              f"  boxes: {len(boxes)} distinct; crop -> box scale: "
              + ", ".join(f"{s[0]:.4f} x {s[1]:.4f}" for s in sorted(scales)[:3]) + (" ..." if len(scales) > 3 else "")]
+    fixed = [e for e in ledger if any(e.get("vae_margins_restored") or [])]
+    if fixed:
+        m = fixed[0]["vae_margins_restored"]
+        lines.append(f"  {len(fixed)} frame(s) came back from the VAE cut to a multiple of 16 (left/top/right/bottom "
+                     f"{m[0]}/{m[1]}/{m[2]}/{m[3]} px): put back in place from the plate - no stretch, no offset.")
     if mode == "feathered box":
         lines.append("  Note: the whole box is pasted (feathered at its border) - background inside the box comes "
                      "from the model. 'exact outside mask' keeps every pixel outside the mask.")

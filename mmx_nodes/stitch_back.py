@@ -15,7 +15,7 @@ _PKG = Path(__file__).resolve().parents[1]
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
-from mmx_utils.affine_transform import inverse_affine_theta
+from mmx_utils.affine_transform import affine_crop_batch, inverse_affine_theta
 from mmx_utils.device import run_with_cpu_fallback
 from mmx_utils.feather_composite import (
     gaussian_blur_mask,
@@ -75,6 +75,20 @@ class MiniMaxH3_StitchBack(io.ComfyNode):
             ],
         )
 
+    @staticmethod
+    def _recover_vae_cut(plate, crops, boxes, cw: int, ch: int, b: int):
+        """The H3 VAE centre-crops each side to a multiple of 16; a canvas off that grid decodes smaller and the
+        inverse warp stretched it back (an offset of up to 7 px). Rebuild the canvas instead: the decoded pixels at
+        core's offset, the cut margins from the plate at the same crop (zero-offset plan, Z1)."""
+        kw, kh, left, top = cw // 16 * 16, ch // 16 * 16, (cw % 16) // 2, (ch % 16) // 2
+        got = (int(crops.shape[2]), int(crops.shape[1]))
+        if got == (cw, ch) or got != (kw, kh):
+            return crops, ""
+        fill = affine_crop_batch(plate[:b, ..., :3], boxes[:b], cw, ch).to(device=crops.device, dtype=crops.dtype)
+        fill[:, top:top + kh, left:left + kw, :] = crops[:b, ..., :3]
+        return fill, (f"decoded crops were {kw}x{kh} (the VAE cut the {cw}x{ch} canvas to a multiple of 16): put "
+                      f"back at +{left},+{top} with the margins from the plate - no stretch, no offset\n")
+
     @classmethod
     def execute(
         cls,
@@ -98,6 +112,7 @@ class MiniMaxH3_StitchBack(io.ComfyNode):
         cw, ch = transform.canvas
         w, h = transform.src_size
         b = min(plate.shape[0], crops.shape[0], len(boxes))
+        crops, vae_note = cls._recover_vae_cut(plate, crops, boxes, int(cw), int(ch), b)
 
         if undetected_frames == "composite_anyway":
             weights = None
@@ -197,6 +212,7 @@ class MiniMaxH3_StitchBack(io.ComfyNode):
             raise RuntimeError("H3 Stitch Back: output contains non-finite values.")
 
         report = (
+            f"{vae_note}"
             f"stitched {b} frames using H3_TRANSFORM planner={transform.planner_mode}\n"
             f"feather_px={feather_px} (source) canvas_feather~{f_can}px\n"
             f"exterior pixels are literal plate (torch.where invariant)."

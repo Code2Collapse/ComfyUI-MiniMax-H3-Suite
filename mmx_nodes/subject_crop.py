@@ -24,15 +24,18 @@ if str(_PKG) not in sys.path:
 from mmx_utils.head_room import MODES as HEAD_SIZE_MODES, head_room
 from mmx_utils.plate_restore import PROTECT_MODES, ledger_report, protected_paste_frames
 from mmx_utils.pose_interop import pose_keypoint_to_wholebody
+from mmx_utils.resample import common_upscale_float
 from mmx_utils.subject_crop_planner import plan
 
 CATEGORY = "MiniMax H3/Crop"
 
 
 def _resize_image(img_hwc, w, h, method="lanczos"):
+    # Lanczos in float (mmx_utils/resample.py): core's lanczos is 8-bit PIL - it clipped HDR above 1.0 and quantised
+    # the plate inside every crop (measured 129/255 on an HDR x1.5 plate; docs/PLAN_h3_zero_offset.md, Z2).
     if img_hwc.shape[0] == h and img_hwc.shape[1] == w:
         return img_hwc
-    return comfy.utils.common_upscale(
+    return common_upscale_float(
         img_hwc.movedim(-1, 0).unsqueeze(0), w, h, method, "disabled"
     ).squeeze(0).movedim(0, -1)
 
@@ -194,6 +197,11 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
     if head_line:
         report = f"{report}\n{head_line}"
     room = room_masks if room_masks is not None else (masks > mask_threshold).float()
+    out_w, out_h = (int(size[0]), int(size[1])) if size else (int(bw), int(bh))
+    if out_w % 16 or out_h % 16:
+        report = (f"{report}\nH3 VAE grid: the crops are {out_w}x{out_h}, not a multiple of 16 - the VAE cuts "
+                  f"{out_w % 16} px of width and {out_h % 16} px of height (centred). Subject Uncrop / Plate Restore "
+                  f"put those margins back from the plate (no stretch, no offset); divisible_by 16 or 32 avoids it.")
 
     if size is not None:
         tw, th = size
@@ -245,8 +253,11 @@ def _plan_and_crop(original_images, masks, sel, p, divisible_by,
         "mode": f"{sel} (full frame)" if full_frame else str(sel),
         "crop_scale": float(p.get("crop_scale", 0.0) or 0.0),
     })
+    # The emitted crop size rides along with every box (core's BoundingBoxes use the same "metadata" key), so the
+    # composite knows what the VAE was given and can undo its centre cut exactly (zero-offset plan, Z1).
+    out_boxes = [[{**b, "metadata": {**(b.get("metadata") or {}), "mmx_crop_size": [out_w, out_h]}}] for b in boxes]
     return io.NodeOutput(cropped_images, cropped_masks,
-                         [[b] for b in boxes], report, cropped_room.to(cropped_masks.dtype),
+                         out_boxes, report, cropped_room.to(cropped_masks.dtype),
                          ui={"mmx_crop_plan": [plan_json]})
 
 
