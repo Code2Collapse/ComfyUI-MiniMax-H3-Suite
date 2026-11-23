@@ -741,8 +741,12 @@ def run_sam_face_masks(
     temporal_smooth: int,
     interrupt_check=None,
     progress_cb=None,
+    fallback: str = "face rect",
 ) -> tuple[torch.Tensor, str]:
-    """Per-frame SAM face masks on stabilised crops, temporally smoothed."""
+    """Per-frame SAM face masks on stabilised crops, temporally smoothed. A frame SAM could not segment gets the face
+    rectangle (``fallback`` = "face rect", the original behaviour) or, with "hold nearest SAM mask (experimental)",
+    the nearest segmented frame's mask moved with the face rect (T7, docs/PLAN_h3_replacement_quality.md); the report
+    names the frames either way."""
     sam_obj = sam_model if not hasattr(sam_model, "sam_wrapper") else sam_model.sam_wrapper
     face_rects = transform.subject_rect or []
     b, ch, cw, _ = crops.shape
@@ -791,18 +795,38 @@ def run_sam_face_masks(
             except Exception:
                 pass
 
-    for i in range(b):
-        if masks[i].max() <= 0:
-            fr = (
-                face_rects[i]
-                if i < len(face_rects)
-                else (cw * 0.25, ch * 0.25, cw * 0.5, ch * 0.5)
-            )
-            fx, fy, fwd, fhd = fr
-            x0, y0 = max(0, int(fx)), max(0, int(fy))
-            x1, y1 = min(cw, int(fx + fwd)), min(ch, int(fy + fhd))
-            if x1 > x0 and y1 > y0:
-                masks[i, y0:y1, x0:x1] = 1.0
+    def rect(i):
+        return face_rects[i] if i < len(face_rects) else (cw * 0.25, ch * 0.25, cw * 0.5, ch * 0.5)
+
+    good = [i for i in range(b) if masks[i].max() > 0]
+    failed = [i for i in range(b) if masks[i].max() <= 0]
+    held, boxed = [], []
+    hold = str(fallback).startswith("hold") and bool(good)
+    snapshot = masks.clone()
+    for i in failed:
+        if hold:
+            j = min(good, key=lambda g: (abs(g - i), g))      # nearest segmented frame (the earlier one on a tie)
+            (fx, fy, fwd, fhd), (gx, gy, gwd, ghd) = rect(i), rect(j)
+            dx = int(round((fx + fwd / 2) - (gx + gwd / 2)))
+            dy = int(round((fy + fhd / 2) - (gy + ghd / 2)))
+            m = torch.roll(snapshot[j], shifts=(dy, dx), dims=(0, 1))
+            if dy > 0:
+                m[:dy] = 0
+            elif dy < 0:
+                m[dy:] = 0
+            if dx > 0:
+                m[:, :dx] = 0
+            elif dx < 0:
+                m[:, dx:] = 0
+            masks[i] = m
+            held.append(i)
+            continue
+        fx, fy, fwd, fhd = rect(i)
+        x0, y0 = max(0, int(fx)), max(0, int(fy))
+        x1, y1 = min(cw, int(fx + fwd)), min(ch, int(fy + fhd))
+        if x1 > x0 and y1 > y0:
+            masks[i, y0:y1, x0:x1] = 1.0
+        boxed.append(i)
 
     if dilation > 0:
         k = 2 * int(dilation) + 1
@@ -818,8 +842,25 @@ def run_sam_face_masks(
             sm = F.conv1d(t, kern)
             masks = sm.reshape(ch, cw, b).permute(2, 0, 1).contiguous()
 
+    def spans(idx):
+        out, start = [], None
+        for k, i in enumerate(idx):
+            start = i if start is None else start
+            if k + 1 == len(idx) or idx[k + 1] != i + 1:
+                out.append(f"{start}" if start == i else f"{start}-{i}")
+                start = None
+        return ", ".join(out)
+
+    fall = ""
+    if boxed:
+        fall += (f"\nWARNING: frames {spans(boxed)} use a plain RECTANGLE (the face rect) - SAM gave no mask there; "
+                 "in a feathered paste the box edge can pop. Set sam_fallback to hold the nearest SAM mask.")
+    if held:
+        fall += (f"\nframes {spans(held)}: SAM gave no mask - held the nearest SAM mask, moved with the face "
+                 "(experimental)")
     report = (
-        f"SAM masks: {ok}/{b} frames segmented ({b - ok} fell back to the face rect)\n"
+        f"SAM masks: {ok}/{b} frames segmented ({b - ok} fell back: {len(boxed)} rectangle, {len(held)} held)"
+        f"{fall}\n"
         f"dilation={dilation}  temporal_smooth={temporal_smooth}\n"
         f"mean coverage {float(masks.mean()) * 100:.1f}% of canvas"
     )

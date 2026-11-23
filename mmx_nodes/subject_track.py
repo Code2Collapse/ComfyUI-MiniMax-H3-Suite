@@ -115,6 +115,23 @@ def _review(*names_and_msg):
 
 # ── H3 Multi-Subject Selector ────────────────────────────────────────────────────────────────────────────────────
 
+def _window_frame(window_json, frame: int, who: str) -> dict:
+    """{clip_frame, source_frame} of row ``frame`` of an H3 Frame Window (empty without one)."""
+    if not str(window_json or "").strip():
+        return {}
+    try:
+        w = json.loads(window_json)
+        pos, src = list(w["positions"]), list(w.get("source_frames") or [])
+    except (ValueError, KeyError, TypeError) as exc:
+        raise ValueError(f"{who}: 'window_json' is not H3 Frame Window's window_json ({exc}).") from exc
+    if not 0 <= frame < len(pos):
+        raise ValueError(f"{who}: frame {frame} is outside the window's {len(pos)} rows.")
+    out = {"clip_frame": int(pos[frame])}
+    if frame < len(src):
+        out["source_frame"] = int(src[frame])
+    return out
+
+
 class MiniMaxH3_MultiSubjectSelector(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -148,7 +165,13 @@ class MiniMaxH3_MultiSubjectSelector(io.ComfyNode):
                     io.Float.Input("ambiguity_margin", default=0.05, min=0.0, max=1.0, step=0.01,
                                    tooltip="Auto stops for review when the best two scores are closer than this.", extra_dict={'c2c_section': 'Decision'}),
                     io.Float.Input("lock_min_score", default=0.5, min=-1.0, max=1.0, step=0.01,
-                                   tooltip="With a subject lock: below this match score it stops for review.", extra_dict={'c2c_section': 'Decision'})],
+                                   tooltip="With a subject lock: below this match score it stops for review.", extra_dict={'c2c_section': 'Decision'}),
+                    # appended last: H3 Frame Window's window_json, so a pick on row `frame` of a window that does
+                    # not start at the clip's frame 0 is known as clip frame positions[frame] (the Tracker checks it)
+                    io.String.Input("window_json", optional=True, force_input=True,
+                                    tooltip="H3 Frame Window's window_json for 'images': the pick is recorded with its "
+                                            "frame in the clip, so H3 Temporal Subject Tracker can refuse a mask that "
+                                            "does not belong on its first frame.")],
             outputs=[io.String.Output("subject_id"), io.Mask.Output("mask"), io.BoundingBox.Output("bbox"),
                      io.String.Output("subject", tooltip="H3 subject (id, box, appearance): for the tracker and "
                                                          "re-identification."),
@@ -160,8 +183,9 @@ class MiniMaxH3_MultiSubjectSelector(io.ComfyNode):
     def execute(cls, images, bboxes, masks=None, reference_images=None, reference_masks=None, subject_lock=None,
                 frame=0, selection="auto", index=0, position_preference="none", size_weight=1.0,
                 reference_weight=1.0, position_weight=0.5, ambiguity_margin=0.05,
-                lock_min_score=0.5) -> io.NodeOutput:
+                lock_min_score=0.5, window_json=None) -> io.NodeOutput:
         who = "H3 Multi-Subject Selector"
+        where = _window_frame(window_json, int(frame), who)
         imgs = images if images.ndim == 4 else images.unsqueeze(0)
         f = min(int(frame), int(imgs.shape[0]) - 1)
         img = imgs[f, ..., :3].float().cpu().numpy()
@@ -211,7 +235,7 @@ class MiniMaxH3_MultiSubjectSelector(io.ComfyNode):
         sid = sid or ST.subject_id(int(frame), c["box"], w, h)
         rep["subject_id"] = sid
         subject = ST.subject_json(sid, int(frame), c["box"], w, h, c["hist"], c["area"], selection=how,
-                                  score=ranked[0]["score"])
+                                  score=ranked[0]["score"], **where)
         return io.NodeOutput(sid, torch.from_numpy((c["mask"] > 0.5).astype(np.float32))[None], _bbox_out(c["box"]),
                              subject, sheet, json.dumps(rep))
 
@@ -487,7 +511,7 @@ class Track:
 def run_window(t: Track, src: _Source, *, track_fn, detect_fn, area_ratio: float, jump: float,
                validate_backward: bool, confidence_threshold: float, reid_interval: int, drift_similarity: float,
                max_gap: int, min_confidence: float, margin: float, motion_weight: float,
-               search_distance: float) -> tuple[torch.Tensor, int]:
+               search_distance: float, jump_2d: bool = False) -> tuple[torch.Tensor, int]:
     """Track one window from the cursor; on a loss re-identify (accept, or stop for review). Returns the window's
     masks and its first frame."""
     s = t.s
@@ -506,8 +530,8 @@ def run_window(t: Track, src: _Source, *, track_fn, detect_fn, area_ratio: float
     lost, reason = None, None
     for j in range(e - i):
         m = _resize_mask(wm[j], ph, pw)
-        fr = frames[j].numpy()
-        reason = ST.loss_reason(m, s["areas"], s["last_box"], pw, area_ratio=area_ratio, jump=jump)
+        fr = frames[j].detach().cpu().numpy()
+        reason = ST.loss_reason(m, s["areas"], s["last_box"], pw, area_ratio=area_ratio, jump=jump, two_d=jump_2d)
         if reason is None and validate_backward and conf[j] < float(confidence_threshold):
             reason = f"forward/backward agreement {conf[j]:.2f} is under {float(confidence_threshold):.2f}"
         if reason is None and int(reid_interval) > 0 and (i + j) % int(reid_interval) == 0 and t.mean_hist is not None:
@@ -539,7 +563,7 @@ def run_window(t: Track, src: _Source, *, track_fn, detect_fn, area_ratio: float
     while True:                       # up to max_gap frames may pass with no acceptable match (occluded, off frame)
         fr = src.read(f, f + 1)[0]
         boxes, masks = detect_fn(fr)
-        cands = ST.candidates(fr.numpy(), boxes, masks)
+        cands = ST.candidates(fr.detach().cpu().numpy(), boxes, masks)
         ranked = ST.rank_reid(pw, cands, t.mean_hist, s["last_box"], motion_weight=motion_weight,
                               search_distance=search_distance)
         verdict, why = ST.decide(ranked, min_score=float(min_confidence), margin=float(margin))
@@ -676,9 +700,10 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
                                      tooltip="Also track each window backwards; frames where the two disagree "
                                              "(IoU under confidence_threshold) count as a loss. Twice the time.", extra_dict={'c2c_section': 'Tracking', 'c2c_show_if': {'backend': ['SAM 3 (core)']}}),
                     io.Float.Input("confidence_threshold", default=0.5, min=0.0, max=1.0, step=0.01, extra_dict={'c2c_section': 'Tracking'}),
-                    io.Int.Input("reid_interval", default=0, min=0, max=1000,
+                    io.Int.Input("reid_interval", default=12, min=0, max=1000,
                                  tooltip="Every N frames compare the tracked person's colours with the memory "
-                                         "(0 = off): catches a tracker that moved to someone else.", extra_dict={'c2c_section': 'Re-identification'}),
+                                         "(0 = off): catches a tracker that moved to someone else. 12 for a new "
+                                         "node (2026-11-23, T6); a saved workflow keeps its own value.", extra_dict={'c2c_section': 'Re-identification'}),
                     io.Float.Input("drift_similarity", default=0.5, min=0.0, max=1.0, step=0.01, extra_dict={'c2c_section': 'Tracking'}),
                     io.Int.Input("max_gap", default=0, min=0, max=1000,
                                  tooltip="Frames the subject may be gone (occluded, off frame: no candidate matches "
@@ -689,7 +714,12 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
                     io.Float.Input("motion_weight", default=0.5, min=0.0, max=10.0, step=0.05, extra_dict={'c2c_section': 'Re-identification'}),
                     io.Float.Input("search_distance", default=1.0, min=0.0, max=2.0, step=0.05, extra_dict={'c2c_section': 'Re-identification'}),
                     io.Float.Input("detection_threshold", default=0.4, min=0.0, max=1.0, step=0.01, extra_dict={'c2c_section': 'Detection'}),
-                    io.Int.Input("max_auto_runs", default=200, min=1, max=100000, extra_dict={'c2c_section': 'Automation', 'c2c_show_if': {'auto_continue': [True]}})],
+                    io.Int.Input("max_auto_runs", default=200, min=1, max=100000, extra_dict={'c2c_section': 'Automation', 'c2c_show_if': {'auto_continue': [True]}}),
+                    # appended last (T6): off keeps saved workflows' rule and their track key
+                    io.Boolean.Input("jump_2d", default=False, optional=True,
+                                     tooltip="Loss rule: measure the centre jump in 2-D, so two people swapping at a "
+                                             "similar x (one above the other, crossing in depth) is caught too. Off: "
+                                             "horizontal only (the reference rule).", extra_dict={'c2c_section': 'Tracking'})],
             outputs=[io.Mask.Output("masks", tooltip="This run's window, at the proxy size."),
                      io.BoundingBox.Output("bboxes", tooltip="Every tracked frame so far, in source pixels "
                                                              "(an empty list where the subject is absent)."),
@@ -712,15 +742,17 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
                 action="run", proxy_width=960, area_ratio=0.35, jump=0.15, validate_backward=False,
                 confidence_threshold=0.5, reid_interval=0, drift_similarity=0.5, max_gap=0, min_confidence=0.5,
                 margin=0.05, motion_weight=0.5, search_distance=1.0, detection_threshold=0.4,
-                max_auto_runs=200) -> io.NodeOutput:
+                max_auto_runs=200, jump_2d=False) -> io.NodeOutput:
         who = "H3 Temporal Subject Tracker"
         mem = ST.parse_subject(subject, who)
         if mem is None:
             raise ValueError(f"{who}: connect 'subject' (H3 Multi-Subject Selector).")
-        if int(mem.get("frame") or 0) != 0:
+        picked = int(mem["clip_frame"] if mem.get("clip_frame") is not None else (mem.get("frame") or 0))
+        if picked != 0:
             # the track is seeded at frame 0; a mask picked on a later frame would be put on frame 0 and SAM 3 would
-            # follow whatever stands there (docs/PLAN_h3_replacement_quality.md T1)
-            raise ValueError(f"{who}: the subject was picked on frame {int(mem['frame'])}, but the track starts at "
+            # follow whatever stands there (docs/PLAN_h3_replacement_quality.md T1). clip_frame comes from the
+            # Selector's window_json: a pick on row 0 of a window starting at frame 7 is a pick on frame 7.
+            raise ValueError(f"{who}: the subject was picked on frame {picked}, but the track starts at "
                              "frame 0 with that mask. Pick the performer on frame 0 of this clip (H3 Multi-Subject "
                              "Selector frame = 0), or trim the clip so it starts at the frame you picked on.")
         src = _Source(media, images, int(proxy_width), who)
@@ -743,6 +775,8 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
                     confidence_threshold, "reid_interval": int(reid_interval), "drift_similarity": drift_similarity,
                     "max_gap": int(max_gap), "min_confidence": min_confidence, "margin": margin, "motion_weight":
                     motion_weight, "search_distance": search_distance, "detection_threshold": detection_threshold}
+        if jump_2d:
+            settings["jump_2d"] = True                # only when on: a saved job's track key (and its progress) stays
         key = J.fingerprint([src.identity(), mem["subject_id"], J.fingerprint(seed0[::4, ::4].tolist()), settings])[:12]
         base = _track_root(job)
         if action == "restart" and (base / key).is_dir():
@@ -775,7 +809,13 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
             if backend == BACKENDS[1]:
                 def track_fn(frames, seed, _m=mk):           # the window starts at the cursor
                     a = int(t.s["cursor"])
-                    return _m[a:a + int(frames.shape[0])].float().cpu()
+                    out = _m[a:a + int(frames.shape[0])].float().cpu().clone()
+                    # the cursor frame IS the seed: a mask the user confirmed (or re-identification took) replaces the
+                    # precomputed one there, so a bad precomputed frame cannot fail again at its own seed and loop the
+                    # review forever (T4, docs/PLAN_h3_replacement_quality.md); a plain window seed is that same mask
+                    if int(out.shape[0]):
+                        out[0] = torch.from_numpy(_resize_mask(seed, int(out.shape[1]), int(out.shape[2])))
+                    return out
             else:
                 def track_fn(frames, seed):
                     return _TRACK(model, frames, seed)
@@ -787,7 +827,7 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
                                 validate_backward=validate_backward, confidence_threshold=confidence_threshold,
                                 reid_interval=reid_interval, drift_similarity=drift_similarity, max_gap=max_gap,
                                 min_confidence=min_confidence, margin=margin, motion_weight=motion_weight,
-                                search_distance=search_distance)
+                                search_distance=search_distance, jump_2d=bool(jump_2d))
             msg = cls._auto(t, auto_continue, int(max_auto_runs))
             note = "; ".join(x for x in (note, msg) if x)
         return cls._outputs(t, src, wm, lo, note)
@@ -841,15 +881,19 @@ class MiniMaxH3_TemporalSubjectTracker(io.ComfyNode):
             have = sorted(int(k) for k in s["boxes"])
             lo = max(0, (have[-1] if have else 0) - 7)
             hi = min(n, lo + 8)
-            wm = torch.from_numpy(np.stack([_load(t.mask_path(i)) if os.path.isfile(t.mask_path(i))
-                                            else np.zeros((ph, pw), np.float32) for i in range(lo, hi)]))
+        else:
+            hi = lo + int(wm.shape[0])
+        # the ACCEPTED masks only (T5, docs/PLAN_h3_replacement_quality.md): a frame the loss rule rejected (another
+        # person, a jump) or not decided yet is empty - the tracker's raw window never reaches a consumer
+        wm = torch.from_numpy(np.stack([_load(t.mask_path(i)) if str(i) in s["boxes"] and os.path.isfile(t.mask_path(i))
+                                        else np.zeros((ph, pw), np.float32) for i in range(lo, hi)]))
         frames = src.read(lo, lo + int(wm.shape[0]))
         path = [((b[0] + b[2]) / 2 / src.w, (b[1] + b[3]) / 2 / src.h) for b in
                 (s["boxes"].get(str(i)) for i in range(n)) if b][-200:]
         prev = preview(frames, wm, path)
         if s["status"] == "waiting review" and s.get("review"):
             f = int(s["review"]["frame"])
-            fr = src.read(f, f + 1)[0].numpy()
+            fr = src.read(f, f + 1)[0].detach().cpu().numpy()
             cands = []
             for p in sorted((t.root / "review").glob(f"f{f:06d}_c*.png")):
                 m = _load(str(p))

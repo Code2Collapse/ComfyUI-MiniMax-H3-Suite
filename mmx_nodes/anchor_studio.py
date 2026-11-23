@@ -130,7 +130,7 @@ class MiniMaxH3_AnchorStudio(io.ComfyNode):
             if int(cm.shape[0]) != n:
                 raise ValueError(f"{who}: {int(cm.shape[0])} candidate masks for {n} candidates - one per candidate.")
             given = [_fit_mask(cm[k], h, w) for k in range(n)]
-        src_hist = BD.color_hist(src.numpy(), where if where is not None else np.ones((h, w), np.float32))
+        src_hist = BD.color_hist(src.detach().cpu().numpy(), where if where is not None else np.ones((h, w), np.float32))
         ref_hist, ref_how = None, None
         if references is not None:
             r = references if references.ndim == 4 else references[None]
@@ -151,7 +151,7 @@ class MiniMaxH3_AnchorStudio(io.ComfyNode):
                     pick = AN.person_overlapping([_fit_mask(m, rh, rw) for m in found], None)
                     if pick is not None:
                         pm, how = _fit_mask(found[pick], rh, rw), "core SAM 3 (largest person)"
-                hs.append(BD.color_hist(img.numpy(), pm if (pm > 0.5).any() else np.ones((rh, rw), np.float32)))
+                hs.append(BD.color_hist(img.detach().cpu().numpy(), pm if (pm > 0.5).any() else np.ones((rh, rw), np.float32)))
                 hows.append(how)
             ref_hist, ref_how = np.mean(hs, axis=0), hows
         rows, masks = [], []
@@ -175,7 +175,7 @@ class MiniMaxH3_AnchorStudio(io.ComfyNode):
             m = (person > 0.5).astype(np.float32) if person is not None else np.zeros((h, w), np.float32)
             masks.append(torch.from_numpy(m))
             use = m if m.any() else np.ones((h, w), np.float32)
-            hist = BD.color_hist(img.numpy(), use)
+            hist = BD.color_hist(img.detach().cpu().numpy(), use)
             rows.append({"index": k, "sha256": _sha(img), "person": bool(m.any()) if checked else None,
                          "person_how": how, "person_area": int(m.sum()),
                          "overlap": None if share is None else round(float(share), 4),

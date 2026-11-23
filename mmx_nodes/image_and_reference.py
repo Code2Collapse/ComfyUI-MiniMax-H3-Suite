@@ -63,7 +63,9 @@ except Exception as _e:  # noqa: BLE001 - private names; see the docstring
 MAX_RESOLUTION = getattr(_comfy_nodes, "MAX_RESOLUTION", 16384)
 
 
-REF_VIDEO_FITS = ("core canvas", "target grid (zero offset)")
+# a third option appended (R5, docs/PLAN_h3_replacement_quality.md): the plate (<Video 1>) is a spatial anchor and
+# goes on the target grid; a driving clip (<Video 2>...) shows another shot and keeps core's canvas (no cover-crop)
+REF_VIDEO_FITS = ("core canvas", "target grid (zero offset)", "target grid for <Video 1>, core canvas for the rest")
 IMAGE_BATCHES = ("first image only", "every image")
 
 
@@ -157,7 +159,8 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                             "reaches the model offset by half a token - the report says by how many "
                             "pixels. 'target grid (zero offset)' sizes it to width x height, so "
                             "every token of it lands exactly on the output's token: use it when the "
-                            "reference video is a spatial anchor. Costs more reference tokens.",
+                            "reference video is a spatial anchor. Costs more reference tokens. The third choice puts only "
+                            "<Video 1> (the plate) on the target grid and leaves a driving clip on core's canvas.",
                             extra_dict={"c2c_section": "References"}),
                 # appended last (docs/PLAN_h3_replacement_quality.md R1): the default keeps saved workflows unchanged
                 io.Combo.Input(
@@ -255,7 +258,7 @@ class MiniMaxH3_ImageAndReferenceToVideo(io.ComfyNode):
                 continue
             soundtrack = ref_video_audios.get(soundtrack_key(name))
             vh, vw = int(video_frames.shape[1]), int(video_frames.shape[2])
-            if ref_video_fit == REF_VIDEO_FITS[1]:
+            if ref_video_fit == REF_VIDEO_FITS[1] or (ref_video_fit == REF_VIDEO_FITS[2] and n_videos == 0):
                 # target grid: every token on the output's token; cover-crop keeps the aspect honest
                 cw, ch = int(width), int(height)
                 frames = _resize(video_frames, cw, ch, "center")

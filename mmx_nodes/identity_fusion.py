@@ -92,8 +92,8 @@ class _FusionAttention:
         if layout is None or v.ndim != 4 or v.shape[2] != getattr(layout, "seq_len", -1):
             return None                                        # not the H3 DiT (the token refiner is shorter)
         cou = opts.get("cond_or_uncond")
-        if cou is not None and (0 not in cou or 1 in cou):
-            return None                                        # positive pass only (H3 normally runs without CFG)
+        if cou is not None and 0 not in cou:
+            return None                                        # the negative pass alone: never biased
         c = self.plan.cfg
         bi = opts.get("block_index")
         if bi is not None and not (c["block_start"] <= int(bi) <= (c["block_end"] if c["block_end"] >= 0 else 10 ** 6)):
@@ -128,6 +128,31 @@ class _FusionAttention:
                 return self.inner(func, *args, **kwargs)
             return func(*args, **kwargs)
 
+        cou = list((kwargs.get("transformer_options") or {}).get("cond_or_uncond") or [0])
+        if len(cou) > 1 and any(c != 0 for c in cou):
+            # real CFG with the positive and the negative in ONE batch (R7, docs/PLAN_h3_replacement_quality.md): the
+            # positive chunks get the bias, every other chunk runs the plain attention; the batch is put back in order
+            q, k, v = args[0], args[1], args[2]
+            n = int(q.shape[0]) // len(cou)
+            if n * len(cou) != int(q.shape[0]):
+                return self._plain(func, *args, **kwargs)
+            parts = []
+            for c_i, c in enumerate(cou):
+                sl = slice(c_i * n, (c_i + 1) * n)
+                sub = (q[sl], k[sl], v[sl]) + tuple(args[3:])
+                # an inner override (NegPiP) sees its own chunk's cond_or_uncond, matching the tensors it gets
+                kw = dict(kwargs, transformer_options=dict(kwargs.get("transformer_options") or {},
+                                                           cond_or_uncond=[c]))
+                parts.append(self._biased(bias, *sub, **kw) if c == 0 else self._plain(func, *sub, **kw))
+            return torch.cat(parts, dim=0)
+        return self._biased(bias, *args, **kwargs)
+
+    def _plain(self, func, *args, **kwargs):
+        if self.inner is not None:
+            return self.inner(func, *args, **kwargs)
+        return func(*args, **kwargs)
+
+    def _biased(self, bias, *args, **kwargs):
         from comfy.ldm.modules.attention import attention_pytorch
 
         q, k, v, heads = args[0], args[1], args[2], args[3]

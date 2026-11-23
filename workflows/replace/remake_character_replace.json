@@ -2,7 +2,7 @@
  "id": "d5fc2563-9d37-5252-85ce-18fabad3512c",
  "revision": 0,
  "last_node_id": 77,
- "last_link_id": 168,
+ "last_link_id": 169,
  "nodes": [
   {
    "id": 5,
@@ -1563,7 +1563,9 @@
      "localized_name": "window_json",
      "name": "window_json",
      "type": "STRING",
-     "links": null
+     "links": [
+      169
+     ]
     },
     {
      "localized_name": "core_start",
@@ -1855,6 +1857,13 @@
       "name": "lock_min_score"
      },
      "link": null
+    },
+    {
+     "localized_name": "window_json",
+     "name": "window_json",
+     "shape": 7,
+     "type": "STRING",
+     "link": 169
     }
    ],
    "outputs": [
@@ -4994,6 +5003,14 @@
    5,
    77,
    0,
+   "STRING"
+  ],
+  [
+   169,
+   45,
+   1,
+   47,
+   15,
    "STRING"
   ]
  ],
