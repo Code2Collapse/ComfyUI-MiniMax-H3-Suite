@@ -45,6 +45,13 @@ def estimate_text_tokens(text: str) -> int:
 
 
 _THINK = re.compile(r"(?is)<think>.*?</think>")
+_FENCE = re.compile(r"^\s*```[A-Za-z0-9_-]*[ \t]*\n(.*?)\n?```\s*$", re.S)
+
+
+def strip_fences(text: str) -> str:
+    """Drop one Markdown code fence wrapped around the whole reply (seen live: a 4B GGUF fenced its prompt)."""
+    m = _FENCE.match(text or "")
+    return m.group(1).strip() if m else (text or "").strip()
 
 
 def strip_thinking(text: str) -> str:

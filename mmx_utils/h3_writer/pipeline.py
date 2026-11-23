@@ -15,6 +15,7 @@ from .audit import audit_prompt, camera_structure_requested
 from .media import Reference
 from .modes import WriterError, is_reference_mode
 from .references import reference_policy, reference_tags
+from .text import strip_fences
 from .repair import (
     audit_failures,
     dialogue_lines,
@@ -99,7 +100,7 @@ def run(provider: Any, assembled: dict[str, Any], *, repair: bool = True, seed: 
     usage = dict(response.get("usage") or {})
     if response.get("finish_reason") == "length":
         raise WriterError(f"The model reached max_tokens ({max_tokens}) before finishing the prompt; raise max_tokens.")
-    prompt = (response.get("text") or "").strip()
+    prompt = strip_fences(response.get("text") or "")
     if not prompt:
         raise WriterError("The model returned no prompt text.")
     result = audit(prompt, assembled)
@@ -126,7 +127,7 @@ def run(provider: Any, assembled: dict[str, Any], *, repair: bool = True, seed: 
             check_interrupt()
         fixed = provider.complete(repair_messages, temperature=0.3, top_p=0.9, max_tokens=max_tokens, seed=seed,
                                   check_interrupt=check_interrupt)
-        repaired = (fixed.get("text") or "").strip()
+        repaired = strip_fences(fixed.get("text") or "")
         fixed_audit = audit(repaired, assembled) if repaired else {"repair_required": True}
         ru = fixed.get("usage") or {}
         usage["prompt_tokens"] = int(usage.get("prompt_tokens", 0)) + int(ru.get("prompt_tokens", 0))
