@@ -169,6 +169,27 @@ def interp_gaps(vals: np.ndarray, valid: np.ndarray) -> np.ndarray:
     return np.interp(idx, idx[valid], vals[valid])
 
 
+FADE_BRIDGE_FRAMES = 6
+
+
+def bridge_short_gaps(valid: np.ndarray, max_gap: int) -> np.ndarray:
+    """``valid`` with every run of at most ``max_gap`` misses that has a detection on BOTH sides set True. Leading and
+    trailing misses and longer dropouts are left as they are (the composite should fade out there)."""
+    v = np.asarray(valid, dtype=bool).copy()
+    n, i = len(v), 0
+    while i < n:
+        if v[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and not v[j]:
+            j += 1
+        if i > 0 and j < n and (j - i) <= int(max_gap):
+            v[i:j] = True
+        i = j
+    return v
+
+
 def smooth(vals: np.ndarray, window: int, method: str = "gaussian") -> np.ndarray:
     """Smooth a trajectory with reflected edges. window<=1 is a no-op."""
     if window <= 1 or len(vals) < 3:
@@ -459,7 +480,10 @@ def track_face_crop(
             preview[i, yy0:yy1, xx0:xx1, 1] = g
             preview[i, yy0:yy1, xx0:xx1, 2] = 0.0
 
-    weights = smooth(valid.astype(np.float64), max(9, smooth_window // 2), "gaussian")
+    # G2 (zero-offset plan): one missed detection dipped the weight for ~9 frames and the old face ghosted through;
+    # short misses bracketed by detections are bridged (the box is interpolated there anyway), real dropouts fade.
+    weights = smooth(bridge_short_gaps(valid, FADE_BRIDGE_FRAMES).astype(np.float64), max(9, smooth_window // 2),
+                     "gaussian")
     weights = np.clip(weights, 0.0, 1.0)
 
     runs, cur = [], 0
