@@ -88,6 +88,9 @@ pasted region, phase correlation (cross-check), interior mean / max |diff| x 255
   default is kept because changing it alters saved workflows; task workflows 04/06 already use `exact outside mask`.
 - **Ingest (F1)** not re-measured in this pass (NOT RUN): F1's numbers stand (VHS 26.5/255 8-bit vs core LoadVideo
   0.4/255 float); the Suite's loaders use the C2C 16-bit reader.
+- **H3 Remake (merged from replace-quality, 705df75)**: `mmx_nodes/remake.py::_resize` still uses core's 8-bit
+  Lanczos (Z2). Left as is on purpose: the port is pinned bit-for-bit against the Viggle reference nodes; switching to
+  `mmx_utils/resample.common_upscale_float` is a one-line change once that parity test is re-baselined.
 - **Real weights**: everything above is UNIT TESTED with stand-ins on CPU. Whether H3's own decoder adds a
   sub-pixel drift is NOT VERIFIED (no weights here); Plate Restore `register = correct` measures and corrects it per
   frame on real output - read its report on the first GPU run.
