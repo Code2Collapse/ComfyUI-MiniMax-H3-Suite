@@ -161,13 +161,16 @@ def detail_reinject_frame(
     p = to_nchw(plate.unsqueeze(0))
     g = to_nchw(generated.unsqueeze(0))
     lf = low_freq(p, method=method, radius=radius)
+    # Frequency separation as in NKD's split/combine (the source of this port): the plate's HIGH band goes onto the
+    # generated image's LOW band. The port multiplied the WHOLE generated image by the plate's detail, which counts
+    # the detail twice: generated == plate came out sharpened (8.8/255 mean) with features moved 0.40 px (measured,
+    # docs/PLAN_h3_zero_offset.md Z4). Now generated == plate gives the plate back.
+    lf_g = low_freq(g, method=method, radius=radius)
     if mode.lower() == "subtract":
-        detail = p - lf
-        target = g + detail * float(strength)
+        combined = lf_g + (p - lf)
     else:
-        detail = p / (lf.abs() + float(eps))
-        neutral = torch.ones_like(detail)
-        target = g * (neutral + (detail - neutral) * float(strength))
+        combined = lf_g * (p / (lf.abs() + float(eps)))
+    target = g + (combined - g) * float(strength)
     out = g.clone()
     if mask is not None:
         m = mask.float()
