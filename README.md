@@ -1352,3 +1352,9 @@ do what their descriptions say. Saved workflows load unchanged; CHANGELOG.md say
 Node panels from this pack were checked in both renderers, light and dark themes, two display scales and three zoom
 levels. Dim text, badges and chips now reach the WCAG contrast of 4.5:1, and the C2C colours apply wherever a panel is
 shown. Saved workflows are unchanged.
+
+## Node panels after a cached run (2026-11-23)
+
+When you queue again with unchanged inputs (after a reload or switching tabs), ComfyUI serves the nodes from its cache
+and used to leave their panels empty. Now the panels show their last result again without re-running anything, and the
+status line says "cached - last result". If the run stops before the end, it says so; the next queue brings it back.
