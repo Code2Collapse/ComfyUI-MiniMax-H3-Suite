@@ -57,9 +57,12 @@ class MiniMaxH3_MaskedReplace(io.ComfyNode):
                 "Chain P10 → P11 guards before SigmaShiftLocked → LegalScheduler → sampler."
             ),
             inputs=[
-                io.Latent.Input("av_latent"),
+                io.Latent.Input("av_latent", tooltip="H3 joint AV latent (samples = NestedTensor(video, audio)), e.g. "
+                                                     "from EmptyMiniMaxH3LatentAV / MiniMaxH3ReferenceToVideo. Its "
+                                                     "video stream is the template the encoded crops must match."),
                 io.Image.Input("crops", tooltip="Canvas-space crops from H3 Track + Crop."),
-                io.Vae.Input("vae"),
+                io.Vae.Input("vae", tooltip="The MiniMax H3 video VAE. Encodes the crops (RGB) that replace the "
+                                            "latent's video stream; retried on CPU after a GPU failure."),
                 io.Mask.Input("video_latent_mask", tooltip="Video-side mask from H3 Mask Prep (N2)."),
                 io.Audio.Input(
                     "audio",
@@ -69,8 +72,12 @@ class MiniMaxH3_MaskedReplace(io.ComfyNode):
                 io.Vae.Input("audio_vae", optional=True, tooltip="Required when audio is connected."),
             ],
             outputs=[
-                io.Latent.Output("av_latent"),
-                io.String.Output("report"),
+                io.Latent.Output("av_latent", tooltip="The AV latent with the encoded crops as its video stream (audio "
+                                                      "replaced only when audio is wired) and noise_mask = "
+                                                      "NestedTensor(video mask 1 = regenerate, audio mask 0 = locked / "
+                                                      "1 = generated). Wire to the sampler."),
+                io.String.Output("report", tooltip="Plain-text summary: encoded latent shape, audio locked or "
+                                                   "generative, mask shapes, temporal fit note."),
             ],
         )
 

@@ -44,9 +44,15 @@ class MiniMaxH3_StitchBack(io.ComfyNode):
                 "mask are the literal plate tensor (invariant 5)."
             ),
             inputs=[
-                io.Image.Input("plate"),
-                io.Image.Input("crops"),
-                H3TransformType.Input("transform"),
+                io.Image.Input("plate", tooltip="Full-size source frames the crops are pasted onto (same clip "
+                                                "Track + Crop received). Pixels outside the paste mask are "
+                                                "returned unchanged (RGB only)."),
+                io.Image.Input("crops", tooltip="Generated crops at the transform's canvas size, one per frame. A "
+                                                "batch the VAE cut to a multiple of 16 is re-centred onto the "
+                                                "canvas with plate margins instead of stretched."),
+                H3TransformType.Input("transform", tooltip="The H3_TRANSFORM from H3 Track + Crop, unchanged: "
+                                                           "per-frame crop boxes used for the inverse warp, plus "
+                                                           "subject rectangles and detection weights."),
                 io.Mask.Input(
                     "paste_mask",
                     optional=True,
@@ -56,22 +62,44 @@ class MiniMaxH3_StitchBack(io.ComfyNode):
                     "paste_region",
                     options=["subject", "subject_ellipse", "full_crop"],
                     default="subject", extra_dict={"c2c_hide_if_linked": ["paste_mask"]},
+                    tooltip="Area of each crop pasted back when no paste_mask is wired. subject: the tracked "
+                            "subject rectangle; subject_ellipse: the ellipse inside it; full_crop: the whole "
+                            "crop. Edges are feathered by feather_px.",
                 ),
-                io.Int.Input("mask_dilation", default=8, min=0, max=256, step=2),
-                io.Int.Input("feather_px", default=32, min=0, max=256, step=2),
+                io.Int.Input("mask_dilation", default=8, min=0, max=256, step=2,
+                             tooltip="Canvas pixels the paste area is grown by before feathering (subject "
+                                     "rectangle/ellipse, or a max-filter on paste_mask). Not used by full_crop. "
+                                     "0 = no growth."),
+                io.Int.Input("feather_px", default=32, min=0, max=256, step=2,
+                             tooltip="Gaussian feather of the paste edge, in SOURCE pixels (converted to canvas "
+                                     "pixels per 8-frame chunk; kernel 2N+1). 32 = one H3 latent token. "
+                                     "0 = hard edge."),
                 io.Float.Input("colour_match", default=1.0, min=0.0, max=1.0, step=0.05,
+                               tooltip="0-1: per frame and channel, shift the crop's mean and standard deviation "
+                                       "inside the paste mask toward the plate's. 0 = crop colours as generated; "
+                                       "1 = full match.",
                                extra_dict={"c2c_section": "Blend"}),
-                io.Float.Input("blend", default=1.0, min=0.0, max=1.0, step=0.05, extra_dict={"c2c_section": "Blend"}),
+                io.Float.Input("blend", default=1.0, min=0.0, max=1.0, step=0.05,
+                               tooltip="0-1 opacity of the pasted crop over the plate (multiplies the paste mask). "
+                                       "0 = output is the plate.",
+                               extra_dict={"c2c_section": "Blend"}),
                 io.Combo.Input(
                     "undetected_frames",
                     options=["fade_out", "skip", "composite_anyway"],
                     default="fade_out", extra_dict={"c2c_section": "Blend"},
+                    tooltip="Frames where Track + Crop found no subject. fade_out: paste opacity follows the "
+                            "detection rate over a 9-frame window (ramps to 0); skip: those frames keep the plate; "
+                            "composite_anyway: paste every frame.",
                 ),
             ],
             outputs=[
-                io.Image.Output("images"),
-                io.Mask.Output("composite_mask"),
-                io.String.Output("report"),
+                io.Image.Output("images", tooltip="Plate frames (RGB) with the crops warped back and composited; "
+                                                  "pixels outside the composite mask are the plate unchanged."),
+                io.Mask.Output("composite_mask", tooltip="Per-frame MASK at source size, 1 = fully the pasted crop, "
+                                                         "fractional on the feather, 0 = plate; includes blend and "
+                                                         "detection weights."),
+                io.String.Output("report", tooltip="Plain-text summary: frames stitched, planner mode, feather in "
+                                                   "source and canvas pixels, any VAE 16 px cut recovery."),
             ],
         )
 

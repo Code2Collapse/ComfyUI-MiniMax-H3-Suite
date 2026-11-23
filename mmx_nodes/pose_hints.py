@@ -47,12 +47,18 @@ class MiniMaxH3_StrongestPose(io.ComfyNode):
                 "(INVARIANT 10). Includes feet/ankles for ground-contact shots."
             ),
             inputs=[
-                io.Image.Input("images"),
-                H3TransformType.Input("transform"),
+                io.Image.Input("images", tooltip="Full-size PLATE frames (the clip given to H3 Track + Crop). Pose "
+                                                 "is detected here, never on the crops. Frames used = min(images, "
+                                                 "transform frames)."),
+                H3TransformType.Input("transform", tooltip="H3_TRANSFORM from H3 Track + Crop. Its per-frame boxes "
+                                                           "map plate keypoints / hints into crop canvas pixels."),
                 io.Combo.Input(
                     "mode",
                     options=["inhouse_vitpose", "passthrough"],
                     default="inhouse_vitpose",
+                    tooltip="inhouse_vitpose: YOLO + ViTPose-H wholebody (ONNX, CPU) on the plate; needs "
+                            "models/detection/vitpose_h_wholebody_model.onnx (+ yolov10m.onnx). passthrough: "
+                            "crop the wired passthrough_hints with the transform instead (no keypoints).",
                 ),
                 io.Image.Input(
                     "passthrough_hints",
@@ -60,17 +66,33 @@ class MiniMaxH3_StrongestPose(io.ComfyNode):
                     tooltip="Plate-space pose/depth hints when mode=passthrough.",
                 ),
                 io.Float.Input("confidence", default=0.3, min=0.0, max=1.0, step=0.01,
+                               tooltip="inhouse_vitpose: keypoints below this ViTPose score get confidence 0, are "
+                                       "not drawn, and do not count toward coverage. Higher = fewer, surer "
+                                       "joints.",
                                extra_dict={"c2c_show_if": {"mode": ["inhouse_vitpose"]}}),
                 io.Boolean.Input("temporal_smooth", default=True,
+                                 tooltip="inhouse_vitpose: One Euro filter (24 fps, min_cutoff 1.0, beta 0.05) on "
+                                         "each keypoint's x/y over time, in plate space, before warping to the crop.",
                                  extra_dict={"c2c_show_if": {"mode": ["inhouse_vitpose"]}}),
                 io.Int.Input("gap_fill", default=3, min=0, max=30,
+                             tooltip="inhouse_vitpose: meant as the longest low-confidence gap (frames) to "
+                                     "interpolate. Current code interpolates x/y across every gap whatever this "
+                                     "value; filled points keep their low score, so they are not drawn.",
                              extra_dict={"c2c_show_if": {"mode": ["inhouse_vitpose"]}}),
             ],
             outputs=[
-                io.Image.Output("hints"),
-                io.String.Output("keypoints_json"),
-                io.Float.Output("coverage"),
-                io.String.Output("report"),
+                io.Image.Output("hints", tooltip="IMAGE batch at the crop canvas size, one per frame: white 1 px "
+                                                 "skeleton lines (arms, torso, legs, ankles/feet) on black; "
+                                                 "passthrough = the wired hints cropped."),
+                io.String.Output("keypoints_json", tooltip='JSON {"format":"minimax_h3_keypoints_v1","frames":[{'
+                                                           '"keypoints":[{"x","y","c"}...]}]}: 133 COCO-WholeBody '
+                                                           'points per frame in crop canvas pixels; all c=0 in '
+                                                           'passthrough.'),
+                io.Float.Output("coverage", tooltip="0-1 share of frames with a usable pose: ViTPose = at least "
+                                                    "17 keypoints above confidence; passthrough = a hint pixel "
+                                                    "left inside the crop."),
+                io.String.Output("report", tooltip="Plain-text summary: detector/model note, mode, coverage, "
+                                                   "settings, crop size, frame count, planner mode."),
             ],
         )
 

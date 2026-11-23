@@ -119,12 +119,27 @@ class MiniMaxH3_RegionEdit(io.ComfyNode):
                 io.Mask.Input("control_region", optional=True, advanced=True,
                               tooltip="Restrict the ControlNet further, e.g. pose only on the person (1 = steer)."),
                 io.Float.Input("sigma_start", default=1.0, min=0.0, max=1.0, step=0.01, optional=True,
+                               tooltip="ControlNet is active only while the step's sigma is <= this value (a raw "
+                                       "sigma, not a percent). 1.0 = from the first step. Also the 'start' of the "
+                                       "schedule fade.",
                                extra_dict={"c2c_section": "ControlNet"}),
                 io.Float.Input("sigma_end", default=0.0, min=0.0, max=1.0, step=0.01, optional=True,
+                               tooltip="ControlNet is active only while the step's sigma is >= this value (raw "
+                                       "sigma). 0.0 = to the last step. Raise it to stop steering the final, "
+                                       "low-noise detail steps.",
                                extra_dict={"c2c_section": "ControlNet"}),
             ],
-            outputs=[io.Model.Output(display_name="model"), io.Latent.Output(display_name="latent"),
-                     io.String.Output(display_name="report")],
+            outputs=[io.Model.Output(display_name="model",
+                                     tooltip="The H3 model with the mask-gated ControlNet patch (a clone); the "
+                                             "input model unchanged when no control_net is wired or strength is 0. "
+                                             "Wire to the sampler's model."),
+                     io.Latent.Output(display_name="latent",
+                                      tooltip="Joint AV latent: samples = NestedTensor(video, audio), noise_mask = "
+                                              "NestedTensor(video mask 1 = regenerate, audio mask per audio_mode). "
+                                              "Wire to the sampler's latent_image."),
+                     io.String.Output(display_name="report",
+                                      tooltip="Plain-text summary: frame/latent sizes, mask token coverage, audio "
+                                              "mode, ControlNet hint/strength and where it acts.")],
         )
 
     @classmethod

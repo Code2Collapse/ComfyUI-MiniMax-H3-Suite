@@ -44,7 +44,8 @@ class MiniMaxH3_FrameHandles(io.ComfyNode):
                 "on the plate's first frame."
             ),
             inputs=[
-                io.Image.Input("images"),
+                io.Image.Input("images", tooltip="Frames to pad or trim (IMAGE batch). Padding repeats the first "
+                                                 "(head) or last (tail) frame; trimming drops frames from that side."),
                 io.Int.Input(
                     "handle_frames",
                     default=0,
@@ -52,11 +53,21 @@ class MiniMaxH3_FrameHandles(io.ComfyNode):
                     max=400,
                     tooltip="Frames to add (positive) or trim (negative). 0 + grid mode = auto-pad.",
                 ),
-                io.Combo.Input("padding_mode", options=list(PADDING_MODES), default="H3 (17n+5)"),
-                io.Combo.Input("handle_side", options=["head", "tail"], default="head"),
+                io.Combo.Input("padding_mode", options=list(PADDING_MODES), default="H3 (17n+5)",
+                               tooltip="Frame grid to land on. H3: 17n+5, WAN: 4n+1, LTX2: 8n+1 - the count is "
+                                       "rounded UP to the grid after handle_frames (handle_frames 0 = pad only to the "
+                                       "next legal count). disabled: exactly handle_frames, no grid."),
+                io.Combo.Input("handle_side", options=["head", "tail"], default="head",
+                               tooltip="Side where frames (and matching audio) are added or removed: head = before "
+                                       "the first frame, tail = after the last."),
                 io.Float.Input("fps", default=float(FPS), min=1.0, max=120.0, step=0.01,
+                               tooltip="Frame rate used to convert padded/trimmed frames to audio samples "
+                                       "(frames / fps x sample_rate). Only matters with audio wired; stored in "
+                                       "the handles record.",
                                extra_dict={"c2c_section": "Audio"}),
-                io.Audio.Input("audio", optional=True),
+                io.Audio.Input("audio", optional=True,
+                               tooltip="Optional soundtrack kept in sync: silence is inserted where frames are "
+                                       "padded and samples are cut where frames are trimmed, on the same side."),
                 # L8.56, appended: the trim-back pass
                 io.String.Input("undo_handles", optional=True, force_input=True,
                                 tooltip="Wire the 'handles' output of the Frame Handles node that padded these frames "
@@ -64,10 +75,13 @@ class MiniMaxH3_FrameHandles(io.ComfyNode):
                                         "sound instead of padding; the widgets above are ignored."),
             ],
             outputs=[
-                io.Image.Output("images"),
-                io.Audio.Output("audio"),
-                io.Int.Output("frame_count"),
-                io.String.Output("report"),
+                io.Image.Output("images", tooltip="The padded / trimmed IMAGE batch (or, with undo_handles, the "
+                                                  "clip with the earlier padding removed)."),
+                io.Audio.Output("audio", tooltip="The audio shifted to match the frame change (silence padding or "
+                                                 "cut samples); None when no audio is wired."),
+                io.Int.Output("frame_count", tooltip="Number of frames in the images output."),
+                io.String.Output("report", tooltip="Plain-text summary: original and final frame counts, frames "
+                                                   "added/trimmed per side, grid mode, fps."),
                 io.String.Output("handles", tooltip="What was padded (JSON). Wire it to undo_handles of a second "
                                                     "Frame Handles after the model to trim the clip back."),
             ],

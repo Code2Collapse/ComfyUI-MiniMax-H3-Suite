@@ -42,24 +42,40 @@ class MiniMaxH3_ControlHints(io.ComfyNode):
                 "ControlNet (control_video), which also respects the latent mask."
             ),
             inputs=[
-                io.Image.Input("plate"),
-                H3TransformType.Input("transform"),
-                io.Combo.Input("hint_type", options=["canny", "passthrough"], default="canny"),
+                io.Image.Input("plate", tooltip="Full-size PLATE frames the transform was tracked on. Canny runs "
+                                                "here before cropping. Hint frames = min(plate frames, transform "
+                                                "boxes); a mismatch is warned in the report."),
+                H3TransformType.Input("transform", tooltip="H3_TRANSFORM from H3 Track + Crop. Its per-frame boxes "
+                                                           "crop the plate-space hints to the H3 canvas, matching "
+                                                           "the crops exactly."),
+                io.Combo.Input("hint_type", options=["canny", "passthrough"], default="canny",
+                               tooltip="canny: torch Canny edges of the plate, then cropped. passthrough: crop the "
+                                       "wired plate_hints (any plate-space depth/pose/HED/MLSD image) instead."),
                 io.Image.Input(
                     "plate_hints",
                     optional=True,
                     tooltip="Plate-space hints for passthrough mode (depth/pose/HED/MLSD).",
                 ),
                 io.Float.Input("low_threshold", default=0.1, min=0.0, max=1.0, step=0.01,
+                               tooltip="canny: hysteresis low threshold on gradient magnitude normalised to each "
+                                       "frame's maximum (0-1). Weak edges above it are kept only when connected "
+                                       "to a strong edge.",
                                extra_dict={"c2c_show_if": {"hint_type": ["canny"]}}),
                 io.Float.Input("high_threshold", default=0.2, min=0.0, max=1.0, step=0.01,
+                               tooltip="canny: hysteresis high threshold (same 0-1 per-frame normalised "
+                                       "magnitude). Edges above it are always kept; higher = fewer edges.",
                                extra_dict={"c2c_show_if": {"hint_type": ["canny"]}}),
                 io.Float.Input("blur_sigma", default=1.4, min=0.1, max=8.0, step=0.1,
+                               tooltip="canny: Gaussian blur sigma in plate pixels applied to the grey image before "
+                                       "gradients. Higher = fewer fine/noise edges.",
                                extra_dict={"c2c_show_if": {"hint_type": ["canny"]}}),
             ],
             outputs=[
-                io.Image.Output("hints"),
-                io.String.Output("report"),
+                io.Image.Output("hints", tooltip="IMAGE batch at the crop canvas size, one per frame: white edges on "
+                                                 "black (canny) or the cropped plate_hints. Wire to control_video "
+                                                 "of Apply MiniMax H3 Fun ControlNet or H3 Mask-Aware ControlNet."),
+                io.String.Output("report", tooltip="Plain-text summary: hint type, crop size, frames, planner mode, "
+                                                   "and a warning when plate and transform lengths differ."),
             ],
         )
 

@@ -44,12 +44,18 @@ class MiniMaxH3_TemporalDepth(io.ComfyNode):
                 "carries zeros when emit_normals is off."
             ),
             inputs=[
-                io.Image.Input("images"),
-                H3TransformType.Input("transform"),
+                io.Image.Input("images", tooltip="Full-size PLATE frames. Depth is computed on these (or, in "
+                                                 "passthrough with nothing wired, their luminance is used); frames "
+                                                 "used = min(images, transform frames)."),
+                H3TransformType.Input("transform", tooltip="H3_TRANSFORM from H3 Track + Crop. Its per-frame boxes "
+                                                           "crop the plate depth to the H3 canvas."),
                 io.Combo.Input(
                     "backend",
                     options=list(BACKENDS),
                     default="passthrough",
+                    tooltip="passthrough: the depth wired into passthrough_hints, else a luminance proxy (not "
+                            "depth). Model backends run through ComfyUI-CustomNodePacks' depth runners and stop "
+                            "with an error when that pack or the weights are missing.",
                 ),
                 io.Image.Input(
                     "passthrough_hints",
@@ -59,7 +65,9 @@ class MiniMaxH3_TemporalDepth(io.ComfyNode):
                 io.Int.Input("window", default=17, min=1, max=128,
                              tooltip="Frames the temporal alignment looks back over (1 = no alignment).",
                              extra_dict={"c2c_section": "Temporal", "c2c_show_if": {"temporal": ["align (experimental)"]}}),
-                io.Boolean.Input("emit_normals", default=False),
+                io.Boolean.Input("emit_normals", default=False,
+                                 tooltip="Also compute normals from the plate depth (Sobel gradients, no model), "
+                                         "cropped like the hints. Off = the normals output is all zeros."),
                 # L9.39: appended last so saved workflows keep their widget order
                 io.Combo.Input("temporal", options=["off", "align (experimental)"], default="off", optional=True,
                                tooltip="align: fit each frame's depth scale / offset to the previous `window` frames "
@@ -74,13 +82,17 @@ class MiniMaxH3_TemporalDepth(io.ComfyNode):
                                          extra_dict={"c2c_section": "Model setup", "c2c_show_if": {"backend": ["depth_anything_v2", "depth_anything_3", "depth_pro", "depthcrafter", "dvd"]}}),
             ],
             outputs=[
-                io.Image.Output("hints"),
+                io.Image.Output("hints", tooltip="IMAGE batch at the crop canvas size, one per frame: the plate depth "
+                                                 "(3 equal channels, 0-1) cropped through the transform."),
                 # NOTE: io.*.Output takes (id, display_name, tooltip, is_output_list) only —
 # there is NO `optional` on Output (comfy_api/latest/_io.py:217). Optionality is an
 # INPUT concept. This socket is always present; when emit_normals is False it carries
 # a zeros tensor of the hint shape, which is documented in the node description.
-                io.Image.Output("normals"),
-                io.String.Output("report"),
+                io.Image.Output("normals", tooltip="IMAGE batch at the crop canvas size: normals as RGB = "
+                                                   "(-dx, -dy, 1) normalised and mapped to 0-1; all zeros when "
+                                                   "emit_normals is off."),
+                io.String.Output("report", tooltip="Plain-text summary: backend and its note (e.g. luminance proxy "
+                                                   "warning), temporal-align flicker numbers, crop size, frames."),
             ],
         )
 

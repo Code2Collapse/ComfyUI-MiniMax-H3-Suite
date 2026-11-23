@@ -176,7 +176,10 @@ class MiniMaxH3_SwapControl(io.ComfyNode):
                                        "jaw for the chin drop but masks only "
                                        "the mouth, so a lip-sync never reshapes "
                                        "the chin."),
-                io.String.Output(display_name="report"),
+                io.String.Output(display_name="report",
+                                 tooltip="Plain-text summary: what the scope drives and masks, the keypoint "
+                                         "source, edges drawn out of possible, warnings (no pupils, no face "
+                                         "landmarks past the gate), mask coverage and pad."),
             ],
         )
 
