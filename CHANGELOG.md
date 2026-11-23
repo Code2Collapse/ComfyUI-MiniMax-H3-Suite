@@ -11,6 +11,9 @@
   confident detections) keeps the detector's own x/y instead of being interpolated; 0 interpolates every gap. Before,
   every gap was interpolated whatever the value. Only `keypoints_json` changes (for points with score 0 inside such
   gaps); the hints image is unchanged because those points are not drawn.
+- H3 Region Mask (painted mode): each frame now uses its own frame of `painted_mask`. Before, the first painted
+  frame was applied to every frame. Saved workflows with a multi-frame painted mask change from frame 2 on; a
+  single-frame mask behaves as before.
 
 ## 1.2.0 - 2026-11-23
 

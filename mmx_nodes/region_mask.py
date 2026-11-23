@@ -107,8 +107,8 @@ class MiniMaxH3_RegionMask(io.ComfyNode):
                                        "depth a top 0 -> bottom 1 ramp is the depth, so sky = lower part."),
                 io.Mask.Input("painted_mask", optional=True,
                               tooltip="painted mode only (required there): your mask, 1 = region. Resized "
-                                      "bilinearly to the plate. Current code applies its FIRST frame to every "
-                                      "frame."),
+                                      "bilinearly to the plate. Frame i uses mask frame i; a shorter mask repeats "
+                                      "its last frame."),
                 io.Float.Input("horizon_bias", default=0.0, min=-1.0, max=1.0, step=0.01,
                                tooltip="sky / ground: moves the threshold. threshold = min + (0.5 + bias) x "
                                        "(max - min) of the clip's depth. Negative = more pixels count as far (sky); "
@@ -177,8 +177,10 @@ class MiniMaxH3_RegionMask(io.ComfyNode):
                     d_plane = depth_on_device[di]
                 pm = None
                 if painted_mask is not None:
-                    pi = min(i, painted_mask.shape[0] - 1) if painted_mask.ndim == 3 else painted_mask
-                    pm = pi.to(device) if isinstance(pi, torch.Tensor) else painted_mask.to(device)
+                    # Frame i of a [B,H,W] batch (the last repeats). The index was computed and then dropped, so
+                    # the whole batch went down and the util took its frame 0 for every frame (L9.312).
+                    pm = (painted_mask[min(i, painted_mask.shape[0] - 1)] if painted_mask.ndim == 3
+                          else painted_mask).to(device)
                 m = region_mask_from_mode(
                     mode=mode_l,
                     height=h,
