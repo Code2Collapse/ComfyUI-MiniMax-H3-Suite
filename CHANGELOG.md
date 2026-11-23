@@ -14,6 +14,9 @@
 - H3 Region Mask (painted mode): each frame now uses its own frame of `painted_mask`. Before, the first painted
   frame was applied to every frame. Saved workflows with a multi-frame painted mask change from frame 2 on; a
   single-frame mask behaves as before.
+- H3 Region Mask: with no depth wired, `sky` is now the top of the frame and `ground` the bottom (a level, centred
+  horizon, as the report says). They were swapped. Saved workflows that use sky or ground mode without depth get the
+  opposite half from before; with depth wired nothing changes.
 
 ## 1.2.0 - 2026-11-23
 

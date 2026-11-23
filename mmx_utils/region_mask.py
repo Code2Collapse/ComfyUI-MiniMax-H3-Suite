@@ -32,7 +32,9 @@ def _depth_plane_single(depth: torch.Tensor, h: int, w: int, device: torch.devic
 
 
 def _vertical_ramp_plane(h: int, w: int, device: torch.device) -> torch.Tensor:
-    yy = torch.linspace(0.0, 1.0, h, device=device)
+    # Stand-in depth for "level centred horizon": higher = far, so the TOP row is far (sky) and the bottom near
+    # (ground). It ran 0 -> 1 top to bottom, which put sky at the bottom of the frame (L9.312).
+    yy = torch.linspace(1.0, 0.0, h, device=device)
     return yy.view(-1, 1).expand(h, w).contiguous()
 
 

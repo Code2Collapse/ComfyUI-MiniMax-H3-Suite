@@ -104,7 +104,7 @@ class MiniMaxH3_RegionMask(io.ComfyNode):
                 io.Combo.Input("mode", options=list(REGION_MODES), default="sky",
                                tooltip="sky: 1 where the depth value is ABOVE one clip-wide threshold (higher value "
                                        "read as far). ground: the rest. painted: painted_mask used as is. With no "
-                                       "depth a top 0 -> bottom 1 ramp is the depth, so sky = lower part."),
+                                       "depth a top 1 (far) -> bottom 0 (near) ramp is the depth, so sky = upper part."),
                 io.Mask.Input("painted_mask", optional=True,
                               tooltip="painted mode only (required there): your mask, 1 = region. Resized "
                                       "bilinearly to the plate. Frame i uses mask frame i; a shorter mask repeats "
