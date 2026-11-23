@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed (L9.312)
+- H3 Per-Frame Denoise: an incoming noise mask is now multiplied by the per-frame strength once, as its tooltip says.
+  It was applied twice (mask x mask x strength), so a 0.5 mask with strength 0.5 gave 0.125 instead of 0.25. Saved
+  workflows that feed this node a latent which already has a noise mask now get a weaker mask reduction (higher
+  values) than before; without an incoming mask nothing changes.
+
 ## 1.2.0 - 2026-11-23
 
 ### Fixed (replacement, round 2 - docs/PLAN_h3_replacement_quality.md s9)

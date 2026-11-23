@@ -115,12 +115,9 @@ class MiniMaxH3_PerFrameDenoise(io.ComfyNode):
             scale_mode=scale_mode,
         )
 
-        prev_vmask = None
-        prev = av_latent.get("noise_mask")
-        if prev is not None and hasattr(prev, "unbind"):
-            prev_vmask = list(prev.unbind())[0]
-
-        vmask, _ = scale_video_noise_mask(video, prev_vmask, strength)
+        # The incoming noise_mask is multiplied in exactly once, by merge_per_frame_video_mask. Passing it to
+        # scale_video_noise_mask as well applied it twice (mask^2 * strength, L9.312).
+        vmask, _ = scale_video_noise_mask(video, None, strength)
         out, _ = merge_per_frame_video_mask(av_latent, vmask, video, audio)
 
         lo = float(face_px_small) if scale_mode == "absolute_px" else float(face.min())
