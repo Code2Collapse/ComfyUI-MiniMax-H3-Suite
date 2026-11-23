@@ -68,6 +68,7 @@ class MiniMaxH3_SigmaPresets(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_SigmaPresets",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="Sigma Presets (official templates)",
             category=CATEGORY,
             description=(

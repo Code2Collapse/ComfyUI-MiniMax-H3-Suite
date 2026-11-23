@@ -100,6 +100,26 @@ export function stripHeight(state, textHeight) {
   return Math.max(18, Math.min(Math.ceil(textHeight || 0) + 4, ERROR_LINES * 13 + 4));
 }
 
+/** L9.290: strip text + hover for a node core serves from its cache. phase: "start" (listed in execution_cached),
+ *  "shown" (core resent the last ui - has_intermediate_output nodes, at the end of a run that finishes) or "stopped"
+ *  (the run ended with an error / cancel before that resend). hasUi: the node has a panel or report to refill. Pure;
+ *  tests/test_kit_cached_status.py runs it. */
+export function cachedStatus(phase, hasUi) {
+  if (phase === "shown") {
+    return { text: "cached · last result", title: "Inputs unchanged: ComfyUI reused this node's last result instead of running it again." };
+  }
+  if (phase === "stopped" && hasUi) {
+    return {
+      text: "cached · result not shown (run stopped)",
+      title: "Inputs unchanged, so ComfyUI did not run this node. It sends a cached node's last result only when the " +
+             "whole run finishes, and this run stopped first. Fix the error (or let the run finish) and queue again: " +
+             "the node will not re-run, its result just comes back.",
+    };
+  }
+  return { text: "cached", title: "Inputs unchanged: ComfyUI reused this node's last result instead of running it again." +
+           (hasUi ? " Its panel refills when the run finishes." : "") };
+}
+
 function setStatus(st, text, tone) {
   const err = tone === "error";
   st.status.textContent = text || "";
@@ -115,6 +135,12 @@ function setStatus(st, text, tone) {
   st.status.title = err ? errorTooltip(text, st.fullError) : "";
   st.ui.el.style.alignItems = err ? "flex-start" : "center";
   refitStrip(st, err);
+}
+
+function showCached(st, phase) {
+  const s = cachedStatus(phase, !!st.node?._mmxResendsUi);
+  setStatus(st, s.text, phase === "shown" ? "ok" : "");
+  st.status.title = s.title;          // setStatus clears the hover outside errors
 }
 
 /** Grow / shrink the node when the strip's height changes (never on a same-height status change). */
@@ -207,11 +233,19 @@ app.registerExtension({
       if (st) {
         const ms = st.t0 ? Date.now() - st.t0 : 0;
         st.fullError = "";
-        st.state = "done";
-        setStatus(st, ms ? `ran in ${(ms / 1000).toFixed(2)}s` : "ran", "ok");
+        if (st.state === "cached") {
+          // L9.290: core's end-of-run resend of a cached node's ui (has_intermediate_output) - it did not run
+          st.state = "done";
+          showCached(st, "shown");
+        } else {
+          st.state = "done";
+          setStatus(st, ms ? `ran in ${(ms / 1000).toFixed(2)}s` : "ran", "ok");
+        }
       }
       return r;
     };
+    // L9.290: /object_info says which nodes core resends from cache; read once per type, kept on the prototype
+    nodeType.prototype._mmxResendsUi = !!(nodeData?.has_intermediate_output || nodeData?.output_node);
   },
 
   async setup() {
@@ -238,6 +272,28 @@ app.registerExtension({
       }
     });
     api.addEventListener("execution_success", () => finish());
+
+    // L9.290: core lists the nodes it serves from its cache when a run starts; they never get "executing". Nodes with
+    // a panel get their last ui back at the end of a run that finishes (onExecuted above -> "cached · last result");
+    // if the run stops first, the strip says why the panel did not refill.
+    let cachedRun = new Set();
+    api.addEventListener("execution_start", () => { cachedRun = new Set(); });
+    api.addEventListener("execution_cached", ({ detail }) => {
+      for (const id of detail?.nodes || []) {
+        const n = findNodeByExecId(id);
+        const st = n && n[ST];
+        if (!st) continue;
+        st.t0 = 0; st.fullError = ""; st.state = "cached";
+        showCached(st, "start");
+        cachedRun.add(st);
+      }
+    });
+    const stopped = () => {
+      for (const st of cachedRun) if (st.state === "cached" && st.node) showCached(st, "stopped");
+      cachedRun = new Set();
+    };
+    api.addEventListener("execution_error", stopped);
+    api.addEventListener("execution_interrupted", stopped);
 
     api.addEventListener("execution_error", ({ detail }) => {
       const n = findNodeByExecId(detail?.node_id);

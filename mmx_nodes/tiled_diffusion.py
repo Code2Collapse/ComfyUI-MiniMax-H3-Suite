@@ -23,6 +23,7 @@ class MiniMaxH3_TiledDiffusion(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_TiledDiffusion",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Tiled Diffusion (experimental)",
             category=CATEGORY,
             description=(

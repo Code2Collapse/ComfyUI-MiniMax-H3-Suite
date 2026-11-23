@@ -311,6 +311,7 @@ class MiniMaxH3_OpenRegenLoRA(io.ComfyNode):
         lora_opts = loras or ["(put open_h3_regenerate_2k_lora.safetensors in models/loras)"]
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenLoRA",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Open Regen · LoRA (refiner + Turbo + Sharp)",
             category=CATEGORY,
             description=("Applies NVIDIA's merged Open-H3-Regenerate-2K LoRA (refiner + LightX2V FL2VA Turbo + LMS "
@@ -368,6 +369,7 @@ class MiniMaxH3_OpenRegenSigmas(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenSigmas",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Open Regen · Sigmas",
             category=CATEGORY,
             description=("The refine's Euler sigmas (CFG 1): 3 steps 0.909375 / 0.857 / 0.667 (NVIDIA release), 2 steps "
@@ -440,6 +442,7 @@ class MiniMaxH3_OpenRegenPrepareDraft(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenPrepareDraft",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Open Regen · Prepare Draft",
             category=CATEGORY,
             description=("Resamples the draft to 24 fps, cuts it to max_frames, cover-scales (bilinear) and centre-crops "
@@ -507,6 +510,7 @@ class MiniMaxH3_OpenRegenFinish(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenFinish",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Open Regen · Finish Frames",
             category=CATEGORY,
             description=("Keeps the real frames (drops the 17k+5 padding), crops the latent-grid overhang (1088 -> 1080, "
@@ -577,6 +581,7 @@ class MiniMaxH3_OpenRegenUpscale(io.ComfyNode):
         models = LU._model_names()
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenUpscale",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Open Regen · Latent Upscale",
             category=CATEGORY,
             description=("The trained H3 3D latent upscaler (the Suite's engine) straight onto the regenerate target "
@@ -687,6 +692,7 @@ class MiniMaxH3_OpenRegenRefineLatent(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenRefineLatent",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Open Regen · Refine Latent",
             category=CATEGORY,
             description=("H3 audio + video latent for the refine: the upscaled video is re-noised by the sampler (start "
@@ -831,6 +837,7 @@ class MiniMaxH3_OpenRegenFastVAEDecode(io.ComfyNode):
         opts = vaes or ["(put fast_h3_vae_noncausal_24l.safetensors in models/vae)"]
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenFastVAEDecode",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Open Regen · Fast VAE Decode",
             category=CATEGORY,
             description=("NVIDIA's fast H3 VAE decoder (StreamRender-H3): the released decoder pruned to 24 layers and "
@@ -997,6 +1004,7 @@ class MiniMaxH3_OpenRegenLoadLatent(io.ComfyNode):
             files = []
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenLoadLatent",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Open Regen · Load Refined Latent",
             category=CATEGORY,
             description=(f"Loads a latent saved by Save Refined Latent (or by upstream Open-H3 Regenerate) from "

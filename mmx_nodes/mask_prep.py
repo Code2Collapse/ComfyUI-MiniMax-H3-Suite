@@ -28,6 +28,7 @@ class MiniMaxH3_MaskPrep(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_MaskPrep",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Mask Prep",
             category="MiniMax H3/Spine",
             description=(

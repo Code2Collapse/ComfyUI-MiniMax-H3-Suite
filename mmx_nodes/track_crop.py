@@ -34,6 +34,7 @@ class MiniMaxH3_TrackCrop(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_TrackCrop",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Track + Crop",
             category="MiniMax H3/Spine",
             description=(

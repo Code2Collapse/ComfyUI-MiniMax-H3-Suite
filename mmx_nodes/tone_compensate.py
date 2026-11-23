@@ -28,6 +28,7 @@ class MiniMaxH3_ToneCompensate(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_ToneCompensate",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Tone Compensate (seam brightness)",
             category="MiniMax H3/Long",
             description=(

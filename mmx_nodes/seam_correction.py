@@ -125,6 +125,7 @@ class MiniMaxH3_SeamCorrection(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_SeamCorrection",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Seam Correction",
             category="MiniMax H3/Long",
             description=("Find the seams of a long video made of H3 segments and remove their exposure / colour steps "

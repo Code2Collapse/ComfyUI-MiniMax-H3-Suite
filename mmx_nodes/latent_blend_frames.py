@@ -138,6 +138,7 @@ class MiniMaxH3_BlendLatentsByFrames(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_BlendLatentsByFrames",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Blend Latents By Frames",
             category=CATEGORY,
             description=("Blend two latents of the same segment frame by frame: keyframes give latent 2's weight per "

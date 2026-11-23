@@ -108,6 +108,7 @@ class MiniMaxH3_AVBridge(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_AVBridge",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 AV Bridge (generate between two clips)",
             category=CATEGORY,
             description=("Generate the middle between two existing clips: the end of clip A and the start of clip B "
@@ -167,6 +168,7 @@ class MiniMaxH3_AVBridgeAssemble(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_AVBridgeAssemble",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 AV Bridge Assemble",
             category=CATEGORY,
             description=("Clip A + the generated middle + clip B, picture and sound: the bridge's two kept contexts "

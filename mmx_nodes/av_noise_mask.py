@@ -252,6 +252,7 @@ class MiniMaxH3_SetAVNoiseMask(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_SetAVNoiseMask",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Set AV Noise Mask",
             category=CATEGORY,
             description=("Set the video and/or audio denoise masks of an H3 AV latent (white = generate, black = keep, "
@@ -313,6 +314,7 @@ class MiniMaxH3_HardKeyframes(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_HardKeyframes",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Hard Keyframes (protected stills)",
             category=CATEGORY,
             description=("Write still images into the target latent at chosen frames and protect those latent steps "

@@ -22,6 +22,7 @@ class MiniMaxH3_ContextWindowSampling(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_ContextWindowSampling",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Context Window Sampling (experimental)",
             category=CATEGORY,
             description=(

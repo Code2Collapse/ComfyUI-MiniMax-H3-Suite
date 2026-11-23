@@ -104,6 +104,7 @@ class MiniMaxH3_HDRLogEncode(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_HDRLogEncode",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 HDR · Log Encode",
             category=CATEGORY,
             description=("Scene-linear HDR (1.0 = diffuse white) -> log code values 0..1 that H3's VAE can carry. "
@@ -134,6 +135,7 @@ class MiniMaxH3_HDRLogDecode(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_HDRLogDecode",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 HDR · Log Decode",
             category=CATEGORY,
             description=("Log code values (the H3 VAE decode of a log-HDR generation) -> scene-linear HDR, 1.0 = diffuse "
@@ -161,6 +163,7 @@ class MiniMaxH3_HDRBiasCorrect(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_HDRBiasCorrect",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 HDR · Bias Correct",
             category=CATEGORY,
             description=("Undoes the H3 VAE's known exposure bias: every pixel is multiplied by 2^(-bias(luma) x strength), "
@@ -200,6 +203,7 @@ class MiniMaxH3_HDRGamutConvert(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_HDRGamutConvert",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 HDR · Gamut Convert",
             category=CATEGORY,
             description="Linear RGB 3x3 matrix between Rec.709, Rec.2020 and ACEScg (AP1). No clamp: out-of-gamut values stay.",
@@ -234,6 +238,7 @@ class MiniMaxH3_HDRClipMask(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_HDRClipMask",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 HDR · Clip Mask",
             category=CATEGORY,
             description=("Where the SDR source is clipped: over = any channel at or above 'over'; under = luma at or below "
@@ -286,6 +291,7 @@ class MiniMaxH3_HDRGainMapJoin(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_HDRGainMapJoin",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 HDR · Gain Map Join",
             category=CATEGORY,
             description=("Draft-resolution linear HDR + the Regenerate 4K SDR output -> 4K linear HDR: gain = hdr / "
@@ -336,6 +342,7 @@ class MiniMaxH3_HDRPrompt(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_HDRPrompt",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 HDR · Prompt",
             category=CATEGORY,
             description=("Builds the HDR caption / inference prompt from three fields and a template ({scene}, "
@@ -429,6 +436,7 @@ class MiniMaxH3_HDRLoadEXRSequence(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_HDRLoadEXRSequence",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 HDR · Load EXR Sequence",
             category=CATEGORY,
             description="Loads a folder of EXR frames (natural sort) as float IMAGE frames - no clamp, values above 1 kept.",

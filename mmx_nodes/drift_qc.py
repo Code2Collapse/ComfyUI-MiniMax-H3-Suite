@@ -68,6 +68,7 @@ class MiniMaxH3_DriftQC(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_DriftQC",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Drift QC",
             category="MiniMax H3/QC",
             description=(

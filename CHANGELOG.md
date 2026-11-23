@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed (L9.290)
+- Node panels refill when ComfyUI serves a node from its cache. A re-queue with unchanged inputs used to leave the
+  window plan, seam drift, token grid, crop plan, drift curve, box trajectory and every text report empty after a
+  page reload or tab switch, because core sends a cached node's result only for output nodes. The 44 non-output
+  nodes that show a result now declare core's `has_intermediate_output` flag. Core then resends their last result at
+  the end of a run that finishes, without running them again; an unwired node still never runs. The status strip
+  says "cached" and then "cached · last result", and it explains when a stopped run left a panel empty. Node ids,
+  inputs, outputs and defaults are unchanged. Design: docs/cached_node_panels_design.md.
+
 ### Fixed (L9.312)
 - H3 Per-Frame Denoise: an incoming noise mask is now multiplied by the per-frame strength once, as its tooltip says.
   It was applied twice (mask x mask x strength), so a 0.5 mask with strength 0.5 gave 0.125 instead of 0.25. Saved

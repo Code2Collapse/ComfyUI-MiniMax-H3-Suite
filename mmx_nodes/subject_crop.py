@@ -350,6 +350,7 @@ class MiniMaxH3_SubjectCrop(io.ComfyNode):
     def define_schema(cls):
         return io.Schema(
             node_id="MiniMaxH3_SubjectCrop",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Subject Crop",
             category=CATEGORY,
             description="Crops a region around the masked subject from every frame, sized so the whole batch stacks into one tensor. Position, size, and shape are chosen together over the whole clip, so the crop holds still through mask jitter and follows only sustained motion.",
@@ -484,6 +485,7 @@ class MiniMaxH3_SubjectCropAdvanced(io.ComfyNode):
                         dial("aspect_ratio"), dial("seamless_loop")]
         return io.Schema(
             node_id="MiniMaxH3_SubjectCropAdvanced",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Subject Crop (Advanced)",
             category=CATEGORY,
             description="Subject Crop with every planner cost exposed. The standard node's padding and prefer settings are presets over these dials; the defaults here reproduce its firm/stillness cell.",
@@ -527,6 +529,7 @@ class MiniMaxH3_SubjectUncrop(io.ComfyNode):
     def define_schema(cls):
         return io.Schema(
             node_id="MiniMaxH3_SubjectUncrop",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Subject Uncrop",
             category=CATEGORY,
             description="Pastes processed crops back into the original frames with a feathered border, optionally confined by a mask. The paste is pixel-exact when the crop size was not changed.",

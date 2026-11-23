@@ -170,6 +170,7 @@ class MiniMaxH3_ContextTaperNoise(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_ContextTaperNoise",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Context Taper Noise (frames, experimental)",
             category="MiniMax H3/Long",
             description=("Blocky chroma noise on the tail of the previous clip before it reaches Motion Context's "
@@ -222,6 +223,7 @@ class MiniMaxH3_ContextLatentTaperNoise(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_ContextLatentTaperNoise",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             display_name="H3 Context Taper Noise (latent, experimental)",
             category="MiniMax H3/Long",
             description=("Gaussian noise on the last latent steps of the previous clip's AV latent, ramping down "

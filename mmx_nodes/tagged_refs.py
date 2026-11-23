@@ -44,6 +44,7 @@ class MiniMaxH3_TaggedPicture(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_TaggedPicture", display_name="H3 Tagged Picture", category=CATEGORY,
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             description=("Register one reference picture under an @tag. Write @tag in the H3 Tagged Reference to "
                          "Video prompt to use it; a picture no prompt mentions is never sent to H3."),
             search_aliases=["tagged reference", "@tag picture", "h3 reference picture"],
@@ -66,6 +67,7 @@ class MiniMaxH3_TaggedVideo(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_TaggedVideo", display_name="H3 Tagged Video", category=CATEGORY,
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             description=("Register one reference video (24 fps frames) and, optionally, its soundtrack under @tags. "
                          "Mentioning either tag in the prompt sends the pair; the soundtrack gets its own <Audio N> "
                          "label right before the video's <Video N>."),
@@ -97,6 +99,7 @@ class MiniMaxH3_TaggedAudio(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_TaggedAudio", display_name="H3 Tagged Audio", category=CATEGORY,
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             description="Register a standalone voice / music / sound reference under an @tag.",
             search_aliases=["tagged reference audio", "@tag audio", "h3 reference audio"],
             inputs=[io.Audio.Input("audio", tooltip="Standalone reference audio."),
@@ -122,6 +125,7 @@ class MiniMaxH3_TaggedReferenceToVideo(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_TaggedReferenceToVideo", display_name="H3 Tagged Reference to Video",
+            has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
             category=CATEGORY,
             description=("Core MiniMax H3 Reference to Video, driven by @tags. Only the references the prompt "
                          "mentions are sent, numbered as core numbers them (pictures, then each video with its "
