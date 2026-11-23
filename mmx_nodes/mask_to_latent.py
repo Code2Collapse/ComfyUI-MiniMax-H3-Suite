@@ -361,6 +361,11 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
         if grow_temporal != 0:
             x = _grow_temporal(x, grow_temporal)
 
+        # Core's VAE encodes the CENTRE-cropped frame when a side is off the `spatial` grid; adaptive pooling over the
+        # whole mask spread the cells over it instead and put masked pixels into kept cells (measured: up to 118
+        # cells on 1922x1081; docs/PLAN_h3_zero_offset.md Z3). On-grid masks are untouched.
+        from mmx_utils.mask_to_token import vae_centre_crop  # noqa: WPS433
+        x = vae_centre_crop(x, int(spatial))
         t, h, w = x.shape
         lh = max(1, h // spatial)
         lw = max(1, w // spatial)
