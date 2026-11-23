@@ -72,7 +72,10 @@ class MiniMaxH3_TailFromLatent(io.ComfyNode):
             ),
             inputs=[
                 io.Latent.Input("samples", tooltip="The sampler's AV latent."),
-                io.Vae.Input("vae"),
+                io.Vae.Input(
+                    "vae",
+                    tooltip="The H3 video VAE: decodes the WHOLE video stream of samples, then the tail "
+                            "is cut from the decoded frames."),
                 io.Vae.Input(
                     "audio_vae", optional=True,
                     tooltip="Wire this to get the tail's audio as well. "
@@ -106,9 +109,17 @@ class MiniMaxH3_TailFromLatent(io.ComfyNode):
                     display_name="last_frame",
                     tooltip="The final frame alone, for use as a first-frame "
                             "keyframe on the next clip."),
-                io.Int.Output(display_name="frame_count"),
-                io.Float.Output(display_name="duration_seconds"),
-                io.String.Output(display_name="report"),
+                io.Int.Output(
+                    display_name="frame_count",
+                    tooltip="Frames in ref_video: tail_seconds x 24, rounded up to 17k+5 when aligned, "
+                            "never more than the clip has."),
+                io.Float.Output(
+                    display_name="duration_seconds",
+                    tooltip="frame_count / 24 fps, in seconds - the length the audio was cut to."),
+                io.String.Output(
+                    display_name="report",
+                    tooltip="Text: tail frames and duration, grid rounding, warnings when the tail is off "
+                            "the grid or is the whole clip, and whether the audio is silence."),
             ],
         )
 

@@ -337,7 +337,13 @@ class MiniMaxH3_OpenRegenLoRA(io.ComfyNode):
                 io.Combo.Input("lora_dtype", options=["bf16", "fp32"], default=D9_LORA_DTYPE_DEFAULT, advanced=True,
                                tooltip="RAM copy of the rank-576 factors: bf16 about 6.2 GB, fp32 about 12.4 GB."),
             ],
-            outputs=[io.Model.Output("model"), io.String.Output("report")],
+            outputs=[io.Model.Output("model", tooltip="A clone of the input H3 model with the merged Open Regen LoRA "
+                                                     "patches (and, unless curve_name is none or curve_strength 0, "
+                                                     "the Sharp curve branches on every block's AdaLN projection). "
+                                                     "Wire to BlockSparseAttention, then the sampler."),
+                     io.String.Output("report", tooltip="Text: LoRA modules mapped to ComfyUI weights, strength, RAM "
+                                                        "copy size, and how the curve branches were applied (or "
+                                                        "that they are off).")],
         )
 
     @classmethod
@@ -376,7 +382,10 @@ class MiniMaxH3_OpenRegenSigmas(io.ComfyNode):
                                tooltip="0 = the release grid for 2 / 3 steps. Above 0: the refiner's shift-6 grid "
                                        "from this start noise (the example workflows use 0.8)."),
             ],
-            outputs=[io.Sigmas.Output("sigmas"), io.String.Output("report")],
+            outputs=[io.Sigmas.Output("sigmas", tooltip="SIGMAS for the refine sampler (Euler, CFG 1): the NVIDIA "
+                                                       "release grid for 2 / 3 steps, or the shift-6 grid from "
+                                                       "start_sigma."),
+                     io.String.Output("report", tooltip="Text: the sigma values and which grid produced them.")],
         )
 
     @classmethod
@@ -450,8 +459,16 @@ class MiniMaxH3_OpenRegenPrepareDraft(io.ComfyNode):
                                tooltip="Frame rate of the frames in fps (Get Video Components fps). Anything other "
                                        "than 24 is resampled to 24 fps (nearest frame). 0 = treat as 24."),
             ],
-            outputs=[io.Image.Output("images"), io.Int.Output("frame_count"), io.Int.Output("width"),
-                     io.Int.Output("height"), io.String.Output("report")],
+            outputs=[io.Image.Output("images", tooltip="IMAGE batch at 24 fps, cover-scaled and centre-cropped to "
+                                                       "width x height, padded to 17k+5 frames by repeating the last "
+                                                       "frame. Wire to the H3 VAE Encode."),
+                     io.Int.Output("frame_count", tooltip="Real frames before the 17k+5 padding. Wire to Save "
+                                                          "Refined Latent and Finish Frames, which drop the "
+                                                          "padding."),
+                     io.Int.Output("width", tooltip="Width of the prepared frames in px (multiple of 32)."),
+                     io.Int.Output("height", tooltip="Height of the prepared frames in px (multiple of 32)."),
+                     io.String.Output("report", tooltip="Text: fps resampling, scale / crop box, real and padded "
+                                                        "frame counts.")],
         )
 
     @classmethod
@@ -506,7 +523,12 @@ class MiniMaxH3_OpenRegenFinish(io.ComfyNode):
                 io.Audio.Input("audio", optional=True,
                                tooltip="Soundtrack to cut (or pad with silence) to the kept frames / 24 s."),
             ],
-            outputs=[io.Image.Output("images"), io.Audio.Output("audio")],
+            outputs=[io.Image.Output("images", tooltip="The first frame_count frames, centre-cropped (auto) from "
+                                                       "1088 / 2176 to 1080 / 2160 px. Wire to Create Video at "
+                                                       "24 fps."),
+                     io.Audio.Output("audio", tooltip="The audio input cut (or padded with silence) to the kept "
+                                                      "frames / 24 s from t = 0; empty (None) when no audio is "
+                                                      "connected.")],
         )
 
     @classmethod
@@ -581,8 +603,15 @@ class MiniMaxH3_OpenRegenUpscale(io.ComfyNode):
                              tooltip="0: the whole clip in one pass (reference). > 0: chunks of this many latent steps, "
                                      "cross-faded; less VRAM, approximate."),
             ],
-            outputs=[io.Latent.Output("latent"), io.Int.Output("width"), io.Int.Output("height"),
-                     io.String.Output("report")],
+            outputs=[io.Latent.Output("latent", tooltip="The upscaled latent, same kind as the input (video or "
+                                                       "audio + video, audio passed through), on the computed "
+                                                       "grid (e.g. 1920x1088 px for 2k). Wire to Refine Latent."),
+                     io.Int.Output("width", tooltip="KEPT output width in px after Finish Frames' crop (e.g. "
+                                                    "1920 for 2k; the latent grid itself may be larger)."),
+                     io.Int.Output("height", tooltip="KEPT output height in px after Finish Frames' crop (1080 "
+                                                     "for a 1088-row grid, 2160 for 2176)."),
+                     io.String.Output("report", tooltip="Text: source and target sizes, planned passes and each "
+                                                        "upscaler pass's own report.")],
         )
 
     @classmethod
@@ -672,7 +701,13 @@ class MiniMaxH3_OpenRegenRefineLatent(io.ComfyNode):
                              tooltip="The H3 audio VAE (needed for silence and draft audio)."),
                 io.Audio.Input("audio", optional=True, tooltip="Draft soundtrack, for 'draft audio (AUDIO input)'."),
             ],
-            outputs=[io.Latent.Output("latent"), io.Int.Output("frame_count"), io.String.Output("report")],
+            outputs=[io.Latent.Output("latent", tooltip="H3 audio + video latent with a noise mask: video 1 "
+                                                       "(regenerated by the sampler), audio 0 (held clean). Wire "
+                                                       "to the refine sampler."),
+                     io.Int.Output("frame_count", tooltip="Pixel frames of the 5k+2 latent (17k+5, padding "
+                                                          "included), not the draft's real frame count."),
+                     io.String.Output("report", tooltip="Text: latent steps -> frames, audio length and source, "
+                                                        "noise-mask layout.")],
         )
 
     @classmethod
@@ -816,7 +851,11 @@ class MiniMaxH3_OpenRegenFastVAEDecode(io.ComfyNode):
                              tooltip="H3 video VAE: used instead when the clip does not fit the fast decoder or it "
                                      "runs out of VRAM."),
             ],
-            outputs=[io.Image.Output("images"), io.String.Output("report")],
+            outputs=[io.Image.Output("images", tooltip="Decoded IMAGE batch, one frame per decoded pixel frame "
+                                                       "(all 17k+5, padding included), 16x the latent size. Wire "
+                                                       "to Finish Frames."),
+                     io.String.Output("report", tooltip="Text: device, latent shape, frames and size, time, VRAM "
+                                                        "estimate, and whether the core VAE fallback was used.")],
         )
 
     @classmethod
@@ -938,7 +977,8 @@ class MiniMaxH3_OpenRegenSaveLatent(io.ComfyNode):
                 io.Audio.Input("audio", optional=True,
                                tooltip="Soundtrack for the final video (stored with the latent)."),
             ],
-            outputs=[io.Latent.Output("samples")],
+            outputs=[io.Latent.Output("samples", tooltip="The input latent, unchanged (passed on after the file "
+                                                         "is written). Wire to the decoder.")],
             is_output_node=True,
         )
 
@@ -968,7 +1008,12 @@ class MiniMaxH3_OpenRegenLoadLatent(io.ComfyNode):
                                tooltip=f"Files in output/{LATENT_DIR}/, newest first. '{NEWEST}' picks the latest file "
                                        "when the workflow runs."),
             ],
-            outputs=[io.Latent.Output("samples"), io.Int.Output("frame_count"), io.Audio.Output("audio")],
+            outputs=[io.Latent.Output("samples", tooltip="The saved latent: H3 video, or audio + video when an "
+                                                         "audio latent was stored. Wire to Fast VAE Decode."),
+                     io.Int.Output("frame_count", tooltip="Real frame count stored with the latent (0 if it was "
+                                                          "saved with 0 = all). Wire to Finish Frames."),
+                     io.Audio.Output("audio", tooltip="The stored soundtrack, or silence (48 kHz stereo) of the "
+                                                      "clip's length when none was stored.")],
         )
 
     @classmethod

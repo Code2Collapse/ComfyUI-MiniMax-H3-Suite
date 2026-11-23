@@ -135,9 +135,14 @@ class MiniMaxH3_RemakeConditioning(io.ComfyNode):
                         "source soundtrack held clean. Needs the Remake LoRA (Load LoRA bypass). For plate work prefer "
                         "H3 Remake Replace: this node cover-crops off-size sources onto 832x480 / 1280x736.",
             inputs=[
-                io.Clip.Input("clip"),
-                io.Vae.Input("vae"),
-                io.Vae.Input("audio_vae"),
+                io.Clip.Input("clip", tooltip="The H3 text encoder (Qwen3-VL). Encodes the text-only labels (<Video 1>, "
+                                              "time stamps, <Picture N>) and the prompt, each segment "
+                                              "tokenized on its own."),
+                io.Vae.Input("vae", tooltip="The H3 video VAE: encodes the source as <Video 1>, each reference picture "
+                                            "and each pinned keyframe."),
+                io.Vae.Input("audio_vae", tooltip="The H3 audio VAE: encodes the soundtrack (or silence) resampled to "
+                                                  "32 kHz stereo; that audio latent is held clean (noise "
+                                                  "mask 0)."),
                 io.Image.Input("source", tooltip="The source clip's frames, at 24 fps. Supplies motion, camera, framing "
                                                  "and everything the prompt does not change."),
                 io.String.Input("prompt", multiline=True, tooltip="The six-section prompt, used verbatim."),
@@ -151,12 +156,30 @@ class MiniMaxH3_RemakeConditioning(io.ComfyNode):
                              tooltip="480 (832x480 for 16:9) or 736 (1280x736)."),
                 io.Audio.Input("audio", optional=True, tooltip="The soundtrack kept in the output, usually the source's "
                                                                "own. Silence when not connected."),
-                io.Image.Input("ref_2", optional=True),
-                io.Image.Input("ref_3", optional=True),
-                io.Image.Input("ref_4", optional=True),
+                io.Image.Input("ref_2", optional=True,
+                               tooltip="<Picture 2>: optional extra reference image (first frame of the batch "
+                                       "used), resized to its own aspect at short_edge. Needs a pin when pins "
+                                       "are given."),
+                io.Image.Input("ref_3", optional=True,
+                               tooltip="<Picture 3>: optional extra reference image (first frame of the batch "
+                                       "used), resized to its own aspect at short_edge. Needs a pin when pins "
+                                       "are given."),
+                io.Image.Input("ref_4", optional=True,
+                               tooltip="<Picture 4>: optional extra reference image (first frame of the batch "
+                                       "used), resized to its own aspect at short_edge. Needs a pin when pins "
+                                       "are given."),
             ],
-            outputs=[io.Conditioning.Output(display_name="positive"), io.Latent.Output(display_name="latent"),
-                     io.String.Output(display_name="report")],
+            outputs=[io.Conditioning.Output(display_name="positive",
+                                            tooltip="The encoded prompt with the source (<Video 1>), the "
+                                                    "pictures and any pinned keyframes attached. Wire to H3 "
+                                                    "Remake Noise and the sampler's guider."),
+                     io.Latent.Output(display_name="latent",
+                                      tooltip="Empty H3 audio + video latent of `frames` frames (5k+2 latent "
+                                              "frames) on the canvas; video noise mask 1 (generated), audio "
+                                              "latent of the soundtrack with mask 0 (held clean)."),
+                     io.String.Output(display_name="report",
+                                      tooltip="One line: frames, canvas and crop, picture count, pins, "
+                                              "soundtrack held or silence.")],
         )
 
     @classmethod
@@ -215,11 +238,15 @@ class MiniMaxH3_RemakeKeyframeUntil(io.ComfyNode):
             node_id="MiniMaxH3_RemakeKeyframeUntil", display_name="H3 Remake Keyframe Until", category=CATEGORY,
             description="Drops Remake's pinned keyframes once sigma falls below keyframe_until (0.9 = the last two of "
                         "six forwards); the references alone remain.",
-            inputs=[io.Model.Input("model"),
+            inputs=[io.Model.Input("model", tooltip="The H3 model (with the Remake LoRA) the keyframe-release "
+                                                    "wrapper is added to; the input is cloned, not changed."),
                     io.Float.Input("keyframe_until", default=0.9, min=0.0, max=1.0, step=0.01,
                                    tooltip="The keyframes condition every forward whose sigma is at least this; below "
                                            "it they are dropped and the references alone remain.")],
-            outputs=[io.Model.Output(display_name="model")],
+            outputs=[io.Model.Output(display_name="model",
+                                     tooltip="Clone of the model with a diffusion-model wrapper that drops the "
+                                             "pinned keyframes from the payload once sigma < keyframe_until. "
+                                             "Wire to the sampler.")],
         )
 
     @classmethod
@@ -258,9 +285,16 @@ class MiniMaxH3_RemakeNoise(io.ComfyNode):
             node_id="MiniMaxH3_RemakeNoise", display_name="H3 Remake Noise", category=CATEGORY,
             description="Draws the starting noise in Remake's reference order (refs and keyframes first, then the "
                         "target), so a seed gives the same video as the reference script.",
-            inputs=[io.Conditioning.Input("positive"),
-                    io.Int.Input("seed", default=0, min=0, max=0xffffffffffffffff, control_after_generate=True)],
-            outputs=[io.Noise.Output(display_name="noise")],
+            inputs=[io.Conditioning.Input("positive",
+                                          tooltip="H3 Remake Conditioning / Replace output. Only read for the "
+                                                  "shapes of its reference and keyframe latents, whose noise is "
+                                                  "drawn (and discarded) before the target's."),
+                    io.Int.Input("seed", default=0, min=0, max=0xffffffffffffffff, control_after_generate=True,
+                                 tooltip="Seed of the one CPU generator used for all noise draws.")],
+            outputs=[io.Noise.Output(display_name="noise",
+                                     tooltip="NOISE for SamplerCustomAdvanced: per latent part (video, audio) "
+                                             "drawn after skipping the reference / keyframe draws, in the "
+                                             "reference script's order.")],
         )
 
     @classmethod
@@ -278,13 +312,20 @@ class MiniMaxH3_RemakePrefix(io.ComfyNode):
             node_id="MiniMaxH3_RemakePrefix", display_name="H3 Remake Prefix", category=CATEGORY,
             description="A hop: the previous take's frames open this render, their latents clean with noise_mask 0 - "
                         "never stepped, they come out unchanged, like the held soundtrack.",
-            inputs=[io.Vae.Input("vae"), io.Latent.Input("latent"),
+            inputs=[io.Vae.Input("vae", tooltip="The H3 video VAE that encodes the prefix frames (padded to "
+                                                "17m+5, first 5m latent frames kept)."),
+                    io.Latent.Input("latent", tooltip="H3 audio + video latent with a noise mask (H3 Remake "
+                                                      "Conditioning / Replace). Its first prefix_frames/17*5 "
+                                                      "latent frames must be fewer than the render's."),
                     io.Image.Input("prefix", tooltip="The previous take's frames, on this render's canvas."),
                     io.Int.Input("prefix_frames", default=17, min=17, max=323, step=17,
                                  tooltip="How many of its frames open this render, a multiple of 17."),
                     io.Int.Input("prefix_at", default=-1, min=-1, max=100000,
                                  tooltip="The previous take's frame they start at; -1: its last prefix_frames.")],
-            outputs=[io.Latent.Output(display_name="latent")],
+            outputs=[io.Latent.Output(display_name="latent",
+                                      tooltip="The latent with its first prefix_frames/17*5 video latent frames "
+                                              "replaced by the encoded prefix and their noise mask set to 0 "
+                                              "(held clean); audio unchanged.")],
         )
 
     @classmethod
@@ -398,9 +439,14 @@ class MiniMaxH3_RemakeReplace(io.ComfyNode):
                         "edit mask and boxes for H3 Plate Restore. Needs the Remake LoRA. Experimental: not A/B-tested "
                         "on H3 weights.",
             inputs=[
-                io.Clip.Input("clip"),
-                io.Vae.Input("vae"),
-                io.Vae.Input("audio_vae"),
+                io.Clip.Input("clip", tooltip="The H3 text encoder (Qwen3-VL). Encodes the text-only labels (<Video 1>, "
+                                              "time stamps, <Picture N>) and the prompt, each segment "
+                                              "tokenized on its own."),
+                io.Vae.Input("vae", tooltip="The H3 video VAE: encodes the window as <Video 1>, each picture, the pinned "
+                                            "anchor and any held context / plate frames."),
+                io.Vae.Input("audio_vae", tooltip="The H3 audio VAE: encodes the soundtrack (or silence) resampled to "
+                                                  "32 kHz stereo; that audio latent is held clean (noise "
+                                                  "mask 0)."),
                 io.Image.Input("window", tooltip="This segment's plate frames (H3 Job Controller window -> Frame Window, "
                                                  "or H3 Subject Crop's crops), 17n + 5 frames at 24 fps."),
                 io.Image.Input("anchor", tooltip="H3 Anchor Approval's anchor: frame anchor_frame of the take repainted "
@@ -433,12 +479,21 @@ class MiniMaxH3_RemakeReplace(io.ComfyNode):
                                          "trained to regenerate the whole target; Plate Restore restores the outside "
                                          "exactly either way)."),
             ],
-            outputs=[io.Conditioning.Output(display_name="positive"), io.Latent.Output(display_name="latent"),
+            outputs=[io.Conditioning.Output(display_name="positive",
+                                            tooltip="The prompt (written for the mode when empty) with the window "
+                                                    "as <Video 1>, the anchor + references as <Picture N> and, on "
+                                                    "the first window only, the anchor pinned at anchor_frame."),
+                     io.Latent.Output(display_name="latent",
+                                      tooltip="H3 audio + video latent on the canvas (5k+2 latent frames). Video "
+                                              "mask 1 except held context frames (and, with hold_outside_mask, "
+                                              "the plate outside the mask); audio held clean."),
                      io.Image.Output(display_name="plate_canvas", tooltip="The window on the render canvas."),
                      io.Mask.Output(display_name="edit_mask", tooltip="Canvas-space mask for H3 Plate Restore."),
                      io.BoundingBox.Output(display_name="bboxes",
                                            tooltip="Whole-window boxes for H3 Plate Restore (decoded canvas -> window)."),
-                     io.String.Output(display_name="report")],
+                     io.String.Output(display_name="report",
+                                      tooltip="JSON: mode, frames, canvas and window size, pinned frame, prefix "
+                                              "frames, picture count and notes.")],
         )
 
     @classmethod

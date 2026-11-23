@@ -55,9 +55,20 @@ class MiniMaxH3_MotionContext(io.ComfyNode):
                 "latent. " + _ATTRIBUTION
             ),
             inputs=[
-                io.Conditioning.Input("conditioning"),
-                io.Vae.Input("vae"),
-                io.Latent.Input("latent"),
+                io.Conditioning.Input(
+                    "conditioning",
+                    tooltip="Positive H3 conditioning of this clip. The pinned frames are added as keyframes at "
+                            "frames 0..n-1; existing keyframes inside that head are dropped.",
+                ),
+                io.Vae.Input(
+                    "vae",
+                    tooltip="H3 video VAE: encodes context_frames (used only when no context_latent is wired).",
+                ),
+                io.Latent.Input(
+                    "latent",
+                    tooltip="This clip's (empty) H3 latent. Only its shape is read: width / height and the "
+                            "pixel frame count; it is not changed or output.",
+                ),
                 io.Combo.Input(
                     "context_length",
                     options=["22", "5", "39", "56"],
@@ -94,9 +105,22 @@ class MiniMaxH3_MotionContext(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Conditioning.Output("conditioning"),
-                io.Int.Output("trim_frames"),
-                io.String.Output("report"),
+                io.Conditioning.Output(
+                    "conditioning",
+                    tooltip="The conditioning with the previous clip's tail pinned as never-denoised keyframe "
+                            "rows at the head (plus the tail audio on the timeline). Unchanged when no context "
+                            "is wired.",
+                ),
+                io.Int.Output(
+                    "trim_frames",
+                    tooltip="Pixel frames pinned at the head (0 when no context). Wire to Motion Context Trim "
+                            "to drop them after decoding.",
+                ),
+                io.String.Output(
+                    "report",
+                    tooltip="Text: video source, frames pinned, keyframe indices, clip size, trim and audio "
+                            "placement.",
+                ),
             ],
         )
 
@@ -172,8 +196,18 @@ class MiniMaxH3_MotionContextTrim(io.ComfyNode):
                 + _ATTRIBUTION
             ),
             inputs=[
-                io.Image.Input("images"),
-                io.Int.Input("trim_frames", default=0, min=0, max=4096),
+                io.Image.Input(
+                    "images",
+                    tooltip="Decoded frames of the clip, pinned head included.",
+                ),
+                io.Int.Input(
+                    "trim_frames",
+                    default=0,
+                    min=0,
+                    max=4096,
+                    tooltip="Leading frames to remove (Motion Context trim_frames). Audio loses trim_frames / "
+                            "fps seconds. 0 = nothing removed; must be less than the frame count.",
+                ),
                 io.Audio.Input(
                     "audio",
                     optional=True,
@@ -194,9 +228,19 @@ class MiniMaxH3_MotionContextTrim(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Image.Output("images"),
-                io.Audio.Output("audio"),
-                io.String.Output("report"),
+                io.Image.Output(
+                    "images",
+                    tooltip="The frames after the first trim_frames.",
+                ),
+                io.Audio.Output(
+                    "audio",
+                    tooltip="Audio with the same duration cut from the start (and, with match_tail, cut / "
+                            "zero-padded to frames / fps). None when no audio is wired.",
+                ),
+                io.String.Output(
+                    "report",
+                    tooltip="Text: frames trimmed, tail adjustment and picture / sound drift in ms.",
+                ),
             ],
         )
 
@@ -248,8 +292,16 @@ class MiniMaxH3_MotionContextSaveLatent(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.String.Output("latent_path"),
-                io.String.Output("report"),
+                io.String.Output(
+                    "latent_path",
+                    tooltip="Full path of the written .safetensors (video + audio latents): "
+                            "<prefix>_<clip_index:05d>.safetensors, or an auto-numbered name when clip_index "
+                            "is 0.",
+                ),
+                io.String.Output(
+                    "report",
+                    tooltip="Text: saved path and the video / audio latent shapes.",
+                ),
             ],
             is_output_node=True,
         )
@@ -290,8 +342,15 @@ class MiniMaxH3_MotionContextLoadLatent(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Latent.Output("latent"),
-                io.String.Output("report"),
+                io.Latent.Output(
+                    "latent",
+                    tooltip="The saved AV latent ({'samples': [video, audio]}) for Motion Context "
+                            "context_latent only - not decodable. None when clip_index is 0.",
+                ),
+                io.String.Output(
+                    "report",
+                    tooltip="Text: loaded path and latent shapes, or that clip_index 0 loads nothing.",
+                ),
             ],
             not_idempotent=True,
         )
@@ -342,7 +401,8 @@ class MiniMaxH3_MotionContextChain(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.String.Output("report"),
+                io.String.Output("report", tooltip="Plain-text deprecation note pointing to H3 Continuation Next + "
+                                                   "Commit; the node does no other work."),
             ],
             is_output_node=True,
         )
@@ -397,6 +457,8 @@ class MiniMaxH3_MotionContextSeamProbe(io.ComfyNode):
                     min=1.0,
                     max=240.0,
                     step=0.001,
+                    tooltip="Frame rate that converts trim_frames (and clip A's frame count) into seconds / "
+                            "samples. H3 clips are 24 fps.",
                 ),
                 io.Float.Input(
                     "window_ms",
@@ -404,6 +466,8 @@ class MiniMaxH3_MotionContextSeamProbe(io.ComfyNode):
                     min=5.0,
                     max=500.0,
                     step=1.0, extra_dict={"c2c_section": "Probe"},
+                    tooltip="Length in ms of each clip B window cross-correlated against clip A's tail "
+                            "(windows step every 25 ms over the pinned span).",
                 ),
                 io.Float.Input(
                     "search_ms",
@@ -411,11 +475,21 @@ class MiniMaxH3_MotionContextSeamProbe(io.ComfyNode):
                     min=5.0,
                     max=500.0,
                     step=1.0, extra_dict={"c2c_section": "Probe"},
+                    tooltip="How far in ms either side of the expected position the lag is searched; a lag "
+                            "pegged at this limit is flagged in the report.",
                 ),
             ],
             outputs=[
-                io.Audio.Output("audio"),
-                io.String.Output("report"),
+                io.Audio.Output(
+                    "audio",
+                    tooltip="clip_b_untrimmed passed through unchanged.",
+                ),
+                io.String.Output(
+                    "report",
+                    tooltip="Text: continuation over the pinned span (normalized cross-correlation, lag in ms) "
+                            "and the level / noise-floor step across the cut, with a reading. Measurement "
+                            "only.",
+                ),
             ],
             is_output_node=True,
         )

@@ -120,8 +120,11 @@ class MiniMaxH3_PrepareContinuation(io.ComfyNode):
                 io.Int.Output(display_name="actual_overlap_frames",
                               tooltip="Overlap after snapping - feed THIS to Stitch "
                                       "Continuation, not your requested value."),
-                io.Float.Output(display_name="overlap_seconds"),
-                io.String.Output(display_name="report"),
+                io.Float.Output(display_name="overlap_seconds",
+                                tooltip="actual_overlap_frames / 24, in seconds."),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: frames, pinned overlap and source length, context "
+                                         "denoise values, and a note when the overlap was snapped."),
             ],
         )
 
@@ -206,9 +209,15 @@ class MiniMaxH3_StitchContinuation(io.ComfyNode):
                             "across many passes just starves the sampler.", extra_dict={"c2c_section": "Performance"}),
             ],
             outputs=[
-                io.Latent.Output(display_name="stitched_av"),
-                io.Int.Output(display_name="total_frames"),
-                io.String.Output(display_name="report"),
+                io.Latent.Output(display_name="stitched_av",
+                                 tooltip="H3 AV latent: the previous segment followed by the continuation "
+                                         "minus its overlap (optionally blended across it); length and A/V "
+                                         "sync are verified. Feed it back as previous_av or decode it."),
+                io.Int.Output(display_name="total_frames",
+                              tooltip="Pixel frames of stitched_av (previous + continuation - overlap)."),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: frames joined, overlap used, audio / video latent rows, "
+                                         "blend / offload, and whether the overlap was checked."),
             ],
         )
 
@@ -280,10 +289,17 @@ class MiniMaxH3_PackAV(io.ComfyNode):
                 "lets you pin one and regenerate the other."
             ),
             inputs=[
-                io.Latent.Input("video_latent"),
-                io.Latent.Input("audio_latent"),
+                io.Latent.Input("video_latent",
+                                tooltip="H3 video latent [1, 24, T, h, w]; T must be 5k+2 latent frames (17k+5 "
+                                        "frames). Batch 1 only. Its noise mask, if any, is kept."),
+                io.Latent.Input("audio_latent",
+                                tooltip="H3 audio latent [1, 32, 2, T] whose length must match the video's "
+                                        "frames (40 audio latents per second). Its noise mask, if any, is "
+                                        "kept."),
             ],
-            outputs=[io.Latent.Output(display_name="av_latent")],
+            outputs=[io.Latent.Output(display_name="av_latent",
+                                      tooltip="Joint AV latent (NestedTensor video, audio). When either input "
+                                              "had a noise mask, a mask pair (missing one = all 1).")],
         )
 
 
@@ -308,10 +324,16 @@ class MiniMaxH3_SplitAV(io.ComfyNode):
                 "Neither stream inherits the other's noise mask, so you can work on "
                 "one without silently constraining the other."
             ),
-            inputs=[io.Latent.Input("av_latent")],
+            inputs=[io.Latent.Input("av_latent",
+                                    tooltip="A joint H3 AV latent (NestedTensor video + audio, with or "
+                                            "without a noise-mask pair).")],
             outputs=[
-                io.Latent.Output(display_name="video_latent"),
-                io.Latent.Output(display_name="audio_latent"),
+                io.Latent.Output(display_name="video_latent",
+                                 tooltip="The video stream [B, 24, T, h, w] with its own noise mask (if "
+                                         "any) and the AV latent's other keys."),
+                io.Latent.Output(display_name="audio_latent",
+                                 tooltip="The audio stream [B, 32, 2, T] with its own noise mask (if any) "
+                                         "and the AV latent's other keys."),
             ],
         )
 
@@ -366,7 +388,10 @@ class MiniMaxH3_MergeAV(io.ComfyNode):
                                step=0.01,
                                tooltip="The same for the merged audio.", extra_dict={"c2c_section": "Noise mask"}),
             ],
-            outputs=[io.Latent.Output(display_name="av_latent")],
+            outputs=[io.Latent.Output(display_name="av_latent",
+                                      tooltip="AV latent in the target's geometry: video and audio each "
+                                              "lerped toward the source by their mix, with constant noise "
+                                              "masks video_denoise / audio_denoise.")],
         )
 
 

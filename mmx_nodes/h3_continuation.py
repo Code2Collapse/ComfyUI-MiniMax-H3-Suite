@@ -135,7 +135,10 @@ class MiniMaxH3_ContinuationNext(io.ComfyNode):
                 io.Conditioning.Output(display_name="positive", tooltip="The conditioning, minus guides inside the "
                                                                         "pinned head (it is already fixed)."),
                 io.String.Output(display_name="segment", tooltip="For H3 Continuation Commit."),
-                io.String.Output(display_name="report"),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: this segment's frame range and pinned overlap, source / "
+                                         "soundtrack / control notes, dropped guides, and frames accepted "
+                                         "so far in the session."),
                 io.Image.Output(display_name="segment_source", tooltip="This segment's frames of source_video (for "
                                                                        "an exact composite before Commit). Empty "
                                                                        "unless source_video is connected."),
@@ -409,7 +412,10 @@ class MiniMaxH3_ContinuationCommit(io.ComfyNode):
             outputs=[
                 io.Image.Output(display_name="new_frames", tooltip="The frames this segment added."),
                 io.Audio.Output(display_name="new_audio", tooltip="The sound this segment added."),
-                io.String.Output(display_name="report"),
+                io.String.Output(display_name="report",
+                                 tooltip="Text: pinned-head check, frozen-ending handling, frames added and "
+                                         "accept / hold decision, drift and seam metrics, accepted total and "
+                                         "session folder."),
                 io.String.Output(display_name="state_json", tooltip="The session state after this segment."),
             ],
             is_output_node=True,
