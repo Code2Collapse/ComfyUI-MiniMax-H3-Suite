@@ -56,7 +56,10 @@ skew the statistics — then enable it.
 
 ## Chain
 
-`N7 Frame Handles` → `N1 Track + Crop` → `N3 Control Hints` → `N2 Mask Prep` → `N4 Masked Replace` → **sampling guards** → *(sampler block)* → `N5 Stitch Back` → `N6 Detail Reinject`
+`N7 Frame Handles` → `N1 Track + Crop` → `N3 Control Hints` → `N2 Mask Prep` → `N4 Masked Replace` → **sampling guards** → *(sampler block)* → `N5 Stitch Back` → `N6 Detail Reinject` → `N7 Frame Handles (trim back)` → Create Video
+
+The second Frame Handles node takes the first one's `handles` output on `undo_handles` and removes exactly the frames
+and sound the first one added (2026-11-23, L8.56): the delivered clip starts on the plate's first frame.
 
 ### Sampling sub-chain (Slice F)
 
@@ -130,7 +133,7 @@ machine. The CPU wiring tests (graph loads, types match, validators pass) do run
 
 ### `h3_full_spine_pipeline.json` (Phase C1 — full spine)
 
-`N7 Frame Handles` → `N1 Track + Crop` → `N8 Strongest Pose` / `N9 Temporal Depth` → `N10 Region Mask` → `N2 Mask Prep` → `N4 Masked Replace` → `P1 Sigma Shift Locked` + `P3 Legal Scheduler` → *(sampler)* → `N5 Stitch Back` → `N6 Detail Reinject` → `N11 Drift QC`
+`N7 Frame Handles` → `N1 Track + Crop` → `N8 Strongest Pose` / `N9 Temporal Depth` → `N10 Region Mask` → `N2 Mask Prep` → `N4 Masked Replace` → `P1 Sigma Shift Locked` + `P3 Legal Scheduler` → *(sampler)* → `N5 Stitch Back` → `N6 Detail Reinject` → `N7 Frame Handles (trim back)` → Create Video (and `N11 Drift QC`)
 
 | ID | Type |
 |----|------|

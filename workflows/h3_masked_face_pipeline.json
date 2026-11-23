@@ -1,8 +1,8 @@
 {
   "id": "4da07d9f-cc44-495b-8bd4-0d0fe3b13399",
   "revision": 0,
-  "last_node_id": 28,
-  "last_link_id": 49,
+  "last_node_id": 29,
+  "last_link_id": 54,
   "nodes": [
     {
       "id": 1,
@@ -117,6 +117,21 @@
           "type": "AUDIO",
           "pos": null,
           "link": 23
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "undo_handles",
+          "locked": null,
+          "name": "undo_handles",
+          "nameLocked": null,
+          "removable": null,
+          "shape": 7,
+          "type": "STRING",
+          "pos": null,
+          "link": null
         }
       ],
       "outputs": [
@@ -188,6 +203,24 @@
           "pos": null,
           "slot_index": null,
           "links": null
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "handles",
+          "locked": null,
+          "name": "handles",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "STRING",
+          "pos": null,
+          "slot_index": null,
+          "links": [
+            52
+          ]
         }
       ],
       "properties": {
@@ -2385,7 +2418,7 @@
           "pos": null,
           "slot_index": null,
           "links": [
-            39
+            50
           ]
         },
         {
@@ -3218,7 +3251,7 @@
           "pos": null,
           "slot_index": null,
           "links": [
-            40
+            51
           ]
         }
       ],
@@ -3238,7 +3271,7 @@
         150
       ],
       "flags": {},
-      "order": 26,
+      "order": 27,
       "mode": 0,
       "showAdvanced": null,
       "inputs": [
@@ -3255,7 +3288,7 @@
           "shape": null,
           "type": "IMAGE",
           "pos": null,
-          "link": 39
+          "link": 53
         },
         {
           "color_off": null,
@@ -3287,7 +3320,7 @@
           "shape": 7,
           "type": "AUDIO",
           "pos": null,
-          "link": 40
+          "link": 54
         },
         {
           "color_off": null,
@@ -3389,7 +3422,7 @@
         106
       ],
       "flags": {},
-      "order": 27,
+      "order": 28,
       "mode": 0,
       "showAdvanced": null,
       "inputs": [
@@ -3868,6 +3901,241 @@
         "start_percent": 0,
         "end_percent": 1
       }
+    },
+    {
+      "id": 29,
+      "type": "MiniMaxH3_FrameHandles",
+      "pos": [
+        2760,
+        300
+      ],
+      "size": [
+        320,
+        226
+      ],
+      "flags": {},
+      "order": 26,
+      "mode": 0,
+      "showAdvanced": null,
+      "inputs": [
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "images",
+          "locked": null,
+          "name": "images",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "IMAGE",
+          "pos": null,
+          "link": 50
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "handle_frames",
+          "locked": null,
+          "name": "handle_frames",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "INT",
+          "widget": {
+            "name": "handle_frames"
+          },
+          "link": null
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "padding_mode",
+          "locked": null,
+          "name": "padding_mode",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "COMBO",
+          "widget": {
+            "name": "padding_mode"
+          },
+          "link": null
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "handle_side",
+          "locked": null,
+          "name": "handle_side",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "COMBO",
+          "widget": {
+            "name": "handle_side"
+          },
+          "link": null
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "fps",
+          "locked": null,
+          "name": "fps",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "FLOAT",
+          "widget": {
+            "name": "fps"
+          },
+          "link": null
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "audio",
+          "locked": null,
+          "name": "audio",
+          "nameLocked": null,
+          "removable": null,
+          "shape": 7,
+          "type": "AUDIO",
+          "pos": null,
+          "link": 51
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "undo_handles",
+          "locked": null,
+          "name": "undo_handles",
+          "nameLocked": null,
+          "removable": null,
+          "shape": 7,
+          "type": "STRING",
+          "pos": null,
+          "link": 52
+        }
+      ],
+      "outputs": [
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "images",
+          "locked": null,
+          "name": "images",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "IMAGE",
+          "pos": null,
+          "slot_index": null,
+          "links": [
+            53
+          ]
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "audio",
+          "locked": null,
+          "name": "audio",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "AUDIO",
+          "pos": null,
+          "slot_index": null,
+          "links": [
+            54
+          ]
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "frame_count",
+          "locked": null,
+          "name": "frame_count",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "INT",
+          "pos": null,
+          "slot_index": null,
+          "links": []
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "report",
+          "locked": null,
+          "name": "report",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "STRING",
+          "pos": null,
+          "slot_index": null,
+          "links": []
+        },
+        {
+          "color_off": null,
+          "color_on": null,
+          "dir": null,
+          "label": null,
+          "localized_name": "handles",
+          "locked": null,
+          "name": "handles",
+          "nameLocked": null,
+          "removable": null,
+          "shape": null,
+          "type": "STRING",
+          "pos": null,
+          "slot_index": null,
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3_FrameHandles"
+      },
+      "widgets_values": [
+        0,
+        "H3 (17n+5)",
+        "head",
+        24
+      ],
+      "widgets_values_named": {
+        "handle_frames": 0,
+        "padding_mode": "H3 (17n+5)",
+        "handle_side": "head",
+        "fps": 24
+      },
+      "color": "#12132f",
+      "bgcolor": "#0c0d23",
+      "title": "H3 Frame Handles (trim back)"
     }
   ],
   "links": [
@@ -4112,22 +4380,6 @@
       "MASK"
     ],
     [
-      39,
-      13,
-      0,
-      24,
-      0,
-      "IMAGE"
-    ],
-    [
-      40,
-      23,
-      0,
-      24,
-      2,
-      "AUDIO"
-    ],
-    [
       41,
       24,
       0,
@@ -4198,6 +4450,46 @@
       10,
       0,
       "MODEL"
+    ],
+    [
+      50,
+      13,
+      0,
+      29,
+      0,
+      "IMAGE"
+    ],
+    [
+      51,
+      23,
+      0,
+      29,
+      5,
+      "AUDIO"
+    ],
+    [
+      52,
+      1,
+      4,
+      29,
+      6,
+      "STRING"
+    ],
+    [
+      53,
+      29,
+      0,
+      24,
+      0,
+      "IMAGE"
+    ],
+    [
+      54,
+      29,
+      1,
+      24,
+      2,
+      "AUDIO"
     ]
   ],
   "floatingLinks": null,
