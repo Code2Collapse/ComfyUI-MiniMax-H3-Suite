@@ -122,7 +122,12 @@ def run_display_roundtrip_qc(
 ) -> RoundTripResult:
     if image.ndim == 3:
         image = image.unsqueeze(0)
-    plane = image[0].detach().cpu().numpy()
+    frames = image.detach().cpu().numpy()
+    b, h = int(frames.shape[0]), int(frames.shape[1])
+    # Every frame, as one tall plane: the OCIO transform is per pixel, so stacking along H is exact. Only frame 0 was
+    # checked before, so a gate passed clips whose later frames failed (L9.312). The SDR-clamp check reads the clip's
+    # peak, so a dark frame inside an HDR clip is not flagged.
+    plane = frames.reshape(b * h, *frames.shape[2:])
     clamp_note = _detect_scene_linear_clamp(plane, scene_colorspace)
     recovered = roundtrip_plane(
         plane,
@@ -132,15 +137,24 @@ def run_display_roundtrip_qc(
         config=config,
     )
     result = evaluate_roundtrip(plane, recovered, tolerance=tolerance)
+    err_map = result.error_map.reshape(b, h, *result.error_map.shape[1:])
+    worst = int(np.argmax(err_map.reshape(b, -1).max(axis=1)))
+    report = f"{result.report}\n{b} frame(s) checked; largest error in frame {worst} (from 0)"
     if clamp_note:
         return RoundTripResult(
             passed=False,
             max_error=result.max_error,
-            report=clamp_note + f"; {result.report}",
-            error_map=result.error_map,
+            report=clamp_note + f"; {report}",
+            error_map=err_map,
             hdr_preserved=False,
         )
-    return result
+    return RoundTripResult(
+        passed=result.passed,
+        max_error=result.max_error,
+        report=report,
+        error_map=err_map,
+        hdr_preserved=result.hdr_preserved,
+    )
 
 
 def clamp_for_vacuous_test(image: np.ndarray) -> np.ndarray:

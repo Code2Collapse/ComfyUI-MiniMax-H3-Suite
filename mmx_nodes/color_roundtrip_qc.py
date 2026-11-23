@@ -47,8 +47,8 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
                 "Use the HDR probe [0, 0.5, 1, 4, 16] in tests — values above 1.0 must survive."
             ),
             inputs=[
-                io.Image.Input("image", tooltip="Scene-linear frames in scene_colorspace. Only the FIRST frame is "
-                                                "round-tripped; a scene-linear frame whose peak is <= 1.0 fails as "
+                io.Image.Input("image", tooltip="Scene-linear frames in scene_colorspace. Every frame is round-"
+                                                "tripped; a scene-linear clip whose peak is <= 1.0 fails as "
                                                 "'clamped to SDR'."),
                 io.Combo.Input(
                     "scene_colorspace",
@@ -77,11 +77,11 @@ class MiniMaxH3_ColorRoundTripQC(io.ComfyNode):
                 io.Boolean.Output("passed", tooltip="True when max_error <= tolerance, every value above 1.0 stays "
                                                     "above 1.0 after the round trip, and the input was not SDR-"
                                                     "clamped."),
-                io.Float.Output("max_error", tooltip="Largest absolute per-channel difference between the first "
-                                                     "frame and its round trip (scene-linear units)."),
+                io.Float.Output("max_error", tooltip="Largest absolute per-channel difference between any frame "
+                                                     "and its round trip (scene-linear units)."),
                 io.String.Output("report", tooltip="Text: OCIO config source, max error vs tolerance with the worst "
                                                    "channel, HDR probe note; starts with 'FAILED' on failure."),
-                io.Image.Output("error_map", tooltip="IMAGE of the first frame's per-pixel max absolute error over "
+                io.Image.Output("error_map", tooltip="IMAGE batch, one per frame: per-pixel max absolute error over "
                                                      "R/G/B (one channel, not normalised), at the input size."),
                 io.Image.Output("image_out", tooltip="The checked image, unchanged: wire it on so a failed gate "
                                                       "(on_fail = stop the run) stops before what comes next."),

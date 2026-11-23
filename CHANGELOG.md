@@ -21,6 +21,11 @@
   to 32, 128-1344) and auto_capped_768 does the same but stops at 768, as in H3 Face Track Crop. Both always gave
   768x768 before. Saved workflows that use an auto mode get a different crop size (output frames and transform
   canvas) unless the largest crop rounds to 768.
+- H3 Color Round-Trip QC: every frame is now checked, not only the first. `max_error` and `passed` cover the whole
+  clip, `error_map` has one frame per input frame, the report names the frame with the largest error, and the
+  "clamped to SDR" check reads the peak of the whole clip (a dark first frame in an HDR clip no longer fails it).
+  Saved workflows with multi-frame input can now fail where they passed, and `error_map` returns more frames. Each
+  extra frame costs one more OCIO round trip on the CPU.
 
 ## 1.2.0 - 2026-11-23
 
