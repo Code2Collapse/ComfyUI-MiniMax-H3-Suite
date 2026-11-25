@@ -1,0 +1,406 @@
+# PORTED FROM: https://github.com/mo-akkakk/ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles@2dae4c4 __init__.py (MIT,
+# Copyright (c) 2026 Mohamed (mo-akkakk); licence text in THIRD_PARTY_LICENSES/
+# ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles-LICENSE.txt). Distributed as part of a GPL-3.0 work.
+# Modified by Code2Collapse, 2026-11-26: Suite node ids MiniMaxH3_*, Suite category, the OLD 1.4.0 node and the
+# extension entry point left out (the Suite registers the classes itself).
+"""MiniMax H3 temporal windows / spatial tiles, prefix carry, Multi Guide, Reference to Video HiRes (mo-akkakk)."""
+from comfy_api.latest import io
+
+import logging
+
+CATEGORY = "MiniMax H3/Temporal Windows"
+
+from .h3_guides import apply_until, keyframe_counts, tag_new_keyframes
+from .h3_refs import BigVideoVAE, set_video_block_sizes
+from .h3_windows import WindowsWrapper, apply, parse_schedule, recording_clip
+
+
+class MiniMaxH3_LongGeneration(io.ComfyNode):
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="MiniMaxH3_LongGeneration",
+            display_name="Minimax H3 Long Generation",
+            category=CATEGORY,
+            search_aliases=["h3 long generation", "h3 prompt schedule", "h3 long t2v", "h3 long i2v", "minimax long video", "mo-akkakk"],
+            description="For text-to-video, image-to-video and first/last-frame generation (no reference video). Put after the model, "
+                        "and route the CLIP through it into Image to Video or Reference to Video. The video is generated as overlapping "
+                        "windows, one after another, each continuing from the previous one, with an optional prompt schedule so the "
+                        "story moves on instead of restarting every window. For video-to-video use the V2V node instead.",
+            inputs=[
+                io.Model.Input("model"),
+                io.Clip.Input("clip", optional=True,
+                              tooltip="Route the CLIP through here into Image to Video or Reference to Video. Needed for the prompt schedule "
+                                      "and for keeping the first/last image only in its own window."),
+                io.String.Input("prompt_schedule", multiline=True, default="",
+                                tooltip="Optional timeline for the whole video, one line per action, in seconds (H3 runs at 24 fps):\n"
+                                        "0s: he walks along the street\n6s: he stops at the bakery window\n"
+                                        "or H3's own format: [0s-6s] he walks along the street\n"
+                                        "Write the look, character and setting once in the conditioning node's prompt; it is kept for "
+                                        "every window. Each window then gets that scene plus the part of this timeline it covers, "
+                                        "re-timed so the window starts at 0 s. Empty = a 'Timeline:' written in the conditioning "
+                                        "prompt is re-timed the same way; with none, every window uses the prompt as it is."),
+                io.Boolean.Input("continuous_shot", default=True,
+                                 tooltip="Add 'One continuous shot, no cuts.' to every window's prompt, so H3 continues the carried "
+                                         "frames instead of cutting to a new shot when the action changes. Turn off if you want cuts."),
+                io.Int.Input("window_frames", default=124, min=22, max=3600, step=17,
+                             tooltip="Frames per window (17k+5). 124 = 5.2 s. Keep it inside what works natively for you."),
+                io.Boolean.Input("short_final_window", default=False,
+                                 tooltip="Let the last window be shorter than window_frames instead of pulling it back to full length."),
+                io.Int.Input("min_final_window_frames", default=22, min=5, max=3600, step=17,
+                             tooltip="With short_final_window on: the last window is never shorter than this (17k+5: 5, 22, 39, 56...)."),
+                io.Combo.Input("carry_mode", options=["prefix", "carry_frames"], default="prefix",
+                               tooltip="How each window continues from the previous one. "
+                                       "prefix (default): the previous window's last carry_prefix_frames are put into the start "
+                                       "of the next window as frozen frames. They are not generated again, so the hand-off is "
+                                       "exact (no crossfade) and they add no extra tokens. "
+                                       "carry_frames: the 1.5.0 method. Windows overlap by overlap_frames, the next window "
+                                       "regenerates the overlap guided by the previous window's last carry_prefix_frames "
+                                       "(extra tokens), and the two versions are crossfaded."),
+                io.Int.Input("carry_prefix_frames", default=39, min=5, max=1000, step=17,
+                             tooltip="prefix: how many frames of the previous window start the next one, frozen (5, 22, 39...). "
+                                     "Without a reference video these frames are what the next window continues the motion "
+                                     "from, so 39 is recommended. Must be less than window_frames. "
+                                     "carry_frames: how many of the overlap frames guide the next window (at or above "
+                                     "overlap_frames = the whole overlap)."),
+                io.Int.Input("overlap_frames", default=39, min=5, max=1000, step=17,
+                             tooltip="carry_mode = carry_frames only: frames shared by neighbouring windows (5, 22, 39...). "
+                                     "Without a reference video the overlap is what carries the motion forward, so use more than "
+                                     "for V2V (39 recommended)."),
+                io.Combo.Input("first_last_images", options=["own_window", "all_windows"], default="own_window",
+                               tooltip="Image to Video's first/last frame images in the prompt. own_window: the first image is only in the "
+                                       "first window's prompt and the last image only in the last window's (matches where they are "
+                                       "used as frames). all_windows: every window's prompt shows them (can help keep a character's "
+                                       "look, but later windows may drift back toward the first frame)."),
+            ],
+            outputs=[io.Model.Output(), io.Clip.Output()],
+        )
+
+    @classmethod
+    def execute(cls, model, prompt_schedule, continuous_shot, window_frames, short_final_window, min_final_window_frames,
+                carry_mode, carry_prefix_frames, overlap_frames, first_last_images="own_window", clip=None) -> io.NodeOutput:
+        if carry_mode == "prefix":
+            if carry_prefix_frames >= window_frames:
+                raise ValueError("Minimax H3 Long Generation: carry_prefix_frames ({}) must be less than window_frames ({}), "
+                                 "so each window has new frames to make.".format(carry_prefix_frames, window_frames))
+            overlap, carry, mode = carry_prefix_frames, 0, "prefix"
+        else:
+            overlap, mode = overlap_frames, "guide"
+            carry = carry_prefix_frames if carry_prefix_frames < overlap_frames else 0
+        wrapper = WindowsWrapper(window_frames, overlap, True, 0, 0, 0, False,
+                                 min_final_window_frames if short_final_window else 0,
+                                 schedule=parse_schedule(prompt_schedule), image_policy=first_last_images,
+                                 continuous=continuous_shot, carry_frames=carry, carry_mode=mode)
+        return io.NodeOutput(apply(model, wrapper), recording_clip(clip, record_all=True) if clip is not None else None)
+
+
+MAX_GUIDES = 16
+
+
+class MiniMaxH3_MultiGuide(io.ComfyNode):
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="MiniMaxH3_MultiGuide",
+            display_name="Minimax H3 Multi Guide",
+            category=CATEGORY,
+            search_aliases=["h3 add guide", "h3 multiple guides", "h3 keyframes", "minimax guide frames", "mo-akkakk"],
+            description="Add Guide for MiniMax H3, for many guides in one node. Connect an image (or a clip) to guide_0 and a new "
+                        "guide slot appears, each with its own frame_idx; audio guides work the same way with audio_frame_idx. "
+                        "Each guide is anchored exactly like the native Add Guide node (an image and an audio at the same frame "
+                        "become one guide, as in Add Guide), so this is the same as chaining one Add Guide per guide. "
+                        "until_step: -1 = the guide is used for every step (default), N = only for the first N sampling "
+                        "steps (it sets the composition, then the details are free; needs the model routed through this "
+                        "node), 0 = the guide is switched off.",
+            inputs=[
+                io.Model.Input("model", optional=True,
+                               tooltip="Only needed when a guide has an until_step of 1 or more: route the model through here "
+                                       "(before or after the V2V / Long Generation node, either works) so the guide can be "
+                                       "released after that step."),
+                io.Conditioning.Input("positive"),
+                io.Latent.Input("latent", tooltip="The MiniMax H3 AV latent (from Reference to Video, Image to Video...)."),
+                io.Vae.Input("vae", optional=True, tooltip="Video VAE, needed when an image guide is connected."),
+                io.Vae.Input("audio_vae", optional=True, tooltip="Audio VAE, needed when an audio guide is connected."),
+                io.Autogrow.Input("guides", optional=True, template=io.Autogrow.TemplatePrefix(
+                    input=io.Image.Input("guide", optional=True,
+                                         tooltip="An image, or a clip (anchored as a clip of 5, 22, 39... (17k+5) frames, cropped "
+                                                 "down to that length; clips under 5 frames use their first image)."),
+                    prefix="guide_", min=1, max=MAX_GUIDES)),
+                io.Autogrow.Input("audios", optional=True, template=io.Autogrow.TemplatePrefix(
+                    input=io.Audio.Input("audio", optional=True,
+                                         tooltip="Soundtrack to anchor starting at its audio_frame_idx, cropped to the video's "
+                                                 "remaining duration."),
+                    prefix="audio_", min=1, max=MAX_GUIDES)),
+            ] + [
+                io.Int.Input("frame_idx_{}".format(i), default=0, min=-9999, max=9999,
+                             tooltip="Frame to anchor guide_{} (or its clip's first frame) at. Negative values count from the end "
+                                     "of the video: -1 = last frame.".format(i))
+                for i in range(MAX_GUIDES)
+            ] + [
+                io.Int.Input("audio_frame_idx_{}".format(i), default=0, min=-9999, max=9999,
+                             tooltip="Frame to start audio_{} at. Negative values count from the end of the video. Same frame as "
+                                     "an image guide = one guide with both, like Add Guide with image and audio.".format(i))
+                for i in range(MAX_GUIDES)
+            ] + [
+                io.Int.Input("until_step_{}".format(i), default=-1, min=-1, max=1000,
+                             tooltip="For how many sampling steps guide_{} is used. -1 = every step (like Add Guide). "
+                                     "N = only the first N steps of each run (each window has its own run), then it is left "
+                                     "out: it sets the composition early and leaves the details free; needs the model routed "
+                                     "through this node. 0 = never: the guide is switched off.".format(i))
+                for i in range(MAX_GUIDES)
+            ] + [
+                io.Int.Input("audio_until_step_{}".format(i), default=-1, min=-1, max=1000,
+                             tooltip="For how many sampling steps audio_{} is used. -1 = every step. N = only the first N "
+                                     "steps of each run (needs the model routed through this node). 0 = never: the audio is "
+                                     "switched off.".format(i))
+                for i in range(MAX_GUIDES)
+            ],
+            outputs=[io.Conditioning.Output(display_name="positive"), io.Model.Output(display_name="model")],
+        )
+
+    @classmethod
+    def execute(cls, positive, latent, model=None, vae=None, audio_vae=None, guides=None, audios=None, **idx) -> io.NodeOutput:
+        from comfy_extras.nodes_minimax_h3 import FRAME_PER_TOKEN, MiniMaxH3AddGuide
+        video = latent["samples"].tensors[0] if getattr(latent["samples"], "is_nested", False) else None
+        frame_count = sum(FRAME_PER_TOKEN[k % 5] for k in range(video.shape[2])) if video is not None else 0
+        resolve = lambda f: f if f >= 0 else frame_count + f
+        images = [("guide_{}".format(i), idx.get("frame_idx_{}".format(i), 0), (guides or {}).get("guide_{}".format(i)),
+                   idx.get("until_step_{}".format(i), -1)) for i in range(MAX_GUIDES)]
+        sounds = [("audio_{}".format(i), idx.get("audio_frame_idx_{}".format(i), 0), (audios or {}).get("audio_{}".format(i)),
+                   idx.get("audio_until_step_{}".format(i), -1)) for i in range(MAX_GUIDES)]
+        images = [g for g in images if g[2] is not None]
+        sounds = [a for a in sounds if a[2] is not None]
+        if not images and not sounds:
+            raise ValueError("Minimax H3 Multi Guide: connect an image to guide_0 (or an audio to audio_0)")
+        # until_step 0 = switched off: the guide is left out entirely (it keeps its slot and frame_idx)
+        images = [g for g in images if g[3] != 0]
+        sounds = [a for a in sounds if a[3] != 0]
+        if model is None:
+            used = [g[0] for g in images + sounds if g[3] > 0]
+            if used:
+                raise ValueError("Minimax H3 Multi Guide: {} has an until_step, which needs the model routed through this node "
+                                 "(model in -> model out). Connect it, or set until_step to -1 (every step).".format(", ".join(used)))
+        jobs = []
+        for name, f, image, until in images:
+            # an audio guide at the same frame joins this image, like Add Guide with both inputs
+            match = next((a for a in sounds if resolve(a[1]) == resolve(f)), None)
+            if match is not None:
+                sounds.remove(match)
+                jobs.append((name + " + " + match[0], f, image, match[2], until, match[3]))
+            else:
+                jobs.append((name, f, image, None, until, -1))
+        jobs += [(name, f, None, audio, -1, until) for name, f, audio, until in sounds]
+        for name, f, image, audio, v_until, a_until in jobs:
+            before = keyframe_counts(positive)
+            try:
+                positive = MiniMaxH3AddGuide.execute(positive=positive, latent=latent, frame_idx=f, vae=vae,
+                                                     audio_vae=audio_vae, image=image, audio=audio).args[0]
+            except ValueError as e:
+                raise ValueError("Minimax H3 Multi Guide, {}: {}".format(name, e)) from e
+            # tags hold the step count to release at; -1 (every step) is stored as 0 = never released
+            positive = tag_new_keyframes(positive, before, max(v_until, 0) if image is not None else 0,
+                                         max(a_until, 0) if audio is not None else 0)
+        if model is not None:
+            model = apply_until(model)
+        return io.NodeOutput(positive, model)
+
+
+class MiniMaxH3_V2VWindows(io.ComfyNode):
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="MiniMaxH3_V2VWindows",
+            display_name="Minimax H3 V2V Temporal Window & Spatial Tiles",
+            category=CATEGORY,
+            search_aliases=["h3 temporal window", "h3 spatial tiles", "h3 long video", "h3 prefix", "minimax overlap",
+                            "context windows", "mo-akkakk"],
+            description="Put after the model, and route the CLIP through it into Reference to Video. Samples the video as "
+                        "temporal windows, one after another, each continuing from the previous one (prefix: the previous "
+                        "window's last frames are put into the next window as frozen frames, so the hand-off is exact), and "
+                        "optionally as spatial tiles, each following its crop of the plate. Works with KSampler and "
+                        "SamplerCustomAdvanced.",
+            inputs=[
+                io.Model.Input("model"),
+                io.Clip.Input("clip", optional=True,
+                              tooltip="Route the CLIP through here into Reference to Video so each window (and tile) re-encodes "
+                                      "the prompt with only its own slice of <Video N>. Strongly recommended."),
+                io.Image.Input("plate", optional=True,
+                               tooltip="Optional, for tiles: the full-resolution version of the video you feed as ref_video_0 "
+                                       "(same frames, same order, at least as long). Each tile's plate piece is then cut from it "
+                                       "exactly and at full detail. Needs vae. See plate_scale."),
+                io.Vae.Input("vae", optional=True, tooltip="Video VAE, used with plate to encode each tile's plate piece."),
+                io.Boolean.Input("temporal_windows", default=True,
+                                 tooltip="Split the shot into temporal windows. Off = the whole length runs as one native H3 pass."),
+                io.Int.Input("window_frames", default=124, min=22, max=3600, step=17,
+                             tooltip="Frames per window (17k+5), including the carried frames. Keep it inside what works "
+                                     "natively for you, e.g. <= 192."),
+                io.Boolean.Input("short_final_window", default=False,
+                                 tooltip="Let the last window be shorter than window_frames instead of pulling it back to full length."),
+                io.Int.Input("min_final_window_frames", default=22, min=5, max=3600, step=17,
+                             tooltip="With short_final_window on: the last window is never shorter than this (17k+5)."),
+                io.Combo.Input("carry_mode", options=["prefix", "carry_frames"], default="prefix",
+                               tooltip="How each window continues from the previous one. "
+                                       "prefix (default): the previous window's last carry_prefix_frames are put into the start "
+                                       "of the next window as frozen frames. They are not generated again, so the hand-off is "
+                                       "exact (no crossfade, no ghosting at the join) and they add no extra tokens. "
+                                       "carry_frames: the 1.4.0 method. Windows overlap by overlap_frames, the next window "
+                                       "regenerates the overlap guided by the previous window's last carry_prefix_frames "
+                                       "(extra tokens), and the two versions are crossfaded."),
+                io.Int.Input("carry_prefix_frames", default=22, min=5, max=1000, step=17,
+                             tooltip="prefix: how many frames of the previous window start the next one, frozen (5, 22, 39...). "
+                                     "Must be less than window_frames. "
+                                     "carry_frames: how many of the overlap frames guide the next window (capped at overlap_frames)."),
+                io.Int.Input("overlap_frames", default=22, min=5, max=1000, step=17,
+                             tooltip="carry_mode = carry_frames only: frames shared by neighbouring windows (5, 22, 39...). "
+                                     "The next window regenerates them and they are crossfaded."),
+                io.Boolean.Input("spatial_tiles", default=False,
+                                 tooltip="Split each window into overlapping tiles, for stage 1 or stage 2. Each tile follows its "
+                                         "crop of the plate. Without a reference video, a full-denoise pass in tiles repeats the subject."),
+                io.Float.Input("plate_scale", default=1.0, min=0.25, max=1.0, step=0.05,
+                               tooltip="Only with the plate input connected. Size of each tile's plate piece relative to the tile. "
+                                       "1.0 = full detail (slowest). 0.5 = a quarter of the reference tokens, much faster, "
+                                       "still exactly aligned."),
+                io.Combo.Input("tile_carry", options=["sync", "own_tile", "blended"], default="sync",
+                               tooltip="How tiles are sampled and continued. sync (recommended) = all tiles take every sampling step "
+                                       "together and their overlaps are averaged after each step, so neighbouring tiles agree "
+                                       "(no ghosting on fast motion); each window continues from the agreed picture. "
+                                       "own_tile = each tile is sampled on its own, blended at the end, and continues from its own "
+                                       "frames. blended = like own_tile but continues from the blended picture."),
+                io.Combo.Input("tile_audio", options=["generate_once", "keep_input"], default="generate_once",
+                               tooltip="With tiles: generate_once = use the soundtrack generated by the first tile. "
+                                       "keep_input = output the incoming audio latent untouched (stage 2, when stage 1's audio is final)."),
+                io.Combo.Input("tile_mode", options=["tile_size", "tile_count"], default="tile_size",
+                               tooltip="How tiles are set. tile_size: use tile_width / tile_height (pixels). tile_count: split the "
+                                       "frame into tiles_across x tiles_down tiles. Both use tile_overlap."),
+                io.Int.Input("tile_width", default=960, min=256, max=16384, step=32,
+                             tooltip="Tile width in pixels (tile_mode = tile_size)."),
+                io.Int.Input("tile_height", default=544, min=256, max=16384, step=32,
+                             tooltip="Tile height in pixels (tile_mode = tile_size)."),
+                io.Int.Input("tiles_across", default=2, min=1, max=16,
+                             tooltip="With tile_mode = tile_count: number of tiles horizontally."),
+                io.Int.Input("tiles_down", default=2, min=1, max=16,
+                             tooltip="With tile_mode = tile_count: number of tiles vertically."),
+                io.Int.Input("tile_overlap", default=256, min=0, max=8192, step=32,
+                             tooltip="Pixels shared by neighbouring tiles, used in both tile modes."),
+                io.Boolean.Input("crop_ref_images_per_tile", default=True,
+                                 tooltip="With tiles, crop <Picture N> to each tile too. On when the picture is a frame of this "
+                                         "shot; off for character/style references."),
+                io.Boolean.Input("color_match", default=False,
+                                 tooltip="Remove a small colour/brightness offset (per-channel median, clamped) between tiles "
+                                         "(own_tile/blended) and between a window and the previous one over their overlap."),
+            ],
+            outputs=[io.Model.Output(), io.Clip.Output()],
+        )
+
+    @classmethod
+    def execute(cls, model, temporal_windows, window_frames, short_final_window, min_final_window_frames, carry_mode,
+                carry_prefix_frames, overlap_frames, spatial_tiles, plate_scale, tile_carry, tile_audio, tile_mode,
+                tile_width, tile_height, tiles_across, tiles_down, tile_overlap, crop_ref_images_per_tile, color_match,
+                clip=None, plate=None, vae=None) -> io.NodeOutput:
+        if carry_mode == "prefix":
+            if temporal_windows and carry_prefix_frames >= window_frames:
+                raise ValueError("Minimax H3 V2V: carry_prefix_frames ({}) must be less than window_frames ({}), so each "
+                                 "window has new frames to make.".format(carry_prefix_frames, window_frames))
+            overlap, carry, mode = carry_prefix_frames, 0, "prefix"
+        else:
+            overlap, mode = overlap_frames, "guide"
+            carry = carry_prefix_frames if carry_prefix_frames < overlap_frames else 0
+        wrapper = WindowsWrapper(window_frames if temporal_windows else 0, overlap, True,
+                                 tile_height // 16 if spatial_tiles else 0, tile_width // 16 if spatial_tiles else 0,
+                                 tile_overlap // 16, crop_ref_images_per_tile,
+                                 min_final_window_frames if short_final_window else 0,
+                                 tile_audio, color_match, tile_carry, plate if spatial_tiles else None, vae, plate_scale,
+                                 tile_counts=(tiles_across, tiles_down) if spatial_tiles and tile_mode == "tile_count" else None,
+                                 carry_frames=carry, carry_mode=mode)
+        return io.NodeOutput(apply(model, wrapper), recording_clip(clip) if clip is not None else None)
+
+
+class MiniMaxH3_ReferenceToVideoHiRes(io.ComfyNode):
+    """The native MiniMax H3 Reference to Video, plus ref_video_size: 'match' gives the DiT the reference
+    videos at the generation's size instead of the native ~1 MP canvas."""
+
+    @classmethod
+    def define_schema(cls):
+        from comfy_extras.nodes_minimax_h3 import MiniMaxH3ReferenceToVideo
+        schema = MiniMaxH3ReferenceToVideo.define_schema()
+        schema.node_id = "MiniMaxH3_ReferenceToVideoHiRes"
+        schema.display_name = "Minimax H3 Reference to Video HiRes"
+        schema.description = ("MiniMax H3 Reference to Video with one extra setting, ref_video_size. native = exactly the "
+                              "native node (reference videos at a 768-short-edge canvas, about 1 MP). match = above that, "
+                              "the reference videos are given to the model at the generation's pixel area (keeping their "
+                              "aspect, never upscaled), for more detail at 2 MP and up. The text encoder sees them as "
+                              "in the native node either way.")
+        at = next(k for k, i in enumerate(schema.inputs) if i.id == "ref_image_size") + 1
+        schema.inputs.insert(at, io.Combo.Input(
+            "ref_video_size", options=["native", "match"], default="native",
+            tooltip="native: reference videos at the native ~1 MP canvas (768 short edge), as in MiniMax H3 Reference to "
+                    "Video. match: when the generation is larger, each reference video is given to the model at the "
+                    "generation's pixel area instead (keeping its aspect, never upscaled beyond the source). More detail "
+                    "to follow at 2 MP and up, but more reference tokens (slower, more memory) and larger than the size "
+                    "H3's reference pipeline uses. Needs vae."))
+        return schema
+
+    @classmethod
+    def execute(cls, ref_video_size="native", **kwargs) -> io.NodeOutput:
+        from comfy_extras.nodes_minimax_h3 import MiniMaxH3ReferenceToVideo
+        videos = [v for v in (kwargs.get("ref_videos") or {}).values() if v is not None]
+        if ref_video_size != "match" or kwargs.get("vae") is None or not videos:
+            return io.NodeOutput(*MiniMaxH3ReferenceToVideo.execute(**kwargs).args[:2])
+        # one encode per video, straight at the larger size: the native node encodes through a stand-in VAE
+        stand_in = BigVideoVAE(kwargs["vae"], videos, kwargs["width"], kwargs["height"])
+        cond, latent = MiniMaxH3ReferenceToVideo.execute(**dict(kwargs, vae=stand_in)).args[:2]
+        cond = set_video_block_sizes(cond, stand_in.sizes)
+        for k, (w, h) in enumerate(stand_in.sizes):
+            logging.info("Minimax H3 Reference to Video HiRes: reference video {} given to the model at {}x{}".format(k + 1, w, h))
+        return io.NodeOutput(cond, latent)
+
+
+NODES = [MiniMaxH3_V2VWindows, MiniMaxH3_LongGeneration, MiniMaxH3_MultiGuide, MiniMaxH3_ReferenceToVideoHiRes]
+
+
+# --- C2C 2026-11-26: tooltips for the sockets upstream leaves bare (Suite rule: every socket says what it carries) ---
+_IN = {
+    "model": "The MiniMax H3 model; the windowed sampler wraps it (the output model).",
+    "positive": "MiniMax H3 conditioning (from Reference to Video, Image to Video...).",
+    "guides": "Guide images or clips; a new slot appears when one is connected.",
+    "audios": "Guide soundtracks; a new slot appears when one is connected.",
+    "clip": "The MiniMax H3 text encoder.",
+    "prompt": "The prompt; refer to references as <Picture N>, <Video N>, <Audio N>.",
+    "width": "Generation width in px (32 px grid).",
+    "height": "Generation height in px (32 px grid).",
+    "ref_images": "Reference images (<Picture N>).",
+    "ref_videos": "Reference videos (<Video N>), 24 fps frames.",
+    "ref_video_audios": "Soundtracks of the same-numbered reference videos.",
+    "ref_audios": "Standalone reference audio (<Audio N>).",
+}
+_OUT = {
+    "MiniMaxH3_V2VWindows": ("The model with the temporal-window / tile sampler.", "The CLIP to route into Reference to Video "
+                             "(re-encodes each window's prompt)."),
+    "MiniMaxH3_LongGeneration": ("The model with the long-generation window sampler.", "The CLIP to route into Image to "
+                                 "Video / Reference to Video (per-window prompts)."),
+    "MiniMaxH3_MultiGuide": ("Conditioning with every guide added.", "The model with the until_step release (when routed "
+                             "through)."),
+    "MiniMaxH3_ReferenceToVideoHiRes": ("Reference-to-video conditioning.", "The empty MiniMax H3 AV latent for this size "
+                                        "and length."),
+}
+
+
+def _with_tooltips(cls):
+    orig = cls.define_schema.__func__
+
+    def define_schema(c):
+        schema = orig(c)
+        for item in schema.inputs:
+            if not getattr(item, "tooltip", None) and item.id in _IN:
+                item.tooltip = _IN[item.id]
+        for k, item in enumerate(schema.outputs):
+            if not getattr(item, "tooltip", None) and k < len(_OUT.get(schema.node_id, ())):
+                item.tooltip = _OUT[schema.node_id][k]
+        return schema
+
+    cls.define_schema = classmethod(define_schema)
+    return cls
+
+
+for _cls in NODES:
+    _with_tooltips(_cls)

@@ -29,7 +29,7 @@ from mmx_utils import open_regen_ic as R  # noqa: E402
 from mmx_utils.av_latent_ops import frame_count_from_video_t  # noqa: E402
 
 LOG = logging.getLogger("MiniMaxSuite.open_regen_ic")
-CATEGORY = "MiniMax H3/Regenerate IC"
+CATEGORY = "MiniMax H3/DEPR/Regenerate IC"   # 2026-11-25: replaced by H3 Open Regen (open_regen_all.py)
 ASSET_FOLDER = "h3_assets"
 SILENCE_ENCODE, SILENCE_ASSET = "encode (audio VAE)", "asset file"
 NO_FILE = "(none)"
@@ -92,7 +92,7 @@ class MiniMaxH3_OpenRegenICPrepareDraft(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenICPrepareDraft",
-            display_name="H3 Open Regen IC · Prepare Draft (17k+5 / 24 fps)",
+            display_name="DEPR · H3 Open Regen IC · Prepare Draft (17k+5 / 24 fps)",
             category=CATEGORY,
             description=("IC draft preparation (port of OpenH3ICDraft): resample to 24 fps with FLOOR (STD uses round), "
                          "repeat the last frame up to frame_count, cover or stretch to the draft canvas, fit the "
@@ -174,7 +174,7 @@ class MiniMaxH3_OpenRegenICPrompt(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenICPrompt",
-            display_name="H3 Open Regen IC · Official Prompt",
+            display_name="DEPR · H3 Open Regen IC · Official Prompt",
             category=CATEGORY,
             description="The verbatim IC TASK prompt + 'Scene description: <caption>'. Feed the IC refine Ref2VA.",
             inputs=[io.String.Input("caption", multiline=True, default="",
@@ -197,7 +197,7 @@ class MiniMaxH3_OpenRegenICSigmas(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenICSigmas",
-            display_name="H3 Open Regen IC · Sigma Grid",
+            display_name="DEPR · H3 Open Regen IC · Sigma Grid",
             category=CATEGORY,
             description="Fixed IC grids: up3 (3 steps, default), up4, hf8. Use euler + BasicGuider CFG 1." + SUPERSEDED,
             inputs=[
@@ -244,7 +244,7 @@ class MiniMaxH3_OpenRegenICComposeLatent(io.ComfyNode):
         default_asset = R.pick_default(assets, ("silence_audio_124f",), assets[0] if assets else NO_FILE)
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenICComposeLatent",
-            display_name="H3 Open Regen IC · Compose Target Latent",
+            display_name="DEPR · H3 Open Regen IC · Compose Target Latent",
             category=CATEGORY,
             description=("Target AV latent for the IC refine: the upscaled draft video (must equal the Ref2VA "
                          "width/height/length, 2560x1440x124 by default) + silence pinned by noise mask 0." + SUPERSEDED),
@@ -363,7 +363,7 @@ class MiniMaxH3_OpenRegenICLoRAChain(io.ComfyNode):
         opt = ["none"] + loras
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenICLoRAChain",
-            display_name="H3 Open Regen IC · LoRA Chain (speed → LMS Sharp → IC)",
+            display_name="DEPR · H3 Open Regen IC · LoRA Chain (speed → LMS Sharp → IC)",
             category=CATEGORY,
             description=("The IC refine adapters in the documented order, fixed in code: speed (HyperFlow 8-step; "
                          "DMAD 4-step accepted) -> LMS Sharp r64 -> Open-H3 IC. Base = minimax_h3_ref2va_bf16 or "

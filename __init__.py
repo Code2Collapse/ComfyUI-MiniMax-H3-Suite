@@ -212,6 +212,11 @@ _PORTED_SPECS: tuple[tuple[str, str], ...] = (
     (".mmx_nodes.anchor_studio", "MiniMaxH3_PropConsistencyChecker"),
     # H3-REGEN-STD-001 (spec docs/research/H3_REGEN_STD_spec.md): Open-H3 Regenerate, standard pipeline
     # (ported from rdh9616/ComfyUI-Open-H3-Regenerate, Apache-2.0)
+    (".mmx_nodes.temporal_windows", "MiniMaxH3_V2VWindows"),   # mo-akkakk (MIT), 2026-11-26
+    (".mmx_nodes.temporal_windows", "MiniMaxH3_LongGeneration"),   # mo-akkakk (MIT), 2026-11-26
+    (".mmx_nodes.temporal_windows", "MiniMaxH3_MultiGuide"),   # mo-akkakk (MIT), 2026-11-26
+    (".mmx_nodes.temporal_windows", "MiniMaxH3_ReferenceToVideoHiRes"),   # mo-akkakk (MIT), 2026-11-26
+    (".mmx_nodes.open_regen_all", "MiniMaxH3_OpenRegen"),   # 2026-11-25: one node, Regenerate + IC
     (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenLoRA"),
     (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenSigmas"),
     (".mmx_nodes.open_regen", "MiniMaxH3_OpenRegenPrepareDraft"),

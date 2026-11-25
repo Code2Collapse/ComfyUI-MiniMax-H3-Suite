@@ -431,6 +431,24 @@ owner's packs. That code needs no third-party credit. Shared CNP code is carried
   Sharp -> IC LoRA order, up3 / up4 / hf8 grids, Ref2VA target with pinned silence) is also available as options on the
   rdh9616-derived nodes in `mmx_nodes/open_regen.py`, reusing the helpers in `mmx_utils/open_regen_ic.py`.
 
+## ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles (mo-akkakk) - ported 2026-11-26
+
+- **Source:** [mo-akkakk/ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles](https://github.com/mo-akkakk/ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles)
+  @ `2dae4c4` (1.7.0), by Mohamed (mo-akkakk).
+- **Licence:** MIT (permissive -> GPL-3.0). Text: `THIRD_PARTY_LICENSES/ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles-LICENSE.txt`.
+- **Ported:**
+  - `h3_windows.py`, `h3_guides.py` and `h3_refs.py`, unchanged apart from a header, in `mmx_nodes/temporal_windows/`.
+  - The node classes, with Suite ids `MiniMaxH3_V2VWindows`, `MiniMaxH3_LongGeneration`, `MiniMaxH3_MultiGuide` and
+    `MiniMaxH3_ReferenceToVideoHiRes`, Suite category and added tooltips.
+  - The two front-end helpers as `web/mmx_tw_*.js`, with the Suite ids and unique extension names.
+  - Upstream's test script as `tests/run_temporal_windows_upstream.py`.
+- **Not ported:** the 1.4.0 "OLD" node, which upstream keeps only for its own saved workflows.
+
+## ComfyUI-Olm-Open-H3-Regenerate-2K (o-l-l-i) - read only
+
+- Source-available under a custom licence that forbids redistribution (only its `upscaler.py` is MIT).
+- No code from it is in this pack. It was read for comparison only.
+
 ## Zero-offset references (ideas, no code copied, 2026-11-23)
 
 - **ComfyUI-Viggle-Remake** (Apache-2.0): padding the soundtrack to whole 800-sample latent frames before the audio

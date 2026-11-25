@@ -47,7 +47,7 @@ from mmx_nodes import latent_upscale_model as LU  # noqa: E402
 from mmx_utils import open_regen_core as core  # noqa: E402
 
 LOG = logging.getLogger("MiniMaxSuite.open_regen")
-CATEGORY = "MiniMax H3/Regenerate STD"
+CATEGORY = "MiniMax H3/DEPR/Regenerate STD"   # 2026-11-25: replaced by H3 Open Regen (open_regen_all.py)
 ATTRIBUTION = "Ported from rdh9616/ComfyUI-Open-H3-Regenerate (Apache-2.0); fast decoder by NVIDIA (Apache-2.0)."
 
 # ---- owner decisions (spec "Owner decisions"): defaults applied here, each kept in one place so it is easy to change
@@ -375,7 +375,7 @@ class MiniMaxH3_OpenRegenLoRA(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenLoRA",
             has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
-            display_name="H3 Open Regen · LoRA (refiner + Turbo + Sharp)",
+            display_name="DEPR · H3 Open Regen · LoRA (refiner + Turbo + Sharp)",
             category=CATEGORY,
             description=("Applies NVIDIA's merged Open-H3-Regenerate-2K LoRA (refiner + LightX2V FL2VA Turbo + LMS "
                          "Sharp, Diffusers keys converted to ComfyUI's H3 keys) and LMS Sharp's 50 AdaLN curve "
@@ -449,7 +449,7 @@ class MiniMaxH3_OpenRegenSigmas(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenSigmas",
             has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
-            display_name="H3 Open Regen · Sigmas",
+            display_name="DEPR · H3 Open Regen · Sigmas",
             category=CATEGORY,
             description=("The refine's Euler sigmas (CFG 1): 3 steps 0.909375 / 0.857 / 0.667 (NVIDIA release), 2 steps "
                          "0.7 / 0.494, or the shift-6 grid from start_sigma. Explicit sigmas make the model's sigma "
@@ -558,7 +558,7 @@ class MiniMaxH3_OpenRegenPrepareDraft(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenPrepareDraft",
             has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
-            display_name="H3 Open Regen · Prepare Draft",
+            display_name="DEPR · H3 Open Regen · Prepare Draft",
             category=CATEGORY,
             description=("Resamples the draft to 24 fps, cuts it to max_frames, cover-scales (bilinear) and centre-crops "
                          "it to 768p / 576p (or keeps it on a 32 px grid) and holds the last frame up to H3's 17k+5 "
@@ -634,7 +634,7 @@ class MiniMaxH3_OpenRegenFinish(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenFinish",
             has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
-            display_name="H3 Open Regen · Finish Frames",
+            display_name="DEPR · H3 Open Regen · Finish Frames",
             category=CATEGORY,
             description=("Keeps the real frames (drops the 17k+5 padding), crops the latent-grid overhang (1088 -> 1080, "
                          "2176 -> 2160 rows; columns for portrait) and cuts the soundtrack to frame_count / 24 s from "
@@ -705,7 +705,7 @@ class MiniMaxH3_OpenRegenUpscale(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenUpscale",
             has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
-            display_name="H3 Open Regen · Latent Upscale",
+            display_name="DEPR · H3 Open Regen · Latent Upscale",
             category=CATEGORY,
             description=("The trained H3 3D latent upscaler (the Suite's engine) straight onto the regenerate target "
                          "grid, no decode / re-encode. 4K runs two passes (to 2K, then 4K) so each stays within the "
@@ -878,7 +878,7 @@ class MiniMaxH3_OpenRegenRefineLatent(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenRefineLatent",
             has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
-            display_name="H3 Open Regen · Refine Latent",
+            display_name="DEPR · H3 Open Regen · Refine Latent",
             category=CATEGORY,
             description=("H3 audio + video latent for the refine: the upscaled video is re-noised by the sampler (start "
                          "sigma 0.909 or 0.8), the audio stream is masked out and stays clean. The output soundtrack is "
@@ -1033,7 +1033,7 @@ class MiniMaxH3_OpenRegenFastVAEDecode(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenFastVAEDecode",
             has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
-            display_name="H3 Open Regen · Fast VAE Decode",
+            display_name="DEPR · H3 Open Regen · Fast VAE Decode",
             category=CATEGORY,
             description=("NVIDIA's fast H3 VAE decoder (StreamRender-H3): the released decoder pruned to 24 layers and "
                          "distilled, whole 5-latent blocks with window attention, no tiling (plain PyTorch SDPA). "
@@ -1163,7 +1163,7 @@ class MiniMaxH3_OpenRegenSaveLatent(io.ComfyNode):
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenSaveLatent",
-            display_name="H3 Open Regen · Save Refined Latent",
+            display_name="DEPR · H3 Open Regen · Save Refined Latent",
             category=CATEGORY,
             description=(f"Saves the refined latent (+ frame count and soundtrack) to output/{LATENT_DIR}/ and passes it "
                          "on. Put it between the sampler and the decoder: the file is written before decoding starts, "
@@ -1200,7 +1200,7 @@ class MiniMaxH3_OpenRegenLoadLatent(io.ComfyNode):
         return io.Schema(
             node_id="MiniMaxH3_OpenRegenLoadLatent",
             has_intermediate_output=True,  # L9.290: core resends this ui when the node is served from cache
-            display_name="H3 Open Regen · Load Refined Latent",
+            display_name="DEPR · H3 Open Regen · Load Refined Latent",
             category=CATEGORY,
             description=(f"Loads a latent saved by Save Refined Latent (or by upstream Open-H3 Regenerate) from "
                          f"output/{LATENT_DIR}/, with its frame count and soundtrack (silence when none was stored). "

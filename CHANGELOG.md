@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Added (2026-11-26)
+- **H3 Open Regen (Regenerate + IC)** (`MiniMaxH3_OpenRegen`): one node regenerates a draft video. Draft frames and
+  fps in; finished frames, soundtrack, refined latent and a report out.
+  - `mode` switches between rdh9616's Regenerate recipe and slmonker's 2K IC recipe. Only the chosen recipe's inputs
+    are shown.
+  - Any size and aspect ratio on the 32 px grid, through `size_by` (megapixels / width / height / scale), `aspect`
+    (source, presets, custom) and `fit`. The default keeps the draft's own ratio at about 3.7 MP.
+  - The draft is encoded at its own ratio (768p area, nearest 32 px pair).
+  - Two upscale passes run above 2K. The refine uses core's own sampler.
+  - Decoding uses the core H3 VAE (default) or the fast decoder.
+  - `colour_lock` (default on) matches each frame's colour and broad contrast back to the draft. Nothing is clamped.
+- The 9 Regenerate STD and 5 Regenerate IC nodes moved to the menu category `MiniMax H3/DEPR`, with names prefixed
+  `DEPR ·`. They stay registered, so saved workflows load unchanged.
+- Ported from mo-akkakk's ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles 1.7.0 (MIT):
+  - **Minimax H3 V2V Temporal Window & Spatial Tiles** (`MiniMaxH3_V2VWindows`): long and high-resolution V2V in
+    windows and tiles. `prefix` carry puts the previous window's last frames into the next window, frozen, so the
+    hand-off is exact.
+  - **Minimax H3 Long Generation** (`MiniMaxH3_LongGeneration`).
+  - **Minimax H3 Multi Guide** (`MiniMaxH3_MultiGuide`), with per-guide `until_step`.
+  - **Minimax H3 Reference to Video HiRes** (`MiniMaxH3_ReferenceToVideoHiRes`): reference videos given to the model
+    at the generation's size.
+  - Upstream's own test script runs against the Suite copy (0 failures on core 0.46.3).
+
 ### Added (Open Regen: one pipeline, 2026-11-25)
 - The H3 Open Regen nodes (rdh9616's Open-H3 Regenerate) now also run slmonker's Open-H3-Regenerate-2K-IC recipe, so
   STD and IC are one pipeline. New inputs, appended at the end with defaults that keep today's results:

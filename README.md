@@ -1180,6 +1180,44 @@ Design: `docs/h3_tiled_sampling_design.md`. Both nodes are experimental until me
     gets only its own part of the control video, mask and source video. It used to be refused whenever the run was
     split. The H3 Mask-Aware ControlNet is still refused for split runs (its gate is built for the whole frame).
 
+## H3 Open Regen: one node for Regenerate and IC (2026-11-26)
+
+**H3 Open Regen (Regenerate + IC)** regenerates a draft video in one node.
+- **Inputs:** the base model (FL2VA for Regenerate, Ref2VA for IC), the H3 text encoder, the video and audio VAEs, the
+  draft's frames and fps, and a prompt.
+- **Outputs:** finished frames at 24 fps, the soundtrack cut to them, the refined latent, and a report.
+
+What you set:
+- **`mode`:** *Regenerate (rdh9616)* (merged LoRA + Sharp curve branches, `start_sigma` 0.8) or *IC (2K IC)* (IC LoRA
+  after HyperFlow and LMS Sharp, Reference to Video with the draft as `<Video 1>`, SigmaShift 12 / 3, up3 / up4 / hf8).
+  Only the chosen recipe's settings are shown.
+- **Size:**
+  - `size_by` megapixels keeps the chosen `aspect` (default: the draft's own ratio) at that pixel count. 3.69 is
+    2560x1440.
+  - `size_by` width / height gives an exact size; `fit` decides contain, crop, pad or stretch.
+  - Everything snaps to H3's 32 px grid. Above 2K the latent upscaler runs two passes.
+- **Decoding:** the core H3 VAE (default, best fidelity) or NVIDIA's fast decoder.
+- **Colour:** `colour_lock` (default 1.0) puts each frame's colour and broad contrast back to the draft's, keeping the
+  new detail and clamping nothing. `colour_method` local also fixes regional drift.
+
+The older 14 Regenerate STD / IC nodes are under **MiniMax H3 / DEPR** and still load saved workflows.
+
+**Status:**
+- UNIT TESTED on CPU with stand-in models.
+- The node's sampling path INTEGRATION TESTED on a real tiny H3 model (core 0.46.3).
+- NOT VERIFIED with real weights, on a GPU, or for image quality.
+
+## Temporal windows, prefix carry, Multi Guide, Reference to Video HiRes (mo-akkakk, 2026-11-26)
+
+Ported from mo-akkakk's MIT pack (see CREDITS.md):
+- **V2V Temporal Window & Spatial Tiles:** long or high-resolution V2V. `carry_mode` prefix starts each window with
+  the previous window's last frames, frozen and kept exactly.
+- **Long Generation:** long text-to-video and image-to-video with a prompt timeline.
+- **Multi Guide:** many guide frames in one node, each with `frame_idx` and `until_step`.
+- **Reference to Video HiRes:** reference videos given to the model at the generation's size.
+
+Upstream's own tests pass against the Suite copy (real core H3 model and samplers, CPU).
+
 ## Regenerate STD (Open-H3): a draft to 1080p / 2K / 4K (ported 2026-11-16)
 
 Ported from [rdh9616/ComfyUI-Open-H3-Regenerate](https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate) @ `46ff778`
