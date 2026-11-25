@@ -34,6 +34,9 @@ ASSET_FOLDER = "h3_assets"
 SILENCE_ENCODE, SILENCE_ASSET = "encode (audio VAE)", "asset file"
 NO_FILE = "(none)"
 NO_LORAS = "<no loras found>"
+# 2026-11-25 (owner): the IC recipe now runs on the H3 Open Regen nodes (mmx_nodes/open_regen.py IC options).
+SUPERSEDED = (" Superseded by the H3 Open Regen nodes (IC options: Prepare Draft fps_map floor, LoRA speed/sharp "
+              "slots, Sigmas IC grids, Refine Latent reference_latent); kept so saved workflows load.")
 
 try:
     import folder_paths
@@ -93,7 +96,7 @@ class MiniMaxH3_OpenRegenICPrepareDraft(io.ComfyNode):
             category=CATEGORY,
             description=("IC draft preparation (port of OpenH3ICDraft): resample to 24 fps with FLOOR (STD uses round), "
                          "repeat the last frame up to frame_count, cover or stretch to the draft canvas, fit the "
-                         "soundtrack. Needs at least 113 real frames (~4.7 s)."),
+                         "soundtrack. Needs at least 113 real frames (~4.7 s)." + SUPERSEDED),
             inputs=[
                 io.Image.Input("images", tooltip="Draft frames [N,H,W,C]; alpha is dropped."),
                 io.Float.Input("source_fps", default=24.0, min=1.0, max=240.0, step=0.01,
@@ -196,7 +199,7 @@ class MiniMaxH3_OpenRegenICSigmas(io.ComfyNode):
             node_id="MiniMaxH3_OpenRegenICSigmas",
             display_name="H3 Open Regen IC · Sigma Grid",
             category=CATEGORY,
-            description="Fixed IC grids: up3 (3 steps, default), up4, hf8. Use euler + BasicGuider CFG 1.",
+            description="Fixed IC grids: up3 (3 steps, default), up4, hf8. Use euler + BasicGuider CFG 1." + SUPERSEDED,
             inputs=[
                 io.Combo.Input("sampler", options=list(R.SIGMAS), default="up3",
                                tooltip="Fixed IC sigma grid. up3: 3 steps from 0.835; up4: 4 steps from 0.923; "
@@ -244,7 +247,7 @@ class MiniMaxH3_OpenRegenICComposeLatent(io.ComfyNode):
             display_name="H3 Open Regen IC · Compose Target Latent",
             category=CATEGORY,
             description=("Target AV latent for the IC refine: the upscaled draft video (must equal the Ref2VA "
-                         "width/height/length, 2560x1440x124 by default) + silence pinned by noise mask 0."),
+                         "width/height/length, 2560x1440x124 by default) + silence pinned by noise mask 0." + SUPERSEDED),
             inputs=[
                 io.Latent.Input("video_latent", tooltip="The upscaled draft (video or AV latent; video part used)."),
                 io.Latent.Input("reference_latent",
@@ -364,7 +367,7 @@ class MiniMaxH3_OpenRegenICLoRAChain(io.ComfyNode):
             category=CATEGORY,
             description=("The IC refine adapters in the documented order, fixed in code: speed (HyperFlow 8-step; "
                          "DMAD 4-step accepted) -> LMS Sharp r64 -> Open-H3 IC. Base = minimax_h3_ref2va_bf16 or "
-                         "the hybrid FL2VA/Ref2VA."),
+                         "the hybrid FL2VA/Ref2VA." + SUPERSEDED),
             inputs=[
                 io.Model.Input("model", tooltip="Base H3 model: minimax_h3_ref2va_bf16 or the hybrid "
                                                 "FL2VA/Ref2VA. The three LoRAs are patched onto it in order."),

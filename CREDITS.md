@@ -427,7 +427,9 @@ owner's packs. That code needs no third-party credit. Shared CNP code is carried
   `tools/convert_ic_lora.py`). Follows the NVlabs/Sana `sol-engine` Open-H3-Regenerate-2K-IC work. Modified by
   Code2Collapse, 2026-11: V3 schema, run-time silence option, asset length check, LoRA chain node, appended outputs.
   Distributed as part of a GPL-3.0 work. The silence asset and all weights are not bundled; they stay under the
-  MiniMax-H3 Community License.
+  MiniMax-H3 Community License. Since 2026-11-25 the same IC recipe (floor fps map, 113-frame minimum, speed -> LMS
+  Sharp -> IC LoRA order, up3 / up4 / hf8 grids, Ref2VA target with pinned silence) is also available as options on the
+  rdh9616-derived nodes in `mmx_nodes/open_regen.py`, reusing the helpers in `mmx_utils/open_regen_ic.py`.
 
 ## Zero-offset references (ideas, no code copied, 2026-11-23)
 

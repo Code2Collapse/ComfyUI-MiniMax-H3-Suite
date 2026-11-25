@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added (Open Regen: one pipeline, 2026-11-25)
+- The H3 Open Regen nodes (rdh9616's Open-H3 Regenerate) now also run slmonker's Open-H3-Regenerate-2K-IC recipe, so
+  STD and IC are one pipeline. New inputs, appended at the end with defaults that keep today's results:
+  - **LoRA:** `speed_lora` / `speed_strength` and `sharp_lora` / `sharp_strength`, applied in the IC order
+    (speed -> LMS Sharp -> `lora_name`). `lora_name` also takes the IC LoRA with Diffusers keys or ComfyUI keys.
+  - **Sigmas:** `grid` = IC up3 / up4 / hf8 / custom, plus `custom_sigmas`.
+  - **Prepare Draft:** `fps_map` = floor (the IC preprocessing), plus `min_real_frames` (IC: 113).
+  - **Refine Latent:** `reference_latent` (the Reference to Video LATENT: the IC target, audio pinned), the
+    `audio_mode` option "silence asset file (IC, 124 frames)", and `silence_file`.
+- New example `workflows/h3_open_regen_ic_draft_to_2k_unified.json`: the IC draft-to-2K graph built on the Open Regen
+  nodes, with Finish Frames.
+- The five `MiniMaxH3_OpenRegenIC*` nodes stay registered for saved workflows. Their descriptions now point to the
+  Open Regen IC options.
+- The shipped STD and HDR example workflows save the new widgets with their default values. Their results are
+  unchanged.
+
 ### Fixed (L9.290)
 - Node panels refill when ComfyUI serves a node from its cache. A re-queue with unchanged inputs used to leave the
   window plan, seam drift, token grid, crop plan, drift curve, box trajectory and every text report empty after a

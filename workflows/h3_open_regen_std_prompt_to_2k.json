@@ -110,7 +110,11 @@
         "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
         1.0,
         1.0,
-        "bf16"
+        "bf16",
+        "none",
+        1.0,
+        "none",
+        1.0
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -1029,7 +1033,8 @@
         "Node name for S&R": "MiniMaxH3_OpenRegenRefineLatent"
       },
       "widgets_values": [
-        "silence (reference)"
+        "silence (reference)",
+        "(none)"
       ]
     },
     {
@@ -1067,7 +1072,9 @@
       },
       "widgets_values": [
         3,
-        0.8
+        0.8,
+        "regenerate (steps / start_sigma)",
+        ""
       ],
       "color": "#432",
       "bgcolor": "#653"

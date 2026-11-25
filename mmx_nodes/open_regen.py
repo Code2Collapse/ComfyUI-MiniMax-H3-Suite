@@ -13,6 +13,9 @@
 #   * Fast VAE Decode: interrupt checks between decoder layers / frames, model released in `finally`;
 #   * Save Refined Latent writes atomically (tmp + os.replace); Load uses fingerprint_inputs = name + mtime.
 #   * OpenH3VideoToPrompt is not ported (owner decision D8 default: use MiniMaxH3_PromptWriter / MiniMaxH3_Vision).
+#   * 2026-11-25 (owner: one pipeline): IC options appended to LoRA / Sigmas / Prepare Draft / Refine Latent. Their
+#     logic is PORTED FROM https://github.com/slmonker/ComfyUI-OpenH3Regenerate2KIC@a85bd96 nodes.py (Apache-2.0,
+#     author slmonker) via mmx_utils/open_regen_ic.py; defaults keep the rdh9616 behaviour.
 """H3 Open Regen (standard): regenerate a draft MiniMax H3 video (or AV latent) at 1080p / 2K / 4K.
 
 draft -> Prepare Draft -> VAE Encode -> Latent Upscale -> Refine Latent -> sampler (FL2VA + Open Regen LoRA +
@@ -59,6 +62,10 @@ SIZES = ["768p (1344x768)", "576p (1024x576)", "keep (snap to 32)"]
 RESOLUTIONS = ["768p", "1080p", "2k", "4k"]
 AUDIO_MODES = ["silence (reference)", "draft audio (AUDIO input)", "keep latent audio"]
 CROPS = ["auto (1088 -> 1080, 2176 -> 2160)", "none"]
+# IC options folded into the STD nodes (owner 2026-11-25: one pipeline; rdh9616's nodes, slmonker's IC recipe)
+SIGMA_GRIDS = ["regenerate (steps / start_sigma)", "IC up3", "IC up4", "IC hf8", "custom"]
+FPS_MAPS = ["nearest (regenerate)", "floor (IC official)"]
+AUDIO_ASSET = "silence asset file (IC, 124 frames)"
 LATENT_DIR = "open_h3_latents"          # under ComfyUI's output folder (same as upstream, so its files load)
 LATENT_FORMAT = "open_h3_refined_latent_v1"
 NEWEST = "(newest)"
@@ -260,6 +267,62 @@ def apply_lora(model, lora_path, strength, dtype):
                f"{str(dtype).replace('torch.', '')} RAM copy {ram / 2 ** 30:.2f} GB"]
 
 
+def _lora_keys(path):
+    from safetensors import safe_open
+    with safe_open(path, framework="pt", device="cpu") as f:
+        return list(f.keys())
+
+
+def _apply_plain_lora(model, name, strength, slot):
+    """(patched clone, report line) for a ComfyUI-keyed LoRA (core loader, model only)."""
+    from mmx_nodes import open_regen_ic as IC
+    path = _full_path("loras", name)
+    sd = IC._load_safetensors(path, f"H3 Open Regen LoRA ({slot})")
+    try:
+        patched, n = IC._apply_comfy(model, sd, strength)
+    finally:
+        del sd
+    if n == 0:
+        raise ValueError(f"H3 Open Regen LoRA: {slot} LoRA {name!r} matched no weight of this model - load the MiniMax "
+                         "H3 Ref2VA (IC) / FL2VA model, or pick a ComfyUI-keyed H3 LoRA")
+    return patched, f"{slot}: {name} strength {strength:g}, ComfyUI keys, {n} weights patched"
+
+
+def apply_lora_recipe(model, lora_name, strength, dtype, speed_lora="none", speed_strength=1.0, sharp_lora="none",
+                      sharp_strength=1.0):
+    """Standard Regenerate (merged Diffusers LoRA) or the IC chain speed -> LMS Sharp -> IC LoRA, one node.
+
+    lora_name may be NVIDIA's merged Regenerate LoRA (Diffusers, rank 576), the official IC LoRA (Diffusers, rank 384;
+    same key layout, so the same exact q/k/v-slice + SwiGLU mapping applies) or a ComfyUI-keyed conversion of it
+    (e.g. slmonker's minimax_h3_open_regenerate_2k_ic_comfy_bf16)."""
+    from mmx_utils import open_regen_ic as R
+    lines = []
+    chosen = {"speed": speed_lora or "none", "sharp": sharp_lora or "none", "ic": lora_name}
+    ic_chain = any(chosen[s] not in ("none", "") for s in ("speed", "sharp"))
+    if ic_chain:
+        lines += R.order_warnings(chosen)
+    for slot, name, st in (("speed", chosen["speed"], speed_strength), ("sharp", chosen["sharp"], sharp_strength)):
+        if name in ("none", ""):
+            continue
+        model, line = _apply_plain_lora(model, name, st, slot)
+        lines.append(line)
+    path = _full_path("loras", lora_name)
+    fmt = R.detect_lora_format(_lora_keys(path))
+    if fmt == "diffusers":
+        m, rep = apply_lora(model, path, strength, dtype)
+        pairs = load_lora_pairs(path, dtype)
+        rank = int(next(iter(pairs.values()))[0].shape[0]) if pairs else 0
+        kind = ("IC recipe: official Open-H3-Regenerate-2K-IC LoRA" if rank != 576 or ic_chain
+                else "Regenerate recipe: NVIDIA merged refiner + Turbo + LMS Sharp LoRA")
+        lines += rep
+        lines.append(f"{kind} (Diffusers keys, rank {rank})")
+    else:
+        m, line = _apply_plain_lora(model, lora_name, strength, "ic")
+        lines.append(line)
+        lines.append("IC recipe: ComfyUI-keyed Open-H3-Regenerate-2K-IC LoRA")
+    return m, lines
+
+
 def apply_curves(m, curve_path, table, strength):
     """Add the Sharp curve branches to every block's AdaLN projection of the patched clone `m`; returns a report line."""
     from safetensors import safe_open
@@ -337,6 +400,17 @@ class MiniMaxH3_OpenRegenLoRA(io.ComfyNode):
                                tooltip="Strength of the Sharp curve branches."),
                 io.Combo.Input("lora_dtype", options=["bf16", "fp32"], default=D9_LORA_DTYPE_DEFAULT, advanced=True,
                                tooltip="RAM copy of the rank-576 factors: bf16 about 6.2 GB, fp32 about 12.4 GB."),
+                # IC recipe (slmonker Open-H3-Regenerate-2K-IC), appended 2026-11-25: speed -> LMS Sharp -> lora_name
+                io.Combo.Input("speed_lora", options=["none"] + loras, default="none", optional=True,
+                               tooltip="IC recipe, applied FIRST: the speed LoRA (HyperFlow 8-step; DMAD 4-step "
+                                       "accepted). none = standard Regenerate recipe."),
+                io.Float.Input("speed_strength", default=1.0, min=-2.0, max=2.0, step=0.01, optional=True,
+                               tooltip="Model strength of the speed LoRA."),
+                io.Combo.Input("sharp_lora", options=["none"] + loras, default="none", optional=True,
+                               tooltip="IC recipe, applied SECOND: LMS Sharp r64 as a plain LoRA. none = standard "
+                                       "Regenerate recipe."),
+                io.Float.Input("sharp_strength", default=1.0, min=-2.0, max=2.0, step=0.01, optional=True,
+                               tooltip="Model strength of the LMS Sharp LoRA."),
             ],
             outputs=[io.Model.Output("model", tooltip="A clone of the input H3 model with the merged Open Regen LoRA "
                                                      "patches (and, unless curve_name is none or curve_strength 0, "
@@ -349,10 +423,15 @@ class MiniMaxH3_OpenRegenLoRA(io.ComfyNode):
 
     @classmethod
     def execute(cls, model, lora_name, curve_name, curve_table, strength, curve_strength,
-                lora_dtype=D9_LORA_DTYPE_DEFAULT) -> io.NodeOutput:
+                lora_dtype=D9_LORA_DTYPE_DEFAULT, speed_lora="none", speed_strength=1.0, sharp_lora="none",
+                sharp_strength=1.0) -> io.NodeOutput:
         dtype = torch.bfloat16 if lora_dtype == "bf16" else torch.float32
-        m, report = apply_lora(model, _full_path("loras", lora_name), float(strength), dtype)
+        m, report = apply_lora_recipe(model, lora_name, float(strength), dtype, speed_lora, float(speed_strength),
+                                      sharp_lora, float(sharp_strength))
         if curve_name != NO_CURVE and float(curve_strength) != 0:
+            if any("IC recipe" in line for line in report):
+                report.append("WARNING: Sharp curve branches are on with the IC LoRA; the IC recipe uses LMS Sharp "
+                              "as a plain LoRA (sharp_lora) and no curve branches - set curve_name to none")
             table = None if curve_table == OWN_TABLE else read_table(_full_path("diffusion_models", curve_table))
             report.append(apply_curves(m, _full_path("loras", curve_name), table, float(curve_strength)))
         else:
@@ -383,6 +462,12 @@ class MiniMaxH3_OpenRegenSigmas(io.ComfyNode):
                 io.Float.Input("start_sigma", default=D2_START_SIGMA_DEFAULT, min=0.0, max=1.0, step=0.001,
                                tooltip="0 = the release grid for 2 / 3 steps. Above 0: the refiner's shift-6 grid "
                                        "from this start noise (the example workflows use 0.8)."),
+                io.Combo.Input("grid", options=SIGMA_GRIDS, default=SIGMA_GRIDS[0], optional=True,
+                               tooltip="regenerate: steps / start_sigma above. IC up3 (default IC refine, 0.835 -> 0 "
+                                       "in 3 steps), IC up4, IC hf8: the fixed Open-H3-Regenerate-2K-IC grids "
+                                       "(steps / start_sigma ignored). custom: custom_sigmas."),
+                io.String.Input("custom_sigmas", default="", optional=True,
+                                tooltip="grid = custom: comma list ending at 0, never increasing, inside [0, 1]."),
             ],
             outputs=[io.Sigmas.Output("sigmas", tooltip="SIGMAS for the refine sampler (Euler, CFG 1): the NVIDIA "
                                                        "release grid for 2 / 3 steps, or the shift-6 grid from "
@@ -391,32 +476,62 @@ class MiniMaxH3_OpenRegenSigmas(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, steps, start_sigma=D2_START_SIGMA_DEFAULT) -> io.NodeOutput:
-        values = core.refine_sigmas(int(steps), float(start_sigma))
-        src = (f"shift-6 grid from start_sigma {float(start_sigma):g}" if start_sigma and float(start_sigma) > 0
-               else f"NVIDIA release grid ({int(steps)} steps)")
+    def execute(cls, steps, start_sigma=D2_START_SIGMA_DEFAULT, grid=None, custom_sigmas="") -> io.NodeOutput:
+        grid = grid or SIGMA_GRIDS[0]
+        if grid == SIGMA_GRIDS[0]:
+            values = core.refine_sigmas(int(steps), float(start_sigma))
+            src = (f"shift-6 grid from start_sigma {float(start_sigma):g}" if start_sigma and float(start_sigma) > 0
+                   else f"NVIDIA release grid ({int(steps)} steps)")
+        elif grid in SIGMA_GRIDS:
+            from mmx_utils import open_regen_ic as R
+            if grid == "custom":
+                if not (custom_sigmas or "").strip():
+                    raise ValueError("H3 Open Regen Sigmas: grid = custom needs custom_sigmas (e.g. 0.8, 0.6, 0.3, 0)")
+                values, _ = R.build_sigmas("up3", custom_sigmas)
+                src = "custom list"
+            else:
+                values, _ = R.build_sigmas(grid.split()[-1], "")
+                src = f"Open-H3-Regenerate-2K-IC {grid.split()[-1]} grid"
+        else:
+            raise ValueError(f"H3 Open Regen Sigmas: grid must be one of {', '.join(SIGMA_GRIDS)}")
         report = f"{', '.join(f'{v:.6f}' for v in values)} ({src})"
         return io.NodeOutput(torch.tensor(values, dtype=torch.float32), report, ui={"text": [report]})
 
 
 # ====================================================================================================== frames
 
-def prepare_draft(images, size, max_frames, source_fps=24.0, chunk=16):
-    """(frames [P,H,W,3], real frame count N, width, height, report)."""
+def prepare_draft(images, size, max_frames, source_fps=24.0, chunk=16, fps_map=FPS_MAPS[0], min_real_frames=0):
+    """(frames [P,H,W,3], real frame count N, width, height, report).
+
+    fps_map floor = the IC preprocessing (source frame int(i * fps / 24), slmonker / NVIDIA IC); nearest = rdh9616."""
     if not isinstance(images, torch.Tensor) or images.ndim != 4 or images.shape[0] == 0:
         raise ValueError("H3 Open Regen Prepare Draft: no frames - connect an IMAGE batch [frames, H, W, 3]")
     fps = float(source_fps)
     if math.isnan(fps) or math.isinf(fps) or fps < 0:
         raise ValueError(f"H3 Open Regen Prepare Draft: source_fps must be a number >= 0, got {source_fps}")
+    if fps_map not in FPS_MAPS:
+        raise ValueError(f"H3 Open Regen Prepare Draft: fps_map must be one of {', '.join(FPS_MAPS)}")
     notes = []
     n_in = images.shape[0]
     if fps and abs(fps - core.FPS) > 1e-3:
-        idx = core.resample_indices(n_in, fps)
+        if fps_map == FPS_MAPS[1]:
+            out_n = max(1, int(n_in * core.FPS / fps))
+            while out_n > 1 and int((out_n - 1) * fps / core.FPS) >= n_in:
+                out_n -= 1
+            idx = [int(i * fps / core.FPS) for i in range(out_n)]
+            how = "floor, IC official"
+        else:
+            idx = core.resample_indices(n_in, fps)
+            how = "nearest, rounded"
         images = images[idx]
-        notes.append(f"fps map {fps:g} -> 24: {n_in} source frames -> {len(idx)} frames (nearest, rounded)")
+        notes.append(f"fps map {fps:g} -> 24: {n_in} source frames -> {len(idx)} frames ({how})")
     else:
         notes.append("24 fps: no resampling" if fps else "source_fps 0: treated as 24 fps, no resampling")
     count = images.shape[0] if int(max_frames) == 0 else min(images.shape[0], int(max_frames))
+    if int(min_real_frames) and count < int(min_real_frames):
+        raise ValueError(f"H3 Open Regen Prepare Draft: the draft gives only {count} real frames at 24 fps; "
+                         f"min_real_frames is {int(min_real_frames)} (Open-H3-Regenerate-2K-IC needs 113, about "
+                         "4.7 s). Use a longer draft, or set min_real_frames to 0 for the standard recipe.")
     src_h, src_w = int(images.shape[1]), int(images.shape[2])
     width, height = core.draft_size(str(size).split()[0], src_w, src_h)
     sw, sh, x0, y0 = core.cover_crop_box(src_w, src_h, width, height)
@@ -461,6 +576,12 @@ class MiniMaxH3_OpenRegenPrepareDraft(io.ComfyNode):
                 io.Float.Input("source_fps", default=24.0, min=0.0, max=240.0, step=0.001,
                                tooltip="Frame rate of the frames in fps (Get Video Components fps). Anything other "
                                        "than 24 is resampled to 24 fps (nearest frame). 0 = treat as 24."),
+                io.Combo.Input("fps_map", options=FPS_MAPS, default=FPS_MAPS[0], optional=True,
+                               tooltip="How a non-24 fps draft is resampled: nearest (rdh9616 Regenerate) or floor "
+                                       "int(i * fps / 24) (the official Open-H3-Regenerate-2K-IC preprocessing)."),
+                io.Int.Input("min_real_frames", default=0, min=0, max=3600, optional=True,
+                             tooltip="Stop with a clear error when the draft has fewer real frames at 24 fps. IC "
+                                     "recipe: 113 (with max_frames 124). 0 = no check."),
             ],
             outputs=[io.Image.Output("images", tooltip="IMAGE batch at 24 fps, cover-scaled and centre-cropped to "
                                                        "width x height, padded to 17k+5 frames by repeating the last "
@@ -475,8 +596,10 @@ class MiniMaxH3_OpenRegenPrepareDraft(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, images, size, max_frames, source_fps=24.0) -> io.NodeOutput:
-        frames, count, width, height, report = prepare_draft(images, size, max_frames, source_fps)
+    def execute(cls, images, size, max_frames, source_fps=24.0, fps_map=None, min_real_frames=0) -> io.NodeOutput:
+        frames, count, width, height, report = prepare_draft(images, size, max_frames, source_fps,
+                                                             fps_map=fps_map or FPS_MAPS[0],
+                                                             min_real_frames=int(min_real_frames or 0))
         return io.NodeOutput(frames, count, width, height, report, ui={"text": [report]})
 
 
@@ -625,10 +748,56 @@ class MiniMaxH3_OpenRegenUpscale(io.ComfyNode):
         return io.NodeOutput(out, kw, kh, report, ui={"text": [report]})
 
 
-def refine_latent(latent, audio_mode, audio_vae=None, audio=None):
-    """(AV latent with video regenerate / audio pinned, frame_count, report)."""
+def _asset_silence(silence_file, audio_t, what):
+    from mmx_nodes import open_regen_ic as IC
+    from mmx_utils import open_regen_ic as R
+    if not silence_file or silence_file == IC.NO_FILE:
+        raise ValueError(f"{what}: '{AUDIO_ASSET}' needs silence_audio_124f.safetensors in models/{IC.ASSET_FOLDER} "
+                         "(pick it in silence_file), or choose 'silence (reference)' with the H3 audio VAE")
+    path = IC._full_path(IC.ASSET_FOLDER, silence_file, what)
+    sd = IC._load_safetensors(path, what)
+    if "audio_latents" not in sd:
+        raise ValueError(f"{what}: {silence_file!r} has no 'audio_latents' tensor - not the IC silence asset")
+    sound = R.asset_to_latent(sd["audio_latents"])
+    if sound.shape[-1] != audio_t:
+        raise ValueError(f"{what}: the silence asset holds {sound.shape[-1]} audio latents (124 frames); this clip "
+                         f"needs {audio_t}. Use 'silence (reference)' with the H3 audio VAE for other lengths.")
+    return sound
+
+
+def _silence_files():
+    try:
+        from mmx_nodes import open_regen_ic as IC
+        return IC._asset_names() or [IC.NO_FILE]
+    except Exception:  # noqa: BLE001 - the list is only a convenience; the node still loads
+        return ["(none)"]
+
+
+def _silence_default():
+    files = _silence_files()
+    return _pick(files, "silence_audio_124f")
+
+
+def refine_latent(latent, audio_mode, audio_vae=None, audio=None, reference_latent=None, silence_file=None):
+    """(AV latent with video regenerate / audio pinned, frame_count, report).
+
+    reference_latent (core MiniMax H3 Reference to Video LATENT, the draft as <Video 1>) = the IC recipe: the target
+    keeps that latent's other keys and must match its video shape (slmonker OpenH3ICComposeLatent semantics)."""
     what = "H3 Open Regen Refine Latent"
     video, latent_audio = _h3_video(latent, what)
+    ref_parts = None
+    if reference_latent is not None:
+        ref = reference_latent.get("samples") if isinstance(reference_latent, dict) else None
+        if not getattr(ref, "is_nested", False) or len(ref.tensors) != 2:
+            raise ValueError(f"{what}: reference_latent must be the LATENT output of core 'MiniMax H3 Reference to "
+                             "Video' (an audio + video latent)")
+        ref_parts = ref.tensors
+        if tuple(video.shape) != tuple(ref_parts[0].shape):
+            raise ValueError(f"{what}: the upscaled video latent {tuple(video.shape)} does not match the Reference to "
+                             f"Video target {tuple(ref_parts[0].shape)}. Set Reference to Video width / height to the "
+                             "upscale target (e.g. 2560 x 1440) and its length to Prepare Draft's padded frame count "
+                             "(e.g. 124).")
+        video = video.to(dtype=ref_parts[0].dtype, device=ref_parts[0].device)
     t = int(video.shape[2])
     try:
         frames = core.frames_for_latent_t(t)
@@ -670,8 +839,24 @@ def refine_latent(latent, audio_mode, audio_vae=None, audio=None):
             notes.append(f"audio: draft soundtrack {sr} -> {rate} Hz, {'padded' if got < length else 'cut'} to "
                          f"{length / rate:.3f} s, encoded")
         sound = audio_vae.encode(waveform.movedim(1, -1))
+    elif audio_mode == AUDIO_ASSET:
+        sound = _asset_silence(silence_file, audio_t, what)
+        notes.append(f"audio: IC silence asset {silence_file}")
     else:
-        raise ValueError(f"{what}: audio_mode must be one of {', '.join(AUDIO_MODES)}")
+        raise ValueError(f"{what}: audio_mode must be one of {', '.join(AUDIO_MODES + [AUDIO_ASSET])}")
+    if isinstance(sound, dict):
+        sound = sound.get("samples")
+    if ref_parts is not None:
+        from mmx_utils import open_regen_ic as R
+        sound = sound.to(device=ref_parts[1].device, dtype=ref_parts[1].dtype)
+        if sound.ndim == 3:
+            sound = sound.unsqueeze(0)
+        sound = R.fit_audio_columns(sound, ref_parts[1])
+        out = R.pinned_av_latent(reference_latent, latent, video, sound, True, _nested, "open_h3_ic",
+                                 {"audio": audio_mode, "pinned": True, "via": "H3 Open Regen Refine Latent"})
+        notes.append(f"IC target: Reference to Video latent kept (keys {', '.join(sorted(out))}); noise mask: "
+                     "video 1 (regenerated), audio 0 (held clean)")
+        return out, frames, "\n".join(notes)
     sound = sound.to(video.device, torch.float32)
     if sound.ndim == 3:
         sound = sound.unsqueeze(0)
@@ -701,11 +886,20 @@ class MiniMaxH3_OpenRegenRefineLatent(io.ComfyNode):
             search_aliases=["open h3 regenerate refine latent", "regen refine"],
             inputs=[
                 io.Latent.Input("latent", tooltip="Upscaled latent (video or AV); T must be 5k+2 latent steps."),
-                io.Combo.Input("audio_mode", options=AUDIO_MODES, default=AUDIO_MODES[0],
-                               tooltip="Audio stream held clean during the refine. Reference: encoded silence."),
+                io.Combo.Input("audio_mode", options=AUDIO_MODES + [AUDIO_ASSET], default=AUDIO_MODES[0],
+                               tooltip="Audio stream held clean during the refine. Reference: encoded silence. "
+                                       "The IC silence asset (models/h3_assets, 124 frames only) is the upstream IC "
+                                       "file; encoded silence works for every length."),
                 io.Vae.Input("audio_vae", optional=True,
                              tooltip="The H3 audio VAE (needed for silence and draft audio)."),
                 io.Audio.Input("audio", optional=True, tooltip="Draft soundtrack, for 'draft audio (AUDIO input)'."),
+                io.Latent.Input("reference_latent", optional=True,
+                                tooltip="IC recipe: the LATENT output of core 'MiniMax H3 Reference to Video' with the "
+                                        "prepared draft on ref_video_0 (<Video 1>) and the IC prompt. Its width / "
+                                        "height / length must equal the upscale target. Empty = standard Regenerate."),
+                io.Combo.Input("silence_file", options=_silence_files(), default=_silence_default(), optional=True,
+                               tooltip="File in models/h3_assets for audio_mode = silence asset file "
+                                       "(silence_audio_124f.safetensors)."),
             ],
             outputs=[io.Latent.Output("latent", tooltip="H3 audio + video latent with a noise mask: video 1 "
                                                        "(regenerated by the sampler), audio 0 (held clean). Wire "
@@ -717,8 +911,9 @@ class MiniMaxH3_OpenRegenRefineLatent(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, latent, audio_mode, audio_vae=None, audio=None) -> io.NodeOutput:
-        out, frames, report = refine_latent(latent, audio_mode, audio_vae, audio)
+    def execute(cls, latent, audio_mode, audio_vae=None, audio=None, reference_latent=None,
+                silence_file=None) -> io.NodeOutput:
+        out, frames, report = refine_latent(latent, audio_mode, audio_vae, audio, reference_latent, silence_file)
         return io.NodeOutput(out, frames, report, ui={"text": [report]})
 
 

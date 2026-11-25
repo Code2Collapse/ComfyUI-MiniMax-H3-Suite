@@ -1207,6 +1207,20 @@ Decode -> Finish -> Create Video 24 fps), `h3_open_regen_std_prompt_to_2k.json` 
 latent goes straight to the upscaler; the Turbo LoRA stays on the draft branch) and
 `h3_open_regen_std_decode_saved_latent.json` (resume after a failed decode).
 
+**IC in the same nodes (2026-11-25).** The Open Regen nodes also run slmonker's Open-H3-Regenerate-2K-IC recipe, so
+you need no separate IC nodes. In the IC recipe, the draft is `<Video 1>` of a core **MiniMax H3 Reference to
+Video** pass, and an IC LoRA rebuilds it on the Ref2VA model. Set the nodes like this:
+- **Prepare Draft:** `fps_map` floor, `min_real_frames` 113, max_frames 124.
+- **LoRA:** `speed_lora` HyperFlow 8-step, `sharp_lora` LMS Sharp r64, `lora_name` the IC LoRA (Diffusers or ComfyUI
+  keys), `curve_name` none.
+- **Sigmas:** `grid` IC up3 (or up4 / hf8 / custom).
+- **Refine Latent:** `reference_latent` = the Reference to Video LATENT. Its width / height / length must equal the
+  upscale target, e.g. 2560 x 1440 x 124.
+
+Example: `workflows/h3_open_regen_ic_draft_to_2k_unified.json`. The default inputs keep the standard Regenerate
+recipe. The older `H3 Open Regen IC ·` nodes still load for saved workflows. **Status: IMPLEMENTED and UNIT TESTED
+(CPU, tiny tensors, also against core 0.46.0); NOT VERIFIED with real weights or on a GPU.**
+
 Temporal rules: 24 fps everywhere; clips are 17k+5 frames (latent 5k+2 steps, audio 40 Hz); `frame_count` travels
 from Prepare Draft to Save and Finish so the padding is always trimmed; the model never hears the source audio (it is
 pinned); the output soundtrack is the source's (or the draft's decoded audio), cut from t = 0. The source must start

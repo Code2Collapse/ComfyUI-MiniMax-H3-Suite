@@ -215,7 +215,9 @@
    "widgets_values": [
     "768p (1344x768)",
     121,
-    24.0
+    24.0,
+    "nearest (regenerate)",
+    0
    ]
   },
   {
