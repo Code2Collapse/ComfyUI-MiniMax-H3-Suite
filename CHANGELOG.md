@@ -21,6 +21,7 @@
 - The six character-replacement workflows (`workflows/character_replacement/`) now set H3 Subject Uncrop to `protect = exact outside mask`. They were saved before that setting existed, so they loaded with "feathered box", where the model's background replaced the plate inside the crop box. Every pixel outside the head mask now stays the original, bit-exact.
 
 ### Added (2026-11-26)
+- `tools/h3_vae_drift.py`: measures the H3 video VAE round trip on your footage. Reports colour shift per channel (red drift), softness, chunk-seam dips and out-of-range values over 1, 3 and 5 rounds, for several VAEs side by side (e.g. the original and H3-MT-VAE), and what colour_lock removes. Run it on a GPU: on a 16 GB CPU box the H3 VAE cannot finish one small encode.
 - **H3 Open Regen (Regenerate + IC)** (`MiniMaxH3_OpenRegen`): one node regenerates a draft video. Draft frames and
   fps in; finished frames, soundtrack, refined latent and a report out.
   - `mode` switches between rdh9616's Regenerate recipe and slmonker's 2K IC recipe. Only the chosen recipe's inputs
