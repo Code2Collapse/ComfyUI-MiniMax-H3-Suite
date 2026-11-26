@@ -1,6 +1,7 @@
 # PORTED FROM: https://github.com/mo-akkakk/ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles@2dae4c4 h3_windows.py (MIT,
 # Copyright (c) 2026 Mohamed (mo-akkakk); licence text in THIRD_PARTY_LICENSES/
 # ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles-LICENSE.txt). Distributed as part of a GPL-3.0 work.
+# Modified by Code2Collapse, 2026-11-26: start frames (WindowsWrapper.start, encode_start) frozen at the video start.
 """Minimax H3 V2V Temporal Window & Spatial Tiles (mo-akkakk): temporal windows (stage 1 + 2) and spatial tiles (stage 2), as one model patch.
 
 The patch wraps the guider's sampling run (OUTER_SAMPLE), so it works with KSampler,
@@ -530,7 +531,10 @@ class WindowsWrapper:
     def __init__(self, window_frames, overlap_frames, carry_overlap, tile_h, tile_w, tile_overlap, crop_images,
                  min_final_frames=0, tile_audio="generate_once", color_match=False, tile_carry="own_tile",
                  plate=None, vae=None, plate_scale=1.0, schedule=None, image_policy="own_window", continuous=True,
-                 tile_counts=None, carry_frames=0, carry_mode="guide"):
+                 tile_counts=None, carry_frames=0, carry_mode="guide", start=None):
+        # C2C 2026-11-26: start = (images, vae, audio, audio_vae): frames (and soundtrack) frozen at the very start of
+        # the video, like the prefix carry of window 1 -> extend a previous clip, or pin an exact first frame
+        self.start = start
         self.schedule = schedule          # None = V2V node; a list (maybe empty) = Long Generation node
         self.image_policy = image_policy
         self.continuous = continuous
@@ -587,6 +591,41 @@ class WindowsWrapper:
                     kfi = {kf["resolved_frame_index"] for kf in (c.get("minimax_keyframes") or [])}
                     img_at[id(src)] = image_frames(len(src["images"]), kfi, total)
         return {"compose": compose, "image_frames": img_at, "policy": self.image_policy}
+
+    def encode_start(self, lat_h, lat_w, first_window_t, audio_t):
+        """start_frames -> (video latent of its first tokens, audio latent or None), encoded at the canvas size.
+        1 to 4 frames = the first frame only (1 token); 5 and more = the largest 17k+5 clip that fits (2+5k tokens),
+        exactly like Add Guide. The frames must leave the first window something new to make."""
+        images, vae, audio, audio_vae = self.start
+        n = images.shape[0]
+        frames = 1 if n < 5 else frames_for_tokens(tokens_for_frames(n))
+        n_tok = 1 if frames == 1 else tokens_for_frames(frames)
+        if n_tok >= first_window_t:
+            raise ValueError("Minimax H3 windows: start_frames ({} frames used) fill the whole first window ({} frames). "
+                             "Use fewer start frames or a longer window.".format(frames, frames_for_tokens(first_window_t)))
+        width, height = lat_w * 16, lat_h * 16
+        pix = images[:frames, :, :, :3]
+        if (pix.shape[2], pix.shape[1]) != (width, height):
+            # lanczos goes through 8 bit: frames already at the canvas size are passed on untouched
+            pix = comfy.utils.common_upscale(pix.movedim(-1, 1), width, height, "lanczos", "center").movedim(1, -1)
+            if "start_resize" not in self.warned:
+                self.warned.add("start_resize")
+                logging.info("MiniMax H3 windows: start_frames {}x{} resized (centre crop) to the canvas {}x{}.".format(
+                    images.shape[2], images.shape[1], width, height))
+        lat = vae.encode(pix).float().cpu()
+        if tuple(lat.shape[-2:]) != (lat_h, lat_w) or lat.shape[2] != n_tok:
+            raise ValueError("Minimax H3 windows: start_frames encoded to {} - expected {} tokens at {}x{} latent. "
+                             "Connect the MiniMax H3 video VAE.".format(tuple(lat.shape), n_tok, lat_w, lat_h))
+        a_lat = None
+        if audio is not None:
+            if audio_vae is None:
+                raise ValueError("Minimax H3 windows: start_audio needs the audio_vae input (the MiniMax H3 audio VAE).")
+            from comfy_extras.nodes_minimax_h3 import _encode_ref_audio
+            a_lat = _encode_ref_audio(audio_vae, audio)[0].float().cpu()
+            a_lat = a_lat[..., :min(audio_ticks(frames), audio_t)]
+        logging.info("MiniMax H3 windows: the first {} frame(s){} are frozen from start_frames.".format(
+            frames, " and their soundtrack" if a_lat is not None else ""))
+        return lat, a_lat
 
     @staticmethod
     def prefix_window(lat_w, lat_a, mask_w, mask_a, c_lat, c_audio, a_off, device):
@@ -686,7 +725,15 @@ class WindowsWrapper:
         else:
             ys = plan_tiles(lat_h, self.tile_h, self.tile_overlap)
             xs = plan_tiles(lat_w, self.tile_w, self.tile_overlap)
+        start = self.encode_start(lat_h, lat_w, windows[0][1], audio_t) if self.start is not None else None
         if len(windows) == 1 and len(ys) == 1 and len(xs) == 1:
+            if start is not None:
+                lat_v, lat_a = comfy.utils.unpack_latents(latent_image, latent_shapes)[:2]
+                masks = comfy.utils.unpack_latents(denoise_mask, latent_shapes)[:2] if denoise_mask is not None else None
+                latent_image, denoise_mask = self.prefix_window(
+                    lat_v, lat_a, masks[0].expand(vshape) if masks is not None else None,
+                    masks[1].expand(ashape) if masks is not None else None, start[0], start[1], 0,
+                    executor.class_obj.model_patcher.load_device)
             return executor(noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed, latent_shapes=latent_shapes)
 
         guider = executor.class_obj
@@ -798,6 +845,8 @@ class WindowsWrapper:
                     if prefix_mode and carry is not None:
                         prefix = (carry["latent"], carry.get("audio_latent"), c_a0 - a0)
                         carry = None
+                    elif wi == 0 and start is not None:
+                        prefix = (start[0][..., y0:y1, x0:x1], start[1], 0)
                     guider.conds = piece_conds(base_conds, t0, t0 + tn, ys[yi] if split_space else None,
                                                xs[xi] if split_space else None, lat_h, lat_w, self.crop_images,
                                                carry, self.warned, text_cache, self.plate, gen)
@@ -850,6 +899,11 @@ class WindowsWrapper:
                             lat_v[vs], lat_a[..., a0:a1], masks[0].expand(vshape)[vs] if masks is not None else None,
                             masks[1].expand(ashape)[..., a0:a1] if masks is not None else None,
                             out_v[:, :, t0:t0 + carry_t].clone(), c_audio, c_a0 - a0, guider.model_patcher.load_device)
+                    elif wi == 0 and start is not None:
+                        p_lat, p_mask = self.prefix_window(
+                            lat_v[vs], lat_a[..., a0:a1], masks[0].expand(vshape)[vs] if masks is not None else None,
+                            masks[1].expand(ashape)[..., a0:a1] if masks is not None else None,
+                            start[0], start[1], 0, guider.model_patcher.load_device)
                     boxes = [(ys[yi][0], ys[yi][1], xs[xi][0], xs[xi][1]) for yi, xi in tiles]
                     win_v, win_a = self.sample_window_sync(
                         executor, guider, sync_conds, sync_shapes, boxes, [tile_weight(ys, xs, yi, xi) for yi, xi in tiles],

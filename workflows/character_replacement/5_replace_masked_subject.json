@@ -2122,7 +2122,8 @@
     "Node name for S&R": "MiniMaxH3_SubjectUncrop"
    },
    "widgets_values": [
-    16
+    16,
+    "exact outside mask"
    ],
    "widgets_values_named": {
     "feather": 16

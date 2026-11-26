@@ -117,6 +117,7 @@ H3 Family Presets ──> Prompt Preview & Edit ──> (prompt)            │ 
 | Guider | | BasicGuider (no CFG) | the official H3 r2v template |
 | RandomNoise | `noise_seed` | 123 | fixed, so A/B runs are comparable |
 | H3 Subject Uncrop | `feather` | 16 | soft seam. `cropped_masks` = `head_room_masks` keeps the paste to the regenerated region |
+| H3 Subject Uncrop | `protect` | exact outside mask | every pixel outside the mask stays the plate, bit-exact; the 16 px feather runs inside the mask edge. Use `soft mask edge` for a matte with soft hair alpha |
 
 ## Before trusting the output
 

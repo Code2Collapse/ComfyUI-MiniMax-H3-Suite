@@ -345,7 +345,7 @@ class MiniMaxH3_MaskToLatentSpace(io.ComfyNode):
                   f"spatial_factor: {spatial}\ntoken_spatial: {token}")
         if grow_tokens:
             report += (f"\ngrow_tokens: +{grow_tokens} token(s) "
-                       f"({grow_tokens * 32}px) after reduction - the "
+                       f"({grow_tokens * spatial * token}px) after reduction - the "
                        f"mask centre does not move")
         if spatial_method == "coverage":
             covered = float((out > 0).float().mean()) * 100.0

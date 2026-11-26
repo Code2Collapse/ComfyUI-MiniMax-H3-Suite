@@ -62,6 +62,31 @@ def strength_curve_from_faces(
     return np.clip(strength, 0.0, 1.0)
 
 
+
+def _combine(base: torch.Tensor, vmask: torch.Tensor) -> torch.Tensor:
+    """The incoming spatial noise mask times the per-frame strength. Masks from Set AV Noise Mask / Hard Keyframes
+    are [1,1,T,h,w] and broadcast; they used to be dropped unless the shape matched exactly (L8.28), which
+    regenerated the whole frame, background included."""
+    try:
+        shape = torch.broadcast_shapes(base.shape, vmask.shape)
+    except RuntimeError:
+        shape = None
+    if shape is None or tuple(shape) != tuple(vmask.shape):
+        raise ValueError(f"Per-Frame Denoise: the incoming noise mask {tuple(base.shape)} does not fit the video "
+                         f"latent {tuple(vmask.shape)}. Make the mask for this latent (same length and size).")
+    return (base * vmask).clamp(0, 1)
+
+
+def _strength_per_step(strength_px, latent_t: int) -> torch.Tensor:
+    """Per-pixel-frame strength -> one value per latent step: the mean over the frames that step covers on H3's
+    grid (1,4,4,4,4 from frame 0). A curve of another length is resampled linearly as before."""
+    from .h3_grid import frames_for_tokens, h3_pixel_frame_groups
+    s = torch.as_tensor(np.asarray(strength_px), dtype=torch.float32).reshape(-1)
+    if s.numel() == frames_for_tokens(latent_t):
+        return torch.stack([s[a:b].mean() for a, b in h3_pixel_frame_groups(s.numel())])
+    return F.interpolate(s.view(1, 1, -1), size=latent_t, mode="linear", align_corners=True).reshape(-1)
+
+
 def merge_per_frame_video_mask(
     av_latent: dict,
     vmask: torch.Tensor,
@@ -73,8 +98,7 @@ def merge_per_frame_video_mask(
     if prev is not None and hasattr(prev, "unbind"):
         pm = list(prev.unbind())
         base = pm[0].to(vmask.device, torch.float32)
-        if base.shape == vmask.shape:
-            vmask = (base * vmask).clamp(0, 1)
+        vmask = _combine(base, vmask)
         pm[0] = vmask.to(pm[0].dtype)
         new_mask = type(prev)(tuple(pm))
     else:
@@ -97,13 +121,9 @@ def scale_video_noise_mask(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Build 5-D video noise mask; preserve audio side via caller."""
     latent_t = int(video.shape[-3])
-    s = torch.from_numpy(strength_px).float().view(1, 1, -1)
-    s = F.interpolate(s, size=latent_t, mode="linear", align_corners=True)
-    s = s.view(1, 1, latent_t, 1, 1).to(video.device, torch.float32)
+    s = _strength_per_step(strength_px, latent_t).view(1, 1, latent_t, 1, 1).to(video.device, torch.float32)
     vmask = s.expand(video.shape[0], 1, latent_t, video.shape[-2], video.shape[-1])
     vmask = vmask.expand(-1, video.shape[1], -1, -1, -1).contiguous()
     if prev_video_mask is not None:
-        base = prev_video_mask.to(vmask.device, torch.float32)
-        if base.shape == vmask.shape:
-            vmask = (base * vmask).clamp(0, 1)
+        vmask = _combine(prev_video_mask.to(vmask.device, torch.float32), vmask)
     return vmask, s

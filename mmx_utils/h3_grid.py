@@ -12,24 +12,18 @@ FRAME_RESCALE = 5.0 / 3.0
 def h3_pixel_frame_groups(frame_count: int) -> list[tuple[int, int]]:
     """Map each video-latent index to a half-open pixel-frame range [start, end).
 
-    Head (frames 0-4): groups (1) + (4) -> 2 latents.
-    Thereafter each 17-frame cycle uses FRAME_PER_TOKEN (1,4,4,4,4).
+    Latent k covers FRAME_PER_TOKEN[k % 5] frames counted from frame 0 (core comfy/ldm/minimax/model.py
+    _video_t_spans; the VAE encodes 17-frame clips): 0 | 1-4 | 5-8 | 9-12 | 13-16 | 17 | 18-21 | ...
+    (Fixed 2026-11-26, L8.28: the cycle used to restart at frame 5, so 4 of every 5 latents got mask frames up to
+    4 frames off.)
     """
     t = max(0, int(frame_count))
     groups: list[tuple[int, int]] = []
-    if t <= 0:
-        return groups
-    groups.append((0, 1))
-    if t > 1:
-        groups.append((1, min(5, t)))
-    pos = 5
+    pos, k = 0, 0
     while pos < t:
-        for gsize in FRAME_PER_TOKEN:
-            if pos >= t:
-                break
-            end = min(pos + int(gsize), t)
-            groups.append((pos, end))
-            pos = end
+        end = min(pos + int(FRAME_PER_TOKEN[k % 5]), t)
+        groups.append((pos, end))
+        pos, k = end, k + 1
     return groups
 
 

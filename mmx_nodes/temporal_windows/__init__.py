@@ -1,7 +1,7 @@
 # PORTED FROM: https://github.com/mo-akkakk/ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles@2dae4c4 __init__.py (MIT,
 # Copyright (c) 2026 Mohamed (mo-akkakk); licence text in THIRD_PARTY_LICENSES/
 # ComfyUI-MiniMaxH3-TemporalWindow-SpatialTiles-LICENSE.txt). Distributed as part of a GPL-3.0 work.
-# Modified by Code2Collapse, 2026-11-26: Suite node ids MiniMaxH3_*, Suite category, the OLD 1.4.0 node and the
+# Modified by Code2Collapse, 2026-11-26: start_frames / start_audio inputs; Suite node ids MiniMaxH3_*, Suite category, the OLD 1.4.0 node and the
 # extension entry point left out (the Suite registers the classes itself).
 """MiniMax H3 temporal windows / spatial tiles, prefix carry, Multi Guide, Reference to Video HiRes (mo-akkakk)."""
 from comfy_api.latest import io
@@ -13,6 +13,26 @@ CATEGORY = "MiniMax H3/Temporal Windows"
 from .h3_guides import apply_until, keyframe_counts, tag_new_keyframes
 from .h3_refs import BigVideoVAE, set_video_block_sizes
 from .h3_windows import WindowsWrapper, apply, parse_schedule, recording_clip
+
+
+START_TIP = ("Optional: frames frozen at the very start of the video, kept exactly (not generated again), and the "
+             "video continues from them. Feed the last frames of a previous clip to extend it seamlessly, or one "
+             "image to pin an exact first frame. 1-4 images = the first image only; 5 or more = the largest "
+             "17k+5 clip (5, 22, 39...). Resized (centre crop) to the generation size when it differs. Needs vae.")
+START_AUDIO_TIP = ("Optional, with start_frames: the soundtrack of those frames, frozen the same way so the audio "
+                   "also continues. Needs audio_vae.")
+
+
+def _start(start_frames, vae, start_audio, audio_vae, node):
+    if start_frames is None:
+        if start_audio is not None:
+            raise ValueError("{}: start_audio needs start_frames (the frames it belongs to).".format(node))
+        return None
+    if vae is None:
+        raise ValueError("{}: start_frames needs the vae input (the MiniMax H3 video VAE).".format(node))
+    if start_audio is not None and audio_vae is None:
+        raise ValueError("{}: start_audio needs the audio_vae input (the MiniMax H3 audio VAE).".format(node))
+    return (start_frames, vae, start_audio, audio_vae)
 
 
 class MiniMaxH3_LongGeneration(io.ComfyNode):
@@ -72,13 +92,19 @@ class MiniMaxH3_LongGeneration(io.ComfyNode):
                                        "first window's prompt and the last image only in the last window's (matches where they are "
                                        "used as frames). all_windows: every window's prompt shows them (can help keep a character's "
                                        "look, but later windows may drift back toward the first frame)."),
+                io.Image.Input("start_frames", optional=True, tooltip=START_TIP),
+                io.Audio.Input("start_audio", optional=True, tooltip=START_AUDIO_TIP),
+                io.Vae.Input("vae", optional=True, tooltip="Video VAE, needed with start_frames."),
+                io.Vae.Input("audio_vae", optional=True, tooltip="Audio VAE, needed with start_audio."),
             ],
             outputs=[io.Model.Output(), io.Clip.Output()],
         )
 
     @classmethod
     def execute(cls, model, prompt_schedule, continuous_shot, window_frames, short_final_window, min_final_window_frames,
-                carry_mode, carry_prefix_frames, overlap_frames, first_last_images="own_window", clip=None) -> io.NodeOutput:
+                carry_mode, carry_prefix_frames, overlap_frames, first_last_images="own_window", clip=None,
+                start_frames=None, start_audio=None, vae=None, audio_vae=None) -> io.NodeOutput:
+        start = _start(start_frames, vae, start_audio, audio_vae, "Minimax H3 Long Generation")
         if carry_mode == "prefix":
             if carry_prefix_frames >= window_frames:
                 raise ValueError("Minimax H3 Long Generation: carry_prefix_frames ({}) must be less than window_frames ({}), "
@@ -90,7 +116,7 @@ class MiniMaxH3_LongGeneration(io.ComfyNode):
         wrapper = WindowsWrapper(window_frames, overlap, True, 0, 0, 0, False,
                                  min_final_window_frames if short_final_window else 0,
                                  schedule=parse_schedule(prompt_schedule), image_policy=first_last_images,
-                                 continuous=continuous_shot, carry_frames=carry, carry_mode=mode)
+                                 continuous=continuous_shot, carry_frames=carry, carry_mode=mode, start=start)
         return io.NodeOutput(apply(model, wrapper), recording_clip(clip, record_all=True) if clip is not None else None)
 
 
@@ -228,7 +254,7 @@ class MiniMaxH3_V2VWindows(io.ComfyNode):
                                tooltip="Optional, for tiles: the full-resolution version of the video you feed as ref_video_0 "
                                        "(same frames, same order, at least as long). Each tile's plate piece is then cut from it "
                                        "exactly and at full detail. Needs vae. See plate_scale."),
-                io.Vae.Input("vae", optional=True, tooltip="Video VAE, used with plate to encode each tile's plate piece."),
+                io.Vae.Input("vae", optional=True, tooltip="Video VAE, used with plate to encode each tile's plate piece, and with start_frames."),
                 io.Boolean.Input("temporal_windows", default=True,
                                  tooltip="Split the shot into temporal windows. Off = the whole length runs as one native H3 pass."),
                 io.Int.Input("window_frames", default=124, min=22, max=3600, step=17,
@@ -288,6 +314,9 @@ class MiniMaxH3_V2VWindows(io.ComfyNode):
                 io.Boolean.Input("color_match", default=False,
                                  tooltip="Remove a small colour/brightness offset (per-channel median, clamped) between tiles "
                                          "(own_tile/blended) and between a window and the previous one over their overlap."),
+                io.Image.Input("start_frames", optional=True, tooltip=START_TIP),
+                io.Audio.Input("start_audio", optional=True, tooltip=START_AUDIO_TIP),
+                io.Vae.Input("audio_vae", optional=True, tooltip="Audio VAE, needed with start_audio."),
             ],
             outputs=[io.Model.Output(), io.Clip.Output()],
         )
@@ -296,7 +325,8 @@ class MiniMaxH3_V2VWindows(io.ComfyNode):
     def execute(cls, model, temporal_windows, window_frames, short_final_window, min_final_window_frames, carry_mode,
                 carry_prefix_frames, overlap_frames, spatial_tiles, plate_scale, tile_carry, tile_audio, tile_mode,
                 tile_width, tile_height, tiles_across, tiles_down, tile_overlap, crop_ref_images_per_tile, color_match,
-                clip=None, plate=None, vae=None) -> io.NodeOutput:
+                clip=None, plate=None, vae=None, start_frames=None, start_audio=None, audio_vae=None) -> io.NodeOutput:
+        start = _start(start_frames, vae, start_audio, audio_vae, "Minimax H3 V2V")
         if carry_mode == "prefix":
             if temporal_windows and carry_prefix_frames >= window_frames:
                 raise ValueError("Minimax H3 V2V: carry_prefix_frames ({}) must be less than window_frames ({}), so each "
@@ -311,7 +341,7 @@ class MiniMaxH3_V2VWindows(io.ComfyNode):
                                  min_final_window_frames if short_final_window else 0,
                                  tile_audio, color_match, tile_carry, plate if spatial_tiles else None, vae, plate_scale,
                                  tile_counts=(tiles_across, tiles_down) if spatial_tiles and tile_mode == "tile_count" else None,
-                                 carry_frames=carry, carry_mode=mode)
+                                 carry_frames=carry, carry_mode=mode, start=start)
         return io.NodeOutput(apply(model, wrapper), recording_clip(clip) if clip is not None else None)
 
 

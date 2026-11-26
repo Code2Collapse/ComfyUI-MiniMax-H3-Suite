@@ -1218,6 +1218,18 @@ Ported from mo-akkakk's MIT pack (see CREDITS.md):
 
 Upstream's own tests pass against the Suite copy (real core H3 model and samplers, CPU).
 
+**Added by the Suite: `start_frames` / `start_audio`** (V2V and Long Generation, optional, at the end of the inputs).
+Frames you give here are frozen at the very start of the video. They are kept exactly as encoded, not generated
+again, and the video continues from them. This uses the same mechanism as the prefix carry between windows.
+- **Extend a clip:** feed the last 22 or 39 frames of a previous clip (and its audio) to continue it with no seam.
+- **Pin a first frame:** feed one image to make it frame 0 exactly.
+- 1-4 images use the first image only; 5 or more use the largest 17k+5 clip.
+- Frames at another size are centre-cropped to the generation size; frames already at that size are not touched.
+- Needs `vae`, plus `audio_vae` for the audio.
+
+**Status:** UNIT TESTED on a tiny real H3 on the CPU. The frozen tokens come out within 5e-07 of the encoded latent in
+windows, own_tile tiles, sync tiles and a single pass. NOT VERIFIED with real weights or on a GPU.
+
 ## Regenerate STD (Open-H3): a draft to 1080p / 2K / 4K (ported 2026-11-16)
 
 Ported from [rdh9616/ComfyUI-Open-H3-Regenerate](https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate) @ `46ff778`

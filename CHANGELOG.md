@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Fixed (masked replacement audit L8.28, 2026-11-26)
+- **H3 Mask Prep / mask-to-token / Identity Fusion put mask frames in the wrong latent step.** The frame grouping
+  restarted H3's 1,4,4,4,4 cycle at frame 5. Core counts it from frame 0: 0 | 1-4 | 5-8 | 9-12 | 13-16 | 17 | ...
+  As a result, 4 of every 5 latent steps took mask frames that were up to 4 frames off, so a moving subject was
+  regenerated in the wrong frames. The grid now matches core exactly (tested against core's own spans).
+- **Per-Frame Denoise dropped a spatial noise mask.** The [1,1,T,h,w] mask from Set AV Noise Mask / Hard Keyframes
+  was replaced by a whole-frame strength, so the background was regenerated too. It is now multiplied in.
+  A mask that does not fit the latent is a plain error. Strength per latent step is now the mean over that step's
+  frames on H3's grid.
+- **H3 Masked Replace:**
+  - A canvas-pixel mask is now reduced on H3's grid (max per latent step and per 32 px token). Before, core shrank
+    it trilinearly, so thin strands vanished.
+  - Crops shorter than the latent are now refused. Before, they were padded with the template's opening frames,
+    with only a warning in the report.
+- The pixel-frame count of a latent, used in messages, was wrong above 2 steps. It is now computed on H3's grid.
+- Mask To Latent Space's report gives `grow_tokens` in the real pixel size.
+- The six character-replacement workflows (`workflows/character_replacement/`) now set H3 Subject Uncrop to `protect = exact outside mask`. They were saved before that setting existed, so they loaded with "feathered box", where the model's background replaced the plate inside the crop box. Every pixel outside the head mask now stays the original, bit-exact.
+
 ### Added (2026-11-26)
 - **H3 Open Regen (Regenerate + IC)** (`MiniMaxH3_OpenRegen`): one node regenerates a draft video. Draft frames and
   fps in; finished frames, soundtrack, refined latent and a report out.
@@ -24,6 +42,9 @@
   - **Minimax H3 Reference to Video HiRes** (`MiniMaxH3_ReferenceToVideoHiRes`): reference videos given to the model
     at the generation's size.
   - Upstream's own test script runs against the Suite copy (0 failures on core 0.46.3).
+  - Suite addition: optional `start_frames` / `start_audio` (plus `vae` / `audio_vae`) on V2V and Long Generation.
+    These frames are frozen at the start of the video, kept exactly, and continued from. Use it to extend a previous
+    clip or to pin an exact first frame.
 
 ### Added (Open Regen: one pipeline, 2026-11-25)
 - The H3 Open Regen nodes (rdh9616's Open-H3 Regenerate) now also run slmonker's Open-H3-Regenerate-2K-IC recipe, so

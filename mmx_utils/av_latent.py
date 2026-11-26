@@ -185,15 +185,19 @@ def audio_latent_length_for_frames(frame_count: int) -> int:
 
 
 def pixel_frame_count_from_video_latent(video: torch.Tensor) -> int:
-    """Best-effort inverse of video_latent_t for validation messages."""
-    t_lat = int(video.shape[-3])
-    if t_lat <= 2:
-        return 5
-    return (t_lat - 2) * 17 + 5
+    """Pixel frames a video latent decodes to (H3's 1,4,4,4,4 grid; was (t-2)*17+5, wrong above 2 steps)."""
+    from .h3_grid import frames_for_tokens
+    return max(1, frames_for_tokens(int(video.shape[-3])))
 
 
 def validate_crop_frame_count(crop_frames: int, video: torch.Tensor) -> None:
+    """Crops must be on the 17k+5 grid and at least as long as the latent (longer crops lose their tail). Shorter
+    crops used to be padded with the template's OPENING latent frames, with only a report warning (L8.28)."""
     validate_h3_pixel_frame_count(int(crop_frames))
+    need = pixel_frame_count_from_video_latent(video)
+    if int(crop_frames) < need:
+        raise ValueError(f"the crops have {int(crop_frames)} frames but the AV latent holds {need} frames. "
+                         f"Give {need} crops (set the latent length or the crop range to the same 17k+5 count).")
 
 
 def pack_latent_dict(

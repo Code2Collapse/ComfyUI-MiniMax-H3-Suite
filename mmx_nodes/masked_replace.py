@@ -170,6 +170,16 @@ class MiniMaxH3_MaskedReplace(io.ComfyNode):
             enc_a = cls._encode_audio(audio_vae, audio, dev)
             members = inject_audio_stream(members, enc_a)
 
+        mask_note = ""
+        m = video_latent_mask if video_latent_mask.ndim == 3 else video_latent_mask.reshape(-1, *video_latent_mask.shape[-2:])
+        lat_h, lat_w = int(members[0].shape[-2]), int(members[0].shape[-1])
+        if (int(m.shape[-2]), int(m.shape[-1])) == (lat_h * 16, lat_w * 16):
+            # a frame-space (canvas pixel) mask: reduce it on H3's real grid (max over each latent step's frames and
+            # each 32 px token) instead of letting core shrink it trilinearly (thin strands vanished, time
+            # misregistered; L8.28)
+            from .av_noise_mask import video_mask_for  # noqa: WPS433
+            red, mask_note = video_mask_for(m, int(members[0].shape[-3]), lat_h, lat_w)
+            video_latent_mask = red[0, 0]
         vmask, amask = build_av_noise_mask(
             video_latent_mask,
             members[0],
@@ -190,6 +200,7 @@ class MiniMaxH3_MaskedReplace(io.ComfyNode):
             f"{lock_msg}\n"
             f"video_mask shape={tuple(vmask.shape)} audio_mask shape={tuple(amask.shape)}\n"
             f"{temporal_note}\n"
-            f"Denoise strength: BasicScheduler only (no SplitSigmas on H3)."
+            + (f"{mask_note}\n" if mask_note else "")
+            + f"Denoise strength: BasicScheduler only (no SplitSigmas on H3)."
         )
         return io.NodeOutput(out, report)
