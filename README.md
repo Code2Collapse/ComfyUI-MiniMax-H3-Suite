@@ -1,5 +1,7 @@
 # ComfyUI-MiniMaxSuite — H3 geometric spine + sampling guards
 
+> **Recent changes (2026-11-29).** Example workflows corrected (TrackCrop widget order, HybridExtract edge margin). Shared Vue-rebind and video-probe code synced from the canonical copy. Full test suite green.
+
 GPL-3.0 node pack (see `LICENSE`) for MiniMax H3 production workflows (V3 `io.ComfyNode` API).
 
 ## Nodes
