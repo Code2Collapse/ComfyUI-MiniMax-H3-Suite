@@ -42,6 +42,7 @@
         true,
         25,
         49,
+        1.1,
         "auto",
         "h3_hybrid_hdr.safetensors"
       ]

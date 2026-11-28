@@ -1,13 +1,4 @@
 /**
- * PORTED FROM: ComfyUI-CustomNodePacks js/_vue_dom_rebind.js (Code2Collapse, Apache-2.0; same author) - copied, not
- * imported: a cross-pack import 404s on a Suite-only install and one 404 takes the whole pack's front end down (L9.259).
- *
- * ONE COPY PER PAGE. CNP ships the same module; both guard on globalThis.__c2cVueDomRebind. Whichever the browser
- * evaluates first registers the extension and handles EVERY C2C pack's nodes (the logic is pack-neutral); the other
- * stands down. globalThis.__c2cVueDomRebindOwner names the winner ("MiniMaxSuite" here; unset = CNP).
- * Logic below is the CNP module's, unchanged apart from the owner name.
- */
-/**
  * Nodes 2.0 + subgraphs: keep a C2C DOM widget showing ITS OWN element (L2.50, L2.52).
  *
  * Measured on frontend 1.53.10: "Convert to subgraph" builds a NEW node instance with the same id inside the
@@ -30,7 +21,9 @@ const C2C_PACKS = [
     "ComfyUI-CustomNodePacks", "ComfyUI-WanNodeExperiments", "ComfyUI-NukeMaxNodes", "ComfyUI-MiniMaxSuite",
     "ComfyUI-WanAnimatePreprocessV2", "ComfyUI-LTX-Enhanced", "ComfyUI-OmniScale", "ComfyUI-GLM_Image",
     "ComfyUI-WanAnimalPreprocessor",
-];
+    // GitHub clone folder names (differ from the local names above); registry installs may be lowercase.
+    "ComfyUI-MiniMax-H3-Suite", "ComfyUI-NukeNodePack", "ComfyUI-WanAnimalPreprocess",
+].map((p) => p.toLowerCase());
 
 /**
  * Mark a DOM widget so a stale copy of it can be found and replaced. Also (L9.237): a DOM panel created with
@@ -47,7 +40,7 @@ export function tagDomWidget(widget) {
 }
 
 export function isC2CNode(node) {
-    const mod = String(node?.constructor?.nodeData?.python_module || "");
+    const mod = String(node?.constructor?.nodeData?.python_module || "").toLowerCase();
     return C2C_PACKS.some((p) => mod === `custom_nodes.${p}` || mod.startsWith(`custom_nodes.${p}.`));
 }
 
@@ -96,7 +89,6 @@ export function afterRender(fn) {
 
 if (!globalThis.__c2cVueDomRebind) {
     globalThis.__c2cVueDomRebind = true;
-    globalThis.__c2cVueDomRebindOwner = "MiniMaxSuite";
     app.registerExtension({
         name: "C2C.VueDomRebind",
         nodeCreated(node) {
